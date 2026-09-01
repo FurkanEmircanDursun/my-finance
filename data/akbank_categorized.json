@@ -1,0 +1,416 @@
+[
+    {
+        "bank": "Akbank",
+        "date": "05/07/2026",
+        "description": "TRENDYOL.COM",
+        "amount": 355.0,
+        "installment": "2/3",
+        "raw_line": "05/07/2026 TRENDYOL.COM (1,065.00 TL) 3/2.taksit 355.00 355.00x1",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "12/07/2026",
+        "description": "TRENDYOL.COM",
+        "amount": 547.21,
+        "installment": "2/3",
+        "raw_line": "12/07/2026 TRENDYOL.COM (1,641.63 TL) 3/2.taksit 547.21 547.21x1",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "18/07/2026",
+        "description": "KENT ECZANESI ISTANBUL TUR",
+        "amount": 337.51,
+        "installment": "2/3",
+        "raw_line": "18/07/2026 KENT ECZANESI ISTANBUL TUR (1,012.53 TL +Vade Farkı) 3/2.taksit 337.51 337.51x1",
+        "category": "Sağlık"
+    },
+    {
+        "bank": "Akbank",
+        "date": "22/07/2026",
+        "description": "NAKİL VAS. VERGİ DAİRESİ",
+        "amount": 2153.57,
+        "installment": "2/3",
+        "raw_line": "22/07/2026 NAKİL VAS. VERGİ DAİRESİ (6,460.72 TL) 3/2.taksit 2,153.57 2,153.57x1",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "26/07/2026",
+        "description": "CAFE GOL AİLE ÇAY BAHÇESİBALIKESİR TR",
+        "amount": 290.0,
+        "installment": null,
+        "raw_line": "26/07/2026 CAFE GOL AİLE ÇAY BAHÇESİBALIKESİR TR 290.00",
+        "category": "Yeme & İçme"
+    },
+    {
+        "bank": "Akbank",
+        "date": "26/07/2026",
+        "description": "A101 9923 I353 BAHÇELİEVLBALIKESİR TR",
+        "amount": 473.0,
+        "installment": null,
+        "raw_line": "26/07/2026 A101 9923 I353 BAHÇELİEVLBALIKESİR TR 473.00",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "27/07/2026",
+        "description": "MONEYPAY/YEMEK",
+        "amount": 150.0,
+        "installment": null,
+        "raw_line": "27/07/2026 MONEYPAY/YEMEK 150.00",
+        "category": "Finans & Cüzdan"
+    },
+    {
+        "bank": "Akbank",
+        "date": "27/07/2026",
+        "description": "PAYCELL/FATURAODEMEM İSTANBUL TR",
+        "amount": 300.0,
+        "installment": null,
+        "raw_line": "27/07/2026 PAYCELL/FATURAODEMEM İSTANBUL TR 300.00",
+        "category": "Fatura & Telekom"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/07/2026",
+        "description": "Google makromusic for London GBR",
+        "amount": 899.99,
+        "installment": null,
+        "raw_line": "28/07/2026 Google makromusic for London GBR 899.99",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/07/2026",
+        "description": "BEKSAN BALIKESİR TR",
+        "amount": 360.0,
+        "installment": null,
+        "raw_line": "28/07/2026 BEKSAN BALIKESİR TR 360.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/07/2026",
+        "description": "7579 PALMIYE SEZONLUK BALIKESİR TUR",
+        "amount": 37.5,
+        "installment": null,
+        "raw_line": "28/07/2026 7579 PALMIYE SEZONLUK BALIKESİR TUR 37.50",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/07/2026",
+        "description": "7579 PALMIYE SEZONLUK BALIKESİR TUR",
+        "amount": 32.5,
+        "installment": null,
+        "raw_line": "28/07/2026 7579 PALMIYE SEZONLUK BALIKESİR TUR 32.50",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/07/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 114.95,
+        "installment": null,
+        "raw_line": "28/07/2026 MONEYPAY/MIGROSONE 114.95",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "29/07/2026",
+        "description": "GOOGLE *YouTubePremium LONDON GBR",
+        "amount": 119.99,
+        "installment": null,
+        "raw_line": "29/07/2026 GOOGLE *YouTubePremium LONDON GBR 119.99",
+        "category": "Abonelik"
+    },
+    {
+        "bank": "Akbank",
+        "date": "30/07/2026",
+        "description": "Google makromusic for London GBR -iade",
+        "amount": -899.99,
+        "installment": null,
+        "raw_line": "30/07/2026 Google makromusic for London GBR -iade 899.99(-)",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "31/07/2026",
+        "description": "Google Claude by Anth London GBR",
+        "amount": 799.99,
+        "installment": null,
+        "raw_line": "31/07/2026 Google Claude by Anth London GBR 799.99",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "02/08/2026",
+        "description": "ERGÜVEN MEGA YILDIZ LTD BALIKESİR TR",
+        "amount": 320.0,
+        "installment": null,
+        "raw_line": "02/08/2026 ERGÜVEN MEGA YILDIZ LTD BALIKESİR TR 320.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "02/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 140.92,
+        "installment": null,
+        "raw_line": "02/08/2026 MONEYPAY/MIGROSONE 140.92",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "03/08/2026",
+        "description": "GOOGLE *YouTube Member LONDON GBR -iade",
+        "amount": -650.0,
+        "installment": null,
+        "raw_line": "03/08/2026 GOOGLE *YouTube Member LONDON GBR -iade 650.00(-)",
+        "category": "Abonelik"
+    },
+    {
+        "bank": "Akbank",
+        "date": "03/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 233.34,
+        "installment": null,
+        "raw_line": "03/08/2026 MONEYPAY/MIGROSONE 233.34",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "09/08/2026",
+        "description": "TRENDYOL.COM",
+        "amount": 499.9,
+        "installment": null,
+        "raw_line": "09/08/2026 TRENDYOL.COM 499.90",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "12/08/2026",
+        "description": "UBERTRENDYOLGOGETIRYEMEK",
+        "amount": 405.0,
+        "installment": null,
+        "raw_line": "12/08/2026 UBERTRENDYOLGOGETIRYEMEK 405.00",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "12/08/2026",
+        "description": "UBERTRENDYOLGOGETIRYEMEK-iade",
+        "amount": -405.0,
+        "installment": null,
+        "raw_line": "12/08/2026 UBERTRENDYOLGOGETIRYEMEK-iade 405.00(-)",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "12/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 775.15,
+        "installment": null,
+        "raw_line": "12/08/2026 MONEYPAY/MIGROSONE 775.15",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "13/08/2026",
+        "description": "ECEM BÜFE İSTANBUL TR",
+        "amount": 70.0,
+        "installment": null,
+        "raw_line": "13/08/2026 ECEM BÜFE İSTANBUL TR 70.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "13/08/2026",
+        "description": "BELBİM AS. ULASIM ISTANBUL TUR",
+        "amount": 65.0,
+        "installment": null,
+        "raw_line": "13/08/2026 BELBİM AS. ULASIM ISTANBUL TUR 65.00",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "14/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 414.99,
+        "installment": null,
+        "raw_line": "14/08/2026 MONEYPAY/MIGROSONE 414.99",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "15/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 707.1,
+        "installment": null,
+        "raw_line": "15/08/2026 MONEYPAY/MIGROSONE 707.10",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "15/08/2026",
+        "description": "BELBİM AS. ULASIM ISTANBUL TUR",
+        "amount": 120.0,
+        "installment": null,
+        "raw_line": "15/08/2026 BELBİM AS. ULASIM ISTANBUL TUR 120.00",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "15/08/2026",
+        "description": "BELBİM AS. ULASIM ISTANBUL TUR",
+        "amount": 65.0,
+        "installment": null,
+        "raw_line": "15/08/2026 BELBİM AS. ULASIM ISTANBUL TUR 65.00",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "16/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 608.64,
+        "installment": null,
+        "raw_line": "16/08/2026 MONEYPAY/MIGROSONE 608.64",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "17/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 333.99,
+        "installment": null,
+        "raw_line": "17/08/2026 MONEYPAY/MIGROSONE 333.99",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "18/08/2026",
+        "description": "OBİLET BİLİŞİM SİSTEMLERİ",
+        "amount": 2440.0,
+        "installment": null,
+        "raw_line": "18/08/2026 OBİLET BİLİŞİM SİSTEMLERİ 2,440.00",
+        "category": "Ulaşım & Araç"
+    },
+    {
+        "bank": "Akbank",
+        "date": "18/08/2026",
+        "description": "SARDUNYA GIDA İSTANBUL TR",
+        "amount": 390.0,
+        "installment": null,
+        "raw_line": "18/08/2026 SARDUNYA GIDA İSTANBUL TR 390.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "22/08/2026",
+        "description": "PAYNKOLAY/TK TARIM KREDİ",
+        "amount": 20.0,
+        "installment": null,
+        "raw_line": "22/08/2026 PAYNKOLAY/TK TARIM KREDİ 20.00",
+        "category": "Finans & Cüzdan"
+    },
+    {
+        "bank": "Akbank",
+        "date": "23/08/2026",
+        "description": "TKPAY/AJET HAVA TASIMACI",
+        "amount": 1690.62,
+        "installment": "1/3",
+        "raw_line": "23/08/2026 TKPAY/AJET HAVA TASIMACI (5,071.86 TL) 3/1.taksit 1,690.62 1,690.62x2",
+        "category": "Ulaşım & Araç"
+    },
+    {
+        "bank": "Akbank",
+        "date": "24/08/2026",
+        "description": "CARREFOURSA ZIVERBEY EXPISTANBUL TUR",
+        "amount": 26.9,
+        "installment": null,
+        "raw_line": "24/08/2026 CARREFOURSA ZIVERBEY EXPISTANBUL TUR 26.90",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "24/08/2026",
+        "description": "VEZİROĞLU ET MİNİ MA İSTANBUL TR",
+        "amount": 475.0,
+        "installment": null,
+        "raw_line": "24/08/2026 VEZİROĞLU ET MİNİ MA İSTANBUL TR 475.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "25/08/2026",
+        "description": "ALAZLI KONYA MUTFAĞI",
+        "amount": 880.0,
+        "installment": null,
+        "raw_line": "25/08/2026 ALAZLI KONYA MUTFAĞI 880.00",
+        "category": "Yeme & İçme"
+    },
+    {
+        "bank": "Akbank",
+        "date": "25/08/2026",
+        "description": "SARDUNYA GIDA İSTANBUL TR",
+        "amount": 400.0,
+        "installment": null,
+        "raw_line": "25/08/2026 SARDUNYA GIDA İSTANBUL TR 400.00",
+        "category": "Diğer"
+    },
+    {
+        "bank": "Akbank",
+        "date": "26/08/2026",
+        "description": "TRENDYOL PLUS",
+        "amount": 75.0,
+        "installment": null,
+        "raw_line": "26/08/2026 TRENDYOL PLUS 75.00",
+        "category": "E-Ticaret"
+    },
+    {
+        "bank": "Akbank",
+        "date": "26/08/2026",
+        "description": "CARREFOURSA ZIVERBEY",
+        "amount": 26.9,
+        "installment": null,
+        "raw_line": "26/08/2026 CARREFOURSA ZIVERBEY 26.90",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "26/08/2026",
+        "description": "MİGROS-MJET ZİVERBEY İSTİSTANBUL TR",
+        "amount": 543.26,
+        "installment": null,
+        "raw_line": "26/08/2026 MİGROS-MJET ZİVERBEY İSTİSTANBUL TR 543.26",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "27/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 336.92,
+        "installment": null,
+        "raw_line": "27/08/2026 MONEYPAY/MIGROSONE 336.92",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "27/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 575.89,
+        "installment": null,
+        "raw_line": "27/08/2026 MONEYPAY/MIGROSONE 575.89",
+        "category": "Market"
+    },
+    {
+        "bank": "Akbank",
+        "date": "28/08/2026",
+        "description": "MONEYPAY/MIGROSONE",
+        "amount": 414.99,
+        "installment": null,
+        "raw_line": "28/08/2026 MONEYPAY/MIGROSONE 414.99",
+        "category": "Market"
+    }
+]
