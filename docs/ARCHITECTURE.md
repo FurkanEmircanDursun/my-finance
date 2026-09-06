@@ -1,399 +1,256 @@
-# Teknik Mimari ve Dokümanlar
+# Mimari
 
-> Bu doküman, `docs/01` – `docs/05` arasındaki tüm parçalanmış dokümanları birleştirerek projenin tek teknik referans kaynağı olarak hizmet verir.
-
----
-
-## İçindekiler
-
-1. [Ürün Vizyonu ve Değer Önerisi](#1-ürün-vizyonu-ve-değer-önerisi)
-2. [Kullanıcı Deneyimi (UX) Akışı](#2-kullanıcı-deneyimi-ux-akışı)
-3. [Mimari Katmanlar](#3-mimari-katmanlar)
-4. [Veri Akışı](#4-veri-akışı)
-5. [Parser ve Kategori Motoru](#5-parser-ve-kategori-motoru)
-6. [Görselleştirme Tasarımı](#6-görselleştirme-tasarımı)
-7. [Finansal Sağlık Skoru](#7-finansal-sağlık-skoru)
-8. [Veritabanı Şeması](#8-veritabanı-şeması)
-9. [Güvenlik ve Gizlilik Modeli](#9-güvenlik-ve-gizlilik-modeli)
-10. [Riskler ve Çözümler](#10-riskler-ve-çözümler)
-11. [Gelecek Yol Haritası](#11-gelecek-yol-haritası)
+Bu belge sistemin nasıl çalıştığını ve neden böyle kurulduğunu anlatır. Kod içindeki yorumlar "neden" sorusunu yerel olarak yanıtlar; burada bütünü tarif edilir.
 
 ---
 
-## 1. Ürün Vizyonu ve Değer Önerisi
+## 1. Genel yapı
 
-My Finance, standart bir gelir-gider takip uygulamasının ötesine geçerek **tamamen yerel (local-first)** çalışan, yapay zeka API'lerine bağımlı olmayan bir Kişisel Finans Yönetimi (PFM) platformudur.
+```
+Dosya
+  │
+  ├─ ingest/extract.ts ─────── metin çıkarma (txt → PDF metin katmanı → EBCDIC → yerel OCR → tarayıcı OCR)
+  ├─ ingest/banks/ ─────────── format tespiti + banka adaptörü → RawRow[]
+  ├─ ingest/categorize.ts ──── kural + anahtar kelime dizini → CategoryId
+  ├─ ingest/pipeline.ts ────── içerik adresli kimlik, işyeri normalizasyonu → Transaction[]
+  │
+  ├─ store/ ───────────────── reducer + IndexedDB kalıcılık + filtreler
+  │
+  ├─ analytics/engine.ts ──── tek geçişli toplayıcılar → türetilmiş raporlar
+  │        ├─ recurring.ts     periyot tespiti
+  │        ├─ commitments.ts   taksit planları, 12 aylık merdiven
+  │        ├─ anomaly.ts       aykırı değer, mükerrer çekim, alışkanlık
+  │        ├─ health.ts        ağırlıklı sağlık skoru
+  │        └─ insights.ts      sıralı bulgular
+  │
+  └─ views/ ───────────────── ekranlar (yalnızca hazır Analysis okur)
+```
 
-### Temel Prensip: Zero-Knowledge (Sıfır Bilgi)
-
-Kullanıcıların en mahrem finansal verilerini üçüncü parti sunuculara göndermeden, tarayıcı ve yerel sunucu ortamında işleyerek maksimum gizlilik sağlamak. Dosya asla diske yazılmaz; RAM'de okunur, parse edilir, sonuç JSON'a dönüştürülür, kaynak dosya garbage collector tarafından anında yok edilir.
-
-### Farklılaştırıcı Özellikler
-
-| Özellik | Mevcut Uygulamalar | My Finance |
-|---------|-------------------|------------|
-| Veri gizliliği | Veriler sunucuya yüklenir | Yerel işleme, sıfır kalıcı depolama |
-| Analiz derinliği | Basit liste görünümü | 9 farklı görselleştirme + drill-down |
-| Gelecek tahmini | Yalnızca geçmiş gösterilir | 6 aylık taksit projeksiyonu |
-| Abonelik tespiti | Manuel | Otomatik (kural tabanlı algoritma) |
-| Davranış yönlendirme | Yok | Nudge teorisi + Finansal Sağlık Skoru |
+Tek yönlü akış: dosya → işlem → analiz → görünüm. Hiçbir görünüm kendi başına toplama veya filtreleme yapmaz.
 
 ---
 
-## 2. Kullanıcı Deneyimi (UX) Akışı
+## 2. Temel kararlar
 
-### Akış Şeması
+### 2.1 Para kuruş tamsayısı olarak tutulur
+
+`Money = number`, minör birimde (kuruş). Dönüşüm yalnızca ayrıştırıcı sınırında bir kez yapılır.
+
+Sebep: binlerce satırın float toplamı kayar (`0.1 + 0.2 !== 0.3`). Yüzlerce satırlık bir ekstrede bu kayma raporlanan toplamı gerçek ekstre toplamından ayırır ve kullanıcı mutabakat yapamaz.
+
+### 2.2 Tarih sıralanabilir dize olarak tutulur
+
+`DayKey = "YYYY-MM-DD"`, `MonthKey = "YYYY-MM"`.
+
+Sebep: `Date` üzerinden `toISOString()` ile gidip gelmek UTC+3'te yerel tarihleri bir gün geriye kaydırıyordu. Dize karşılaştırması aynı zamanda sıralama ve gruplama için doğrudan kullanılabilir; `Date` nesnesi ayırmaya gerek kalmaz.
+
+### 2.3 Yön işaretle değil `kind` ile taşınır
+
+`Transaction.amount` her zaman pozitiftir. Yön `kind` alanındadır:
+
+| kind | Anlam | Harcamaya sayılır mı |
+|---|---|---|
+| `expense` | Para çıkışı | Evet |
+| `refund` | İşyeri iadesi | Kendi kategorisinden düşer |
+| `income` | Gelir, gelen transfer | Hayır |
+| `payment` | Kart borcu ödemesi | Hayır — nakit hareketi |
+
+Sebep: eski modelde negatif tutar hem iadeyi hem geliri hem kart ödemesini temsil ediyordu. "Ödemeniz için teşekkürler" satırı 22.000 TL'lik bir gelir gibi görünüp net durumu bozuyordu.
+
+### 2.4 İşyeri anahtarı normalize edilir
+
+`normalizeMerchant()` diakritikleri katlar, ödeme kuruluşu ön eklerini (`GOOGLE *`, `IYZICO`) atar, şube/şehir/terminal gürültüsünü temizler, ilk belirteci marka çıpası olarak korur.
 
 ```
-Açılış Sayfası
-    │
-    ▼
-[Dropzone] ── Ekstre (.txt) sürükle-bırak
-    │
-    ▼
-Processing State (Animasyonlu)
-    ├─ "Dosya okunuyor..."
-    ├─ "İşlemler kategorize ediliyor..."
-    └─ "Taksitler ve abonelikler hesaplanıyor..."
-    │
-    ▼
-Dashboard
-    ├─ KPI Kartları (Toplam, Top Kategori, Sağlık Skoru)
-    ├─ Kategori Donut Chart  ──→ [tıkla] ──→ Transaction Drawer
-    ├─ Merchant Treemap      ──→ [tıkla] ──→ Transaction Drawer
-    ├─ Günlük Trend (Area Chart)
-    ├─ Taksit Projeksiyonu (Stacked Bar, 6 ay)
-    ├─ Gün Isı Haritası (Heatmap)
-    ├─ Top 10 Merchant (Horizontal Bar)
-    └─ Abonelik Paneli
+"A101 9923 I353 BAHÇELİEVL"  ┐
+"A101 4417 I112 KADIKOY"     ├─→  "A101"
 ```
 
-### Tasarım Prensipleri
+Sebep: ham açıklamayla gruplamak tek bir işyerini onlarca kovaya bölüyordu; bu da hem "en çok harcanan işyerleri" listesini hem de abonelik tespitini işlevsiz bırakıyordu.
 
-- **Progressive Disclosure:** Bilgi yoğunluğu kademeli olarak sunulur. Kullanıcı önce özet KPI'ları, sonra grafikleri, sonra ham verileri görür.
-- **Drill-down:** Her grafik tıklanabilirdir. Kategoriye tıklamak, o kategorideki tüm ham işlemleri bir çekmece (drawer) içinde listeler.
-- **Sürtünmesiz Yükleme:** Kayıt zorunluluğu yoktur. Ekstre yükle, analizi gör.
+### 2.5 İşlem kimliği içerik adreslidir
+
+`hash(date | amount | merchant | ordinal)`.
+
+Ham satır yerine anlamsal alanlar kullanılır: aynı alışveriş bir kez PDF metin katmanından, bir kez OCR'dan okunduğunda ham metin farklı olur ama yine de yinelenen sayılmalıdır. `ordinal`, aynı gün aynı tutarlı iki gerçek işlemi ayırır.
 
 ---
 
-## 3. Mimari Katmanlar
+## 3. İçe aktarma boru hattı
+
+### 3.1 Metin çıkarma basamakları
+
+Her basamak yalnızca bir öncekinin çıktısını hiçbir adaptör tanımadığında çalışır:
+
+1. **UTF-8 okuma** — `.txt`, `.csv`. `�` görülürse `windows-1254` denenir.
+2. **PDF.js metin katmanı** — dijital üretilmiş ekstreler.
+3. **EBCDIC çözme** — Akbank ekstreleri; anında ve kayıpsız.
+4. **Yerel OCR servisi** — gerçek tarama, isteğe bağlı, `127.0.0.1`, kullanıcı açtıysa.
+5. **Tesseract.js** — tarayıcı içi, yavaş, son çare.
+
+`pdfjs-dist` ve `tesseract.js` dinamik `import()` ile yüklenir; yalnızca `.txt` kullanan biri ikisini de indirmez.
+
+### 3.1.1 EBCDIC
+
+Akbank ekstreleri ana bilgisayarda üretiliyor. PDF'e gömülü alt kümeli fontların glif kodları ham EBCDIC baytları ve kullanılabilir bir `ToUnicode` tablosu yok; PDF.js bu baytları Latin-1 olarak geri veriyor:
 
 ```
-┌─────────────────────────────────────────┐
-│            Frontend (React + Vite)       │
-│  ┌──────────┐  ┌────────────────────┐   │
-│  │UploadPage│  │   DashboardPage    │   │
-│  │ DropZone │  │  9 × Chart Bileşen │   │
-│  └────┬─────┘  └────────┬───────────┘   │
-└───────┼─────────────────┼───────────────┘
-        │  HTTP (axios)   │
-        ▼                 ▼
-┌─────────────────────────────────────────┐
-│           Backend (FastAPI)              │
-│  POST /api/upload   POST /api/analyze    │
-│  ┌──────────────────────────────────┐   │
-│  │         services/analyzer.py     │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │   parsers/ (akbank, garanti)     │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
-        │
-        ▼ (gelecek iterasyon)
-┌─────────────────────────────────────────┐
-│       PostgreSQL (Kalıcı Depolama)       │
-│  users / transactions / categories /    │
-│  custom_rules                           │
-└─────────────────────────────────────────┘
+"ð õ að ÷ aò ð ò ö ãÙÅÕÄèÖÓKÃÖÔ"   →   "05/07/2026 TRENDYOL.COM"
 ```
 
-### Teknoloji Seçimleri
+Önceki sürüm bunu okunamayan bir tarama sanıp OCR'a düşüyordu — yavaş, kayıplı ve ayrı bir servis gerektiren bir yol. Oysa metin eksiksiz; yalnızca kod sayfası uygulanması gerekiyor. Taban tablo CP037/CP1026 ortak yerleşimi, Türkçe harfler gerçek ekstrelerde gözlenen kodlardan eşleniyor. Belge birkaç font alt kümesi karıştırdığı için birkaç yüksek bayt alt kümeler arasında belirsiz kalıyor; bunlar işlem tablosunun kullandığı alt küme lehine çözülüyor — ayrıştırılan tek yer orası.
 
-| Katman | Teknoloji | Neden |
-|--------|-----------|-------|
-| Frontend | React 18 + Vite + TypeScript | Hızlı HMR, tip güvenliği, ekosistem zenginliği |
-| Stil | Tailwind CSS | Utility-first, hızlı prototipleme |
-| Grafikler | Recharts | React-native, composable, Treemap desteği |
-| Animasyon | Framer Motion | Processing state mikro-animasyonları için |
-| İkonlar | Lucide React | Hafif, tutarlı ikonografi |
-| Backend | FastAPI (Python) | Async, Pydantic validasyon, otomatik API docs |
-| HTTP | Uvicorn | ASGI, yüksek performanslı |
+Tespit `looksLikeEbcdic()` ile yapılır: EBCDIC harf/rakam aralıklarındaki karakter yoğunluğu ASCII'ye göre baskınsa çözme denenir, sonuç bir adaptör tarafından tanınırsa kabul edilir.
+
+### 3.1.2 Satır yeniden kurma
+
+İki ayrıntı çıktının ayrıştırılabilir olup olmadığını belirliyor:
+
+**Satır gruplama.** Parçalar taban çizgisine göre gruplanır; tolerans sayfanın kendi medyan glif yüksekliğinden türetilir. Sabit 5px eşiği küçük punto ile basılmış yoğun ekstrelerde iki satırı birleştiriyordu.
+
+**Kelime birleştirme.** PDF üreticileri her glif dizisini ayrı bir öğe olarak yazar, dolayısıyla bir ekstre satırı onlarca parça hâlinde gelir. Her parçayı boşlukla birleştirmek kelimeleri paramparça eder (`TREN DY OL`), boşluksuz birleştirmek sütunları kaynaştırır (`355.00355.00x1`). Üstelik Akbank 9,6 punto metinde kerning için 0,24 punto genişliğinde "boşluk" öğeleri yazar. Bu yüzden bir boşluk yalnızca iki durumda eklenir: boşluk öğesinin genişliği font boyunun %12'sinden fazlaysa, ya da iki parça arasında hiç boşluk öğesi yokken yatay aralık font boyunun %25'ini aşıyorsa.
+
+### 3.2 Adaptör kaydı
+
+Her adaptör iki işlev sunar:
+
+```ts
+detect(text: string): number   // 0-1 güven
+parse(text: string): AdapterOutput
+```
+
+`detectAdapter()` en yüksek skoru alanı seçer; eşik `MIN_CONFIDENCE = 0.35`. CSV adaptörü kasıtlı olarak 0.55 döner, böylece gerçek bir ekstre her zaman kendi adaptörüne gider.
+
+**Akbank:** Anglo gruplama (`1,065.00`). `N/M.taksit` = toplam/sıra — açıklanan ana tutarla doğrulandı (`1.065,00 / 3 = 355,00`). Satır sonundaki sayısal sütunlardan ilki ekstreye yansıyan tutardır.
+
+**Garanti:** Türk gruplama (`1.234,56`). Sonda `-` veya `+` alacak demektir. İki sayı varsa ilki kazanılan bonus, ikincisi tahsil edilen tutardır.
+
+**CSV:** Sütun rolleri başlıktan çıkarılır; ayraç `;`, `\t`, `,` arasından örneklemeyle seçilir; tırnaklı alanlar RFC4180'e göre okunur.
+
+### 3.3 Sınıflandırma
+
+```
+1. kullanıcı kuralı (işyeri → kategori)     — manuel düzeltmelerden öğrenilir
+2. çok kelimeli ifade eşleşmesi              — en uzun ifade kazanır
+3. tek belirteç dizin araması                — hash
+4. 'other'
+```
+
+Sonuçlar normalize işyeri başına önbelleklenir: 90 farklı işyeri içeren 400 satırlık bir ekstre 400 değil 90 sınıflandırma yapar. Eski sürüm her satır için ~50 regex çalıştırıyordu.
+
+Kategori kimliği, etiketi, rengi, harcama doğası (`need`/`mixed`/`want`/`neutral`) ve anahtar kelimeleri tek bir yerde, `domain/categories.ts` içinde tanımlıdır. Eskiden bu liste dört ayrı dosyada tekrarlanıyor ve birbirinden ayrışıyordu.
 
 ---
 
-## 4. Veri Akışı
+## 4. Analiz motoru
 
-```
-[.txt Dosya]
-    │
-    ▼ POST /api/upload (multipart/form-data)
-[FastAPI: upload.py]
-    │  RAM'de oku, banka tipini tespit et (Akbank/Garanti)
-    ▼
-[Parser: AkbankParser veya GarantiParser]
-    │  Regex ile satır satır parse et
-    ▼
-[Categorizer: categorize_transaction()]
-    │  CATEGORIES sözlüğüyle eşleştir
-    ▼
-[JSON Response]  ← İşlenmiş transaction listesi
-    │
-    ▼ POST /api/analyze
-[FastAPI: analyze.py]
-    │
-    ▼
-[Analyzer Service]
-    ├─ category_totals()
-    ├─ daily_trend()
-    ├─ installment_projection()
-    ├─ subscription_detection()
-    ├─ top_merchants()
-    ├─ weekday_heatmap()
-    └─ health_score()
-    │
-    ▼
-[AnalysisResult JSON] → Frontend → 9 Grafik Render
-```
+### 4.1 Tek geçiş
 
----
+`accumulate()` işlem dizisini bir kez dolaşıp şu toplayıcıları doldurur: toplamlar, gün/ay/kategori/işyeri/banka kovaları, ay×kategori matrisi, hafta günü profili, tarih aralığı. Türetilmiş raporlar diziye değil bu haritalara bakar.
 
-## 5. Parser ve Kategori Motoru
+Eski analizör listeyi yedi kez tarıyordu (kategori, günlük trend, işyeri, taksit, abonelik, hafta günü, sağlık — artı sağlık içinde ikinci bir kategori geçişi) ve her kategori düzenlemesinde bunu baştan yapıyordu.
 
-### Sınıf Hiyerarşisi
+Günlük hareketli ortalama ön ek toplamlarıyla hesaplanır: pencere boyutundan bağımsız O(n).
 
-```python
-BaseParser (ABC)
-├── AkbankParser   # DD/MM/YYYY formatı, taksit desteği
-└── GarantiParser  # DD Ay YYYY formatı, Türkçe ay isimleri
-```
+### 4.2 Memoizasyon
 
-### Akbank Satır Formatı
+`analyzeMemo()` sonucu `WeakMap<Transaction[], Map<profileKey, Analysis>>` içinde saklar. Analiz `(transactions, profile)` ikilisinde saftır; görünümler ikisine de dokunmayan sebeplerle yeniden çizildiğinde hesaplama tekrarlanmaz. Kategori düzenlemesi yeni bir dizi ürettiği için önbelleği doğru şekilde ıskalar.
 
-```
-05/07/2026 TRENDYOL.COM (1,065.00 TL) 3/2.taksit 355.00 355.00x1
-│          │             │              │           │
-Tarih      Açıklama      Toplam TL      Taksit No   Taksit Tutarı
-```
+### 4.3 Düzenli ödeme tespiti
 
-**Regex'ler:**
-- Tarih: `^(\d{2}/\d{2}/\d{4})`
-- Taksit: `(\d+)/(\d+)\.taksit` → `current/total` formatına dönüştür
-- İade: Tutarın sonundaki `(-)` işareti → negatif float
-- Temizleme: `\([\d.,]+\s+TL(\s*\+Vade Farkı)?\)` → kaldır
+Üç bağımsız sinyal:
 
-### Garanti BBVA Satır Formatı
+| Sinyal | Ölçüm | Kapı |
+|---|---|---|
+| Periyot düzeni | Ardışık farkların medyanı bir banda düşmeli; MAD medyanın %20'sini aşmamalı | ≥ 0.50 |
+| Tutar istikrarı | Tutarların MAD'ı medyanın %10'unu aşmamalı | ≥ 0.35 |
+| Kanıt | En az üç tekrar; abonelik kategorisinde iki yeterli ama güven 0.62 ile sınırlı | ≥ 3 (veya 2 + abonelik) |
 
-```
-08 Ağustos 2026 A101 9923 I353 BAHÇELİEVL 0,09 788,50
-│               │                           │     │
-Tarih           Açıklama                    Bonus  Tutar
-```
+`güven = 0.45·düzen + 0.35·istikrar + 0.20·kanıt` (abonelik kategorisine +0.12), eşik **0.60**.
 
-**Regex'ler:**
-- Tarih: `^(\d{2}\s+[a-zA-ZğüşıöçĞÜŞİÖÇ]+\s+\d{4})`
-- Tutar tespiti: Satır sonundan geriye doğru parse et. Sondan ikinci sayısal değer = Bonus, sonuncu = Asıl Tutar.
-- Türk formatı: `788,50` → `788.50` (`replace('.','').replace(',','.')`)
+İstikrar bir kapıdır, yalnızca ağırlık değildir: düzenli aralıkla ama çok farklı tutarlarla ziyaret edilen bir benzin istasyonu, yalnızca periyot ve kanıt üzerinden sabit aylık yükümlülük sayılıyordu ve "aylık karşılığı" değeri gerçek aboneliklerin toplamını gölgede bırakıyordu.
 
-### Kategori Motoru
+Üç tekrar şartı da aynı sebeple var: iki ödeme bir aralık tanımlar ama bir desen tanımlamaz. Gerçek bir ekstrede yedi gün arayla yapılan iki benzer tutarlı market alışverişi "haftalık abonelik" olarak raporlanıp yıllık beş haneli bir maliyete çevriliyordu.
 
-```python
-CATEGORIES = {
-    "Market":           [r"MİGROS", r"A101", r"BİM", r"CARREFOUR", ...],
-    "Yeme & İçme":      [r"UBER\s*EATS", r"YEMEKSEPETI", r"RESTORAN", ...],
-    "Abonelik":         [r"NETFLIX", r"SPOTIFY", r"YOUTUBE", ...],
-    "E-Ticaret":        [r"TRENDYOL", r"HEPSIBURADA", r"AMAZON", ...],
-    "Fatura & Telekom": [r"TURKCELL", r"VODAFONE", r"İSKİ", ...],
-    "Ulaşım & Araç":    [r"PETROL OFİSİ", r"OPET", r"BELBİM", ...],
-    "Sağlık":           [r"ECZANE", r"HASTANE", r"MEDİCANA", ...],
-    "Eğitim & Kitap":   [r"KİTAP", r"KIRTASİYE", ...],
-    "Finans & Cüzdan":  [r"PAYCELL", r"MONEYPAY", r"IYZICO", ...]
-}
-```
+Aylık karşılık `medyan × (30,44 / periyot)` ile hesaplanır; haftalık, üç aylık ve yıllık ödemeler böylece karşılaştırılabilir.
 
-**Algoritma:** `description.upper()` → her kategorideki her regex ile `re.search()` → ilk eşleşen kategorinin adını döndür → eşleşme yoksa `"Diğer"`.
+### 4.4 Taksit ve yükümlülük merdiveni
 
-**Kullanıcı Kuralları:** Kullanıcı UI'dan bir işlemin kategorisini değiştirdiğinde, bu kural `Custom_Rules` tablosuna yazılır ve bir sonraki analizde kategorizer önce özel kuralları kontrol eder.
+Bir plan `işyeri + aylık tutar + plan uzunluğu` ile tanımlanır — bu üçlü planın kapsadığı ekstreler boyunca sabittir. Kalan taksitler, planın **en son fatura edildiği aydan sonraki** aya yerleşir. Eski projeksiyon her planı işlemin kendi ayından başlatıp ödenmiş taksiti tekrar sayıyordu; bu hem içinde bulunulan ayı çift faturalandırıyor hem de geçmişte kalan yükümlülükler gösteriyordu.
+
+### 4.5 Aykırı değer tespiti
+
+Ortalama/standart sapma yerine medyan/MAD. Kişisel harcama dağılımı sağa çarpıktır; tek bir kira ödemesi ortalama tabanlı eşiği şişirip diğer her şeyi gizler. Eşik, normal dağılıma denk gelecek şekilde ölçeklenmiş robust z-skorunda **3,5**. Karşılaştırma iki tabana göre yapılır: kategorinin tipik işlem büyüklüğü ve işyerinin kendi geçmişi; işyeri sinyali daha özgül olduğu için kategori sinyalini ezer.
+
+**Mükerrer çekim:** aynı işyeri, aynı tutar, ≤3 gün ara. Düzenli ödemeler listeden çıkarılır.
+
+**Alışkanlık ("küçük ama sık"):** medyan tutarı ≤ ₺400 ve en az 5 tekrar olan işyerleri; yıllık karşılığa ölçeklenir. Toplam bazlı bir sıralamada görünmeyen ama yıllık etkisi büyük olan harcama budur.
+
+### 4.6 Sağlık skoru
+
+Altı bileşen, her biri kendi ekseninde 0–100 ve kendi ağırlığıyla:
+
+| Bileşen | Ağırlık | 100 puan | 0 puan |
+|---|---|---|---|
+| Tasarruf oranı | 0.30 | %25 biriktirme | −%5 |
+| Sabit yük | 0.25 | gelirin %15'i | %45'i |
+| İsteğe bağlı harcama payı | 0.20 | %20 | %60 |
+| İstikrar (aylık CV) | 0.15 | %10 | %60 |
+| Dağılım (HHI) | 0.10 | 0.15 | 0.60 |
+| Sınıflandırma kapsamı | 0.08 | %95 | %60 |
+
+Hesaplanamayan bileşenler (gelir girilmemiş, tek ay veri) düşürülür ve kalan ağırlıklar yeniden ölçeklenir. Eski skor 100'den başlayıp kategori payı sabit bir eşiği geçtiğinde keyfi puan düşüyordu; bu, yüksek market harcamalı bir ayla tamamen keyfi harcamalı bir ayı aynı puana getiriyordu.
 
 ---
 
-## 6. Görselleştirme Tasarımı
+## 5. Durum ve kalıcılık
 
-### Grafik Kataloğu
+Tek `useReducer` + context. Kalıcılık `IndexedDB` üzerinde ince bir anahtar-değer sarmalayıcıyla, 400 ms geciktirmeli yazma ile yapılır. Depolama engellendiğinde (gizli pencere, site verisi kapalı) bellek içi yedeğe düşülür; hiçbir yol atmaz.
 
-#### KPI Kartları
-Sayfanın en üstünde 3 büyük sayısal metrik:
-- **Toplam Harcama:** Dönem içi pozitif tutarların toplamı (TL)
-- **En Yüksek Kategori:** En fazla harcama yapılan kategori adı + tutarı
-- **Finansal Sağlık Skoru:** 0–100 arası renk kodlu puan (Kırmızı < 40, Sarı 40–70, Yeşil > 70)
+`STATE_VERSION` değiştiğinde eski anlık görüntü yarım okunmak yerine atılır — ekstreler her zaman özgün dosyadan yeniden içe aktarılabilir.
 
-#### Kategori Donut Chart
-- Ortada: Toplam dönem harcaması (TL)
-- Dilimler: Her kategorinin yüzdesi
-- Etkileşim: Dilime tıklandığında sağdan `TransactionDrawer` açılır, o kategorideki tüm işlemler listelenir
+Filtreler tek yerde uygulanır (`store/selectors.ts`) ve `analysis` zaten filtrelenmiş kümeden hesaplanır. Görünümler filtreleme mantığını tekrarlamaz.
 
-#### Merchant Treemap
-- Alan büyüklüğü = harcama tutarı
-- Renk = kategori
-- İçeride: Merchant adı + tutar
-- Etkileşim: Kutuya tıklandığında drawer açılır
-
-#### Günlük Harcama Trend (Area Chart)
-- X ekseni: Ayın günleri
-- Y ekseni: Günlük harcama tutarı (TL)
-- Özellik: 7 günlük hareketli ortalama çizgisi (benchmark)
-- Tooltip: "Bu gün geçen haftaya göre %X daha fazla"
-
-#### Taksit Projeksiyonu (Stacked Bar Chart)
-- X ekseni: Önümüzdeki 6 ay
-- Y ekseni: Toplam taksit yükü (TL)
-- Renkler: Kategoriye göre (E-Ticaret = mavi, Sağlık = yeşil, vb.)
-- Veri kaynağı: `installment` field'ından (`current/total`) kalan ay sayısı hesaplanır
-
-#### Gün Isı Haritası (Heatmap)
-- Matris: 7 gün (Pzt–Paz) × Haftalar
-- Renk yoğunluğu: O günkü toplam harcama
-- Analiz: "Hafta sonları daha mı çok harcıyorsunuz?"
-
-#### Top 10 Merchant (Horizontal Bar Chart)
-- En çok harcandığı 10 işyeri
-- Etiket: İşyeri adı + toplam tutar + işlem sayısı
-
-#### Abonelik Paneli
-- Tespit algoritması: Aynı merchant, 25–35 gün arayla, ±%5 tutar toleransıyla tekrarlayan ödemeler
-- Gösterim: Logo (favicon) + isim + aylık tutar + toplam yıllık maliyet
-- Uyarılar: Tutar artışı tespit edilirse sarı rozet göster
-
-#### Transaction Drawer
-- Sağdan kayan panel
-- Seçili kategorinin tüm ham işlemleri: Tarih | Açıklama | Taksit | Tutar
-- Kategori değiştirme butonu (manuel override)
+**Kural öğrenme:** kullanıcı bir işlem grubuna kategori atadığında ve "kural olarak kaydet" işaretliyse, o işyerlerinin geçmiş ve gelecek tüm kayıtları güncellenir; kural içe aktarma boru hattına da geçer.
 
 ---
 
-## 7. Finansal Sağlık Skoru
+## 6. Arayüz
 
-Kullanıcının harcama profilini 0–100 skalasında ölçen, bütçe yönetimi yeteneğini göstergeleyen puan sistemi.
+### 6.0 Gezinme
 
-```
-Başlangıç Puanı: 100
+Beş sekme, insanın soruyu sorduğu sırayla: ne oldu → nereye gitti → ne tekrar ediyor → şimdiden ne borçlu → satırları göster. Önceki sürümde yedi sekme vardı; nakit akışı kategorilerden, bulgular da özetten ayrıydı. Her iki ayrım da ilk ekranı bir cevap olmaktan çıkarıp menüye çeviriyordu. Nakit akışı ve kategoriler tek bir "Harcamalar" sayfası oldu, bulgular özete taşındı ve tam listeye bağlantı verildi.
 
-DÜŞÜRÜCÜ FAKTÖRLER:
-├─ Yeme & İçme oranı > %25 toplam harcama       → -15 puan
-├─ Tekil abonelik oranı > %10 toplam harcama     → -10 puan
-├─ Taksitli işlem oranı > %40 toplam harcama     → -20 puan
-├─ E-Ticaret oranı > %20 toplam harcama          → -10 puan
-└─ "Diğer" (kategorisiz) oranı > %15             → -5 puan
+Özet ekranının tek işi var: okuyanın hiçbir şeyi kendi kafasında birleştirmek zorunda kalmadan "nasıl gidiyorum" sorusunu yanıtlamak. Bir cümleyle açılır, üç sayı verir, ardından üzerine düşünülmeye değer birkaç bulguyu sıralar. Gerisi bir tık ötede.
 
-ARTIRICI FAKTÖRLER:
-├─ İade (negatif tutar) bulunuyorsa              → +5 puan
-└─ Hiç taksitli işlem yoksa                     → +10 puan
+Tek bir renk paleti CSS değişkeni olarak `styles/index.css` içinde tanımlıdır; açık tema `:root`, koyu tema hem `prefers-color-scheme` hem `[data-theme]` altında. Tailwind renkleri bu değişkenlere bağlanır, böylece bileşenlerde `dark:` varyantı yoktur ve ürün tek bir bloktan yeniden temalandırılabilir.
 
-Skor Aralıkları:
-  0 – 39  → 🔴 Kritik (Harcama kontrolü önerilir)
-  40 – 69 → 🟡 Dikkatli (İyileştirme alanları var)
-  70 – 100 → 🟢 Sağlıklı (Devam et!)
-```
+Grafikler `ui/charts.tsx` içinde ince Recharts sarmalayıcılarıdır: tek eksen stili, tek ipucu bileşeni, renkler kategori tanımlarından. Uzun aralıklar SVG düğüm sayısını sınırlamak için seyreltilir.
+
+**Paket bölme:** grafik kütüphanesi yalnızca gösterge panosu görünümleriyle yüklenir (`React.lazy`); PDF ve OCR ayrı parçalardadır. İlk açılış (her zaman içe aktarma ekranıdır) ~98 kB gzip iner.
 
 ---
 
-## 8. Veritabanı Şeması
+## 7. Yerel OCR servisi
 
-> MVP'de PostgreSQL kullanılmaz; veriler session'da tutulur. Aşağıdaki şema kalıcı depolama iterasyonu için referanstır.
+İsteğe bağlı FastAPI yardımcısı. Kapsamı dar: taranmış PDF'i metne çevirip geri verir. Ayrıştırma, sınıflandırma ve analiz tarayıcıda kalır.
 
-### `transactions`
-```sql
-CREATE TABLE transactions (
-    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id          UUID REFERENCES users(id),
-    bank_name        VARCHAR(50) NOT NULL,          -- 'Akbank', 'Garanti'
-    transaction_date DATE NOT NULL,
-    raw_description  TEXT NOT NULL,
-    amount           DECIMAL(12, 2) NOT NULL,       -- negatif = iade
-    category_id      UUID REFERENCES categories(id),
-    installment_current INT,                        -- 2 (2. taksit)
-    installment_total   INT,                        -- 6 (6 taksit)
-    created_at       TIMESTAMPTZ DEFAULT NOW()
-);
-```
+- Model **ilk istekte** yüklenir. Eskiden modül import'u endpoint hiç çağrılmasa bile saniyelerce blokluyor, bağımlılık eksikse tüm süreç çöküyordu.
+- Sonuçlar içerik hash'iyle önbelleklenir (LRU, varsayılan 8 belge).
+- Sayfalar tek tek işlenip hemen serbest bırakılır; uzun ekstrelerde bellek düz kalır.
+- CORS yalnızca yerel geliştirme kaynaklarına açıktır — servis finansal belge işler, rastgele bir web sayfasından erişilebilir olmamalıdır.
+- Satır gruplama toleransı sayfa yüksekliğine oranlıdır, sabit piksel değil.
 
-### `categories`
-```sql
-CREATE TABLE categories (
-    id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    parent_id UUID REFERENCES categories(id),       -- hiyerarşik
-    name      VARCHAR(100) NOT NULL,                -- 'Market'
-    icon      VARCHAR(50),                          -- 'shopping-cart'
-    color     VARCHAR(7)                            -- '#22c55e'
-);
-```
-
-### `custom_rules`
-```sql
-CREATE TABLE custom_rules (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID REFERENCES users(id),
-    keyword     VARCHAR(200) NOT NULL,              -- 'ÇAPARİ RESTAURANT'
-    category_id UUID REFERENCES categories(id),
-    created_at  TIMESTAMPTZ DEFAULT NOW()
-);
-```
+Yapılandırma ortam değişkenleriyle: `MYFINANCE_OCR_DPI`, `MYFINANCE_OCR_MAX_PAGES`, `MYFINANCE_MAX_UPLOAD_MB`, `MYFINANCE_OCR_CACHE`, `MYFINANCE_PORT`.
 
 ---
 
-## 9. Güvenlik ve Gizlilik Modeli
+## 8. Testler
 
-### Zero-Knowledge Prensibi
+`npm test` — vitest, 70 test.
 
-```python
-# upload.py — Dosya hiçbir zaman diske yazılmaz
-async def upload_statement(file: UploadFile):
-    content = await file.read()          # RAM'e oku
-    text = content.decode("utf-8")       # Decode et
-    transactions = parser.parse(text)    # Parse et
-    del content, text                    # Referansı sil
-    return transactions                  # Sadece JSON döndür
-```
+Kapsam: para ayrıştırma ve biçimleme, tarih aritmetiği (saat dilimi kayması dahil), işyeri normalizasyonu, EBCDIC çözme ve tespiti, PDF satır/kelime birleştirme, her iki banka adaptörü artı CSV, gerçek ekstrelerde görülen yerleşim tuhaflıkları (şablon "bosluk" hücreleri, banka bölüm başlıkları, tarih içeren düz metin paragrafları), format tespiti, düzenli ödeme tespitinin kabul ve ret durumları, taksit penceresi, motorun `kind` ayrımı ve boş veri davranışı.
 
-### Veri Maskeleme
+Test verileri gerçek ekstre yerleşimlerinden alınmış ama tutarlar ve işyeri adları değiştirilmiştir; depoya kişisel finansal veri girmez.
 
-Ham satırlarda kart numarası veya IBAN gibi hassas veriler varsa, veritabanına yazmadan önce maskelenir:
-```
-4870 75** **** 4011
-TR** **** **** **** **** **
-```
-
-### CORS Politikası
-Backend yalnızca `localhost:5173` (geliştirme) ve dağıtım domain'inden gelen istekleri kabul eder.
-
----
-
-## 10. Riskler ve Çözümler
-
-| Risk | Olasılık | Etki | Çözüm |
-|------|----------|------|-------|
-| Banka ekstre formatını değiştirir | Orta | Yüksek | Fallback: parse edilemeyen satırı `"Tanımsız İşlem"` olarak kaydet; kullanıcıya uyar |
-| Yeni merchant kategorize edilemiyor | Yüksek | Düşük | `Custom_Rules` tablosu: kullanıcı düzelttikçe sistem öğrenir |
-| Taksit hesaplama hatası | Düşük | Orta | İade işlemleri (`-` tutarlı) ayrı hesaplanır; negatif tutar = toplam borca artı |
-| Abonelik yanlış tespit | Orta | Düşük | Kullanıcı "Bu abonelik değil" diyebilir; kural false-positive listesine eklenir |
-| Büyük ekstre dosyası (1000+ satır) | Düşük | Orta | Streaming parse + async FastAPI endpoint; UI'da skeleton loader |
-
----
-
-## 11. Gelecek Yol Haritası
-
-### Iterasyon 2
-- [ ] PDF parsing (`pdfplumber` veya `pypdf2`)
-- [ ] Kullanıcı hesapları (JWT auth)
-- [ ] PostgreSQL kalıcı depolama
-- [ ] Çoklu ekstre yükleme (birden fazla ay karşılaştırma)
-
-### Iterasyon 3
-- [ ] İş Bankası, Yapı Kredi parser adaptörleri
-- [ ] Bütçe limitleri ve proaktif uyarılar
-- [ ] Gamification: Tasarruf serileri (streak sistemi)
-- [ ] Peer-to-peer benchmark (anonimleştirilmiş karşılaştırma)
-
-### Iterasyon 4 — Open Banking
-- [ ] BDDK Open Banking API entegrasyonu
-- [ ] Otomatik ekstre çekme (kullanıcı onayıyla)
-- [ ] Gerçek zamanlı harcama bildirimleri
+**Uçtan uca doğrulama.** Ayrıştırıcı gerçek bir Akbank Axess ve gerçek bir Garanti Bonus ekstresiyle karşılaştırıldı. Her iki dosyada da okunamayan satır sayısı sıfır ve ayrıştırılan net tutar ekstrenin kendi "Dönem Borcu" rakamına kuruşu kuruşuna eşit çıktı (₺18.628,32 ve ₺34.037,58). Bu karşılaştırma kişisel dosyalara dayandığı için depoda tutulmaz; yerleşimden çıkarılan kurallar yukarıdaki testlerde sabitlenmiştir.

@@ -1,32 +1,63 @@
-/** @type {import('tailwindcss').Config} */
+import type { Config } from 'tailwindcss'
+
+/**
+ * Colours resolve to CSS variables declared in `src/styles/index.css`, so the
+ * whole product re-themes from one block and utilities stay theme-aware without
+ * `dark:` variants scattered through the components.
+ */
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        background: '#0a0a0a',
-        surface: {
-          DEFAULT: '#111111',
-          hover: '#171717',
-          active: '#1f1f1f',
+        bg: 'var(--bg)',
+        raised: 'var(--bg-raised)',
+        sunken: 'var(--bg-sunken)',
+        hover: 'var(--bg-hover)',
+        active: 'var(--bg-active)',
+        line: 'var(--line)',
+        'line-strong': 'var(--line-strong)',
+        ink: 'var(--text)',
+        muted: 'var(--text-muted)',
+        faint: 'var(--text-faint)',
+        inverse: 'var(--text-inverse)',
+        accent: {
+          DEFAULT: 'var(--accent)',
+          hover: 'var(--accent-hover)',
+          soft: 'var(--accent-soft)',
+          text: 'var(--accent-text)',
         },
-        border: {
-          DEFAULT: '#262626',
-          hover: '#333333',
+        positive: {
+          DEFAULT: 'var(--positive)',
+          soft: 'var(--positive-soft)',
         },
-        brand: {
-          50:  '#f0fdf4',
-          100: '#dcfce7',
-          500: '#22c55e',
-          600: '#16a34a',
-          700: '#15803d',
-          900: '#14532d',
+        negative: {
+          DEFAULT: 'var(--negative)',
+          soft: 'var(--negative-soft)',
+        },
+        warning: {
+          DEFAULT: 'var(--warning)',
+          soft: 'var(--warning-soft)',
         },
       },
+      borderRadius: {
+        DEFAULT: 'var(--radius)',
+        lg: 'var(--radius-lg)',
+      },
+      boxShadow: {
+        overlay: 'var(--shadow-overlay)',
+      },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+      },
+      fontSize: {
+        '2xs': ['11px', '1.35'],
+      },
+      maxWidth: {
+        app: '1180px',
       },
     },
   },
   plugins: [],
-}
+} satisfies Config

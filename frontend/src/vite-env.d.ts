@@ -1,6 +1,16 @@
 /// <reference types="vite/client" />
 
-declare module '*?url' {
-  const src: string
-  export default src
+/**
+ * pdfjs-dist and tesseract.js are loaded through dynamic `import()` with paths
+ * that have no bundled type declarations. They are typed loosely here so the
+ * rest of the codebase can stay strict.
+ */
+declare module 'pdfjs-dist/build/pdf.min.mjs' {
+  const lib: any
+  export = lib
+}
+
+declare module 'pdfjs-dist/build/pdf.worker.min.mjs?url' {
+  const url: string
+  export default url
 }

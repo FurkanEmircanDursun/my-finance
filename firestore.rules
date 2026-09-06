@@ -1,0 +1,13 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Every document a user's data lives under is scoped to their own uid;
+    // nobody, including another authenticated user, can read or write a path
+    // that is not their own — anonymous accounts included, since `uid` is
+    // still unique and stable for them.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

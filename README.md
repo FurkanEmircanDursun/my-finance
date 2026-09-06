@@ -1,112 +1,77 @@
-# My Finance — Akıllı Kişisel Finans Asistanı
+# My Finance
 
-> Kredi kartı ekstreni sürükle, harcamalarını anında analiz et.
-
-## Ne Yapar?
-
-**My Finance**, Akbank ve Garanti BBVA ekstrelerinizi (`.txt`) sürükleyip bırakmanızla birlikte otomatik olarak:
-
-- Tüm işlemleri **kategorize eder** (Market, Yeme & İçme, Ulaşım, vb.)
-- **9 farklı görsel analiz** üretir (Donut, Treemap, Heatmap, Stacked Bar…)
-- **Aboneliklerinizi** tespit eder
-- **Taksitlerinizin** önümüzdeki 6 aydaki yükünü hesaplar
-- **Finansal Sağlık Skoru** (0–100) çıkarır
-
-Tüm veriler **yerel (local-first)** işlenir — hiçbir veri sunucuya kalıcı olarak kaydedilmez.
-
----
-
-## Proje Yapısı
-
-```
-my-finance/
-├── README.md
-├── PRD.md
-├── docs/
-│   └── ARCHITECTURE.md       # Teknik mimari ve dokümanlar
-├── parsers/                   # Python parse motorları
-│   ├── base_parser.py
-│   ├── akbank_parser.py
-│   ├── garanti_parser.py
-│   ├── categorizer.py
-│   └── main.py
-├── backend/                   # FastAPI REST API
-│   ├── requirements.txt
-│   ├── main.py
-│   ├── routers/
-│   │   ├── upload.py
-│   │   └── analyze.py
-│   └── services/
-│       └── analyzer.py
-├── frontend/                  # React + Vite arayüzü
-│   ├── package.json
-│   └── src/
-│       ├── App.tsx
-│       ├── pages/
-│       └── components/
-└── data/                      # Örnek ekstre dosyaları ve JSON çıktıları
-```
-
----
-
-## Hızlı Kurulum
-
-### Gereksinimler
-- Python 3.10+
-- Node.js 18+
-
-### 1 — Backend
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-Backend `http://localhost:8000` adresinde çalışmaya başlar.  
-API dokümantasyonu: `http://localhost:8000/docs`
-
-### 2 — Frontend
+Kredi kartı ekstrenizi tarayıcıda okuyup analiz eden kişisel finans aracı. Dosyalar cihazınızdan çıkmaz; ayrıştırma, sınıflandırma ve tüm analiz tarayıcıda çalışır, veriler IndexedDB'de yerel olarak saklanır.
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev          # http://localhost:3003
 ```
 
-Frontend `http://localhost:5173` adresinde açılır.
-
-### 3 — Parser'ları Tek Başına Çalıştırmak (Opsiyonel)
+Taranmış (metin katmanı olmayan) PDF'ler için isteğe bağlı yerel OCR servisi:
 
 ```bash
-cd parsers
-python main.py          # Parse eder → data/ klasörüne JSON yazar
-python categorizer.py   # Kategorize eder → *_categorized.json üretir
+pip install -r backend/requirements.txt
+python backend/main.py     # http://127.0.0.1:8005
 ```
 
----
-
-## API Endpoint'leri
-
-| Method | Path | Açıklama |
-|--------|------|----------|
-| `POST` | `/api/upload` | Ekstre `.txt` dosyası yükle, parse edilmiş işlemleri al |
-| `POST` | `/api/analyze` | İşlem listesi gönder, tüm analiz metriklerini al |
-| `GET`  | `/api/health` | Backend sağlık kontrolü |
+Servisi Ayarlar bölümünden etkinleştirin. Kapalıyken taranmış PDF'ler tarayıcı içi OCR ile okunur.
 
 ---
 
-## Desteklenen Bankalar
+## Ne yapar
 
-| Banka | Format | Taksit Desteği |
-|-------|--------|----------------|
-| Akbank | `.txt` (DD/MM/YYYY) | ✅ |
-| Garanti BBVA | `.txt` (DD Ay YYYY) | ❌ (Garanti ekstrelerinde taksit bilgisi yok) |
+Beş bölüm. İlki tek başına yeterli; gerisi derinleşmek isteyene.
 
-Yeni banka eklemek için `parsers/base_parser.py`'den türetilmiş yeni bir sınıf yeterlidir.
+| Bölüm | İçerik |
+|---|---|
+| **Özet** | Dönemi tek cümlede özetler, üç sayı verir (ay sonu tahmini, gelecek ay bağlı tutar, sağlık skoru) ve en önemli üç bulguyu gösterir |
+| **Harcamalar** | Brüt/iade/net ayrımı, aylık seri ve limit takibi, kategori tablosu, aylar arası hareket edenler, işyerleri, "küçük ama sık" alışkanlıklar, haftalık ritim |
+| **Düzenli ödemeler** | Periyot bandı tespiti, tutar istikrarı, güven skoru, fiyat artışı, sonraki tahsilat, durmuş abonelikler |
+| **Gelecek** | Açık taksit planları, 12 aylık bağlı tutar merdiveni, gelire oran |
+| **İşlemler** | Arama, sıralama, toplu kategori atama (kural olarak öğrenir), manuel kayıt, CSV dışa aktarım |
 
----
+Ayrıca **Bulgular** (tüm sıra dışı işlemler, mükerrer çekimler, açıklamalı sağlık raporu), **Ekstreler** ve **Ayarlar** — özetteki bağlantılardan ve üst çubuktan erişilir.
 
-## Teknik Detaylar
+## Desteklenen kaynaklar
 
-→ Detaylı mimari, veri akışı ve risk analizi için bkz. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+- **Akbank / Axess** — `.txt` ve `.pdf`
+- **Garanti BBVA / Bonus** — `.txt` ve `.pdf`
+- **Genel CSV** — başlık satırında tarih ve tutar sütunu olan her dışa aktarım
+
+Akbank PDF'leri ana bilgisayarda üretiliyor ve metin katmanı EBCDIC kodlu geliyor; uygulama bunu doğrudan çözer, OCR'a gerek kalmaz. Her iki banka için de gerçek ekstrelerle doğrulandı: ayrıştırılan net tutar, ekstrenin kendi "Dönem Borcu" rakamıyla kuruşu kuruşuna örtüşüyor.
+
+Yeni bir banka eklemek: `src/ingest/banks/` altına bir adaptör dosyası yazıp `src/ingest/banks/index.ts` içindeki `ADAPTERS` dizisine ekleyin. Boru hattının geri kalanında değişiklik gerekmez.
+
+## Komutlar
+
+```bash
+npm run dev         # geliştirme sunucusu
+npm run build       # tip kontrolü + üretim derlemesi
+npm run typecheck   # yalnızca tip kontrolü
+npm test            # birim testleri (vitest)
+```
+
+## Mimari
+
+Ayrıntı için [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+```
+src/
+  core/        para (kuruş tamsayı), tarih, istatistik, metin, hash
+  domain/      tipler ve kategori tek kaynağı
+  ingest/      metin çıkarma, banka adaptörleri, sınıflandırma, boru hattı
+  analytics/   tek geçişli analiz motoru ve modülleri
+  store/       reducer, IndexedDB kalıcılık, seçiciler
+  ui/          tasarım sistemi ilkelleri, grafik sarmalayıcıları
+  views/       bölüm ekranları
+  app/         kabuk, gezinme, filtre çubuğu, tema
+```
+
+## Gizlilik
+
+- Hiçbir işlem verisi ağa çıkmaz. Uygulamada uzak API çağrısı yoktur.
+- Yerel OCR servisi yalnızca siz açtığınızda ve yalnızca `127.0.0.1` üzerinde çalışır; hiçbir şeyi diske yazmaz.
+- Veriler tarayıcınızın IndexedDB'sinde durur. Ayarlar bölümünden JSON yedeği alabilir veya tamamen silebilirsiniz.
+
+> **Not:** Depoda gerçek ekstre içerikli örnek dosyalar (`frontend/*.txt`, `data/*.json`) bulunuyor. Bunlar geçmiş commit'lerde de yer aldığı için depoyu paylaşacaksanız önce temizlemeniz gerekir.

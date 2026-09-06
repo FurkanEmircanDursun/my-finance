@@ -1,69 +1,88 @@
-# Ürün Gereksinim Dokümanı (PRD) — My Finance MVP
+# Ürün Gereksinim Dokümanı — My Finance
 
-> **Versiyon:** 1.0 | **Tarih:** Ağustos 2026 | **Durum:** Geliştirme aşamasında
+> **Versiyon:** 2.0 · **Tarih:** Eylül 2026 · **Durum:** Geliştirmede
 
 ---
 
-## 1. Problem Tanımı
+## 1. Problem
 
-Kullanıcılar, kredi kartı ekstrelerinde onlarca satır ham veri ile karşılaşır; ancak bu veriyi anlamlandırmak için zaman, araç veya finansal bilgi gerekmektedir. Mevcut uygulamalar ya verilerinizi buluta göndererek gizliliği ihlal eder, ya da yalnızca geçmiş verileri göstererek gelecek planlamayı zorlaştırır.
+Kredi kartı ekstresi onlarca ham satırdır. Kullanıcı bu satırlardan üç soruya cevap arar ve hiçbirini ekstreden okuyamaz:
+
+1. Param nereye gidiyor?
+2. Önümüzdeki ay ben hiçbir şey yapmasam bile ne kadar ödeyeceğim?
+3. Bu ayda alışılmadık bir şey oldu mu?
+
+Mevcut uygulamalar ya veriyi buluta gönderir ya da yalnızca geçmişi tablolar; ikisi de bu soruları yanıtlamaz.
 
 ## 2. Çözüm
 
-**My Finance**, kredi kartı ekstrelerini (`.txt`) sürükle-bırak yöntemiyle alır, tamamen yerel (local-first) bir şekilde parse eder ve kullanıcıya 9 farklı interaktif görselleştirme sunar.
+Ekstre tarayıcıya bırakılır, cihazdan çıkmadan ayrıştırılır ve beş bölümlük bir analiz olarak sunulur. Uygulama geçmişi göstermekle kalmaz; tekrarlayan yükleri, bağlı gelecek ödemeleri ve sıra dışı hareketleri açıkça isimlendirir.
 
-## 3. Temel Özellikler (MVP Kapsamı)
+## 3. Kapsam
 
-| # | Özellik | Öncelik | Durum |
-|---|---------|---------|-------|
-| 1 | Sürükle-bırak ekstre yükleme (.txt) | P0 | ✅ |
-| 2 | Akbank & Garanti parser motorları | P0 | ✅ |
-| 3 | Kural tabanlı kategorizasyon | P0 | ✅ |
-| 4 | Kategori Donut Chart + Drill-down | P0 | ✅ |
-| 5 | Merchant Treemap | P1 | ✅ |
-| 6 | Günlük Harcama Trend Grafiği | P1 | ✅ |
-| 7 | Taksit Projeksiyonu (6 ay) | P1 | ✅ |
-| 8 | Abonelik Tespiti | P1 | ✅ |
-| 9 | Haftanın Günleri Isı Haritası | P1 | ✅ |
-| 10 | Top 10 Merchant Sıralaması | P1 | ✅ |
-| 11 | Finansal Sağlık Skoru (0–100) | P1 | ✅ |
-| 12 | PDF desteği | P2 | ❌ Sonraki iterasyon |
-| 13 | Kullanıcı hesapları | P2 | ❌ Sonraki iterasyon |
+### 3.1 Tamamlandı (v2)
 
-## 4. Kullanıcı Profili
+| # | Özellik | Öncelik |
+|---|---|---|
+| 1 | Sürükle-bırak içe aktarma: PDF, TXT, CSV | P0 |
+| 2 | Akbank ve Garanti BBVA adaptörleri + genel CSV adaptörü | P0 |
+| 3 | Akbank'ın EBCDIC kodlu PDF'lerinin doğrudan çözülmesi (OCR gerekmez) | P0 |
+| 3b | Gerçek tarama PDF'leri için OCR (isteğe bağlı yerel servis, tarayıcı içi yedek) | P1 |
+| 4 | 18 kategorili kural tabanlı sınıflandırma + kullanıcı düzeltmelerinden kural öğrenme | P0 |
+| 5 | Kalıcı yerel depolama (IndexedDB), çoklu ekstre birleştirme, yinelenen eleme | P0 |
+| 6 | Küresel dönem/banka/arama filtresi | P0 |
+| 7 | Nakit akışı: brüt/iade/net ayrımı, aylık seri, doğrusal eğim + R² | P1 |
+| 8 | Ay sonu projeksiyonu ve limit takibi | P1 |
+| 9 | Düzenli ödeme tespiti: periyot bandı, tutar istikrarı, güven skoru | P1 |
+| 10 | Fiyat artışı ve durmuş abonelik tespiti | P1 |
+| 11 | Taksit planları ve 12 aylık bağlı tutar merdiveni | P1 |
+| 12 | Zorunlu / karma / isteğe bağlı harcama ayrımı | P1 |
+| 13 | Sıra dışı işlem tespiti (robust z-skor, iki taban) | P1 |
+| 14 | Olası mükerrer çekim tespiti | P1 |
+| 15 | "Küçük ama sık" alışkanlık analizi ve yıllık karşılığı | P1 |
+| 16 | Aylar arası kategori hareketleri | P1 |
+| 17 | Bileşen bazlı, açıklanabilir sağlık skoru | P1 |
+| 18 | Öncelik sıralı bulgu motoru | P1 |
+| 19 | Toplu kategori atama, manuel işlem, CSV/JSON dışa aktarım | P1 |
+| 20 | Açık/koyu tema, mobil uyum | P2 |
+| 21 | Beş bölümlük sadeleştirilmiş gezinme; özet ekranı tek bakışta okunabilir | P0 |
 
-**Birincil Kullanıcı:** 25–40 yaş arası, teknoloji ile barışık, finansal bilinç sahibi olmak isteyen Türkiye'deki banka kartı kullanıcısı.
+### 3.2 Kapsam dışı
 
-**Temel İş Akışı:**
-1. Ekstreni indir (Akbank veya Garanti internet bankacılığından)
-2. My Finance'e sürükle
-3. Analiz ekranlarını incele
-4. İçgörüleri değerlendir, gerekirse kategoriyi düzelt
+- Open Banking / gerçek zamanlı hesap bağlantısı
+- Sunucu tarafı hesap, senkronizasyon veya paylaşım
+- Yatırım tavsiyesi veya portföy takibi
+- Makine öğrenimi tabanlı sınıflandırma (kural tabanlı yaklaşım denetlenebilir ve çevrimdışıdır)
 
-## 5. Başarı Metrikleri (MVP)
+## 4. Kullanıcı
 
-- Parse doğruluk oranı: > %95 (tanınan işlem / toplam işlem)
-- Yükleme → Dashboard süresi: < 5 saniye (500 satırlık ekstre için)
-- Kullanıcı memnuniyeti (NPS): > 40
+25–45 yaş, Türkiye'de kredi kartı kullanan, verisini buluta vermek istemeyen, finansal farkındalık arayan kişi.
 
-## 6. Kapsam Dışı (v1)
+**Akış:** ekstreyi indir → sürükle → genel bakışta bulguları oku → yanlış kategorileri düzelt (kural olarak öğrenilir) → yükümlülükler ve düzenli ödemeleri incele.
 
-- PDF parsing (karmaşık ve banka bazında farklılık gösterir)
-- Gerçek zamanlı Open Banking API entegrasyonu
-- Mobil native uygulama
-- Çoklu kullanıcı / paylaşım özellikleri
-- Makine öğrenimi tabanlı kategorizasyon
+## 5. Başarı ölçütleri
 
-## 7. Teknik Gereksinimler (Özet)
+| Ölçüt | Hedef | Nasıl doğrulanır |
+|---|---|---|
+| Ayrıştırma doğruluğu | Ayrıştırılan net tutar = ekstrenin "Dönem Borcu" rakamı | Gerçek Akbank ve Garanti ekstreleriyle doğrulandı: ₺18.628,32 ve ₺34.037,58, okunamayan satır 0 |
+| Sınıflandırma kapsamı | "Diğer" payı < %15 | Genel bakışta ve bulgularda raporlanır |
+| Düzenli ödeme kesinliği | Yanlış pozitif ≈ 0 | Üç kapılı tespit; testlerle sabitlendi |
+| İçe aktarmadan panoya | 500 satırlık TXT için < 2 sn | Tek geçişli motor, memoize analiz |
+| İlk yükleme | < 100 kB gzip | Grafik/PDF/OCR ayrı parçalarda |
+
+## 6. Teknik özet
 
 | Katman | Teknoloji |
-|--------|-----------|
-| Frontend | React 18 + Vite + TypeScript + Tailwind CSS |
-| Grafikler | Recharts (Donut, Area, Bar, Treemap) |
-| Backend | FastAPI (Python 3.10+) |
-| Parse motoru | Kural tabanlı Regex (no LLM dependency) |
-| Güvenlik | In-memory processing, zero persistent storage |
+|---|---|
+| Arayüz | React 18 + TypeScript + Vite + Tailwind (CSS değişkeni tabanlı tema) |
+| Grafik | Recharts (tembel yüklenen ayrı parça) |
+| Ayrıştırma | Kural tabanlı adaptör kaydı, LLM bağımlılığı yok |
+| Depolama | IndexedDB, yalnızca cihazda |
+| OCR (isteğe bağlı) | FastAPI + RapidOCR, yalnızca `127.0.0.1` |
+| Test | Vitest |
 
----
+Ayrıntı: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 
-> Detaylı teknik mimari, veri akışı, DB şeması ve risk analizi için bkz. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+## 7. Gizlilik taahhüdü
+
+Uygulamada işlem verisini ağa gönderen hiçbir kod yolu yoktur. Yerel OCR servisi yalnızca kullanıcı açtığında ve yalnızca döngü arayüzü üzerinden çalışır, diske hiçbir şey yazmaz.
