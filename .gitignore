@@ -43,3 +43,16 @@ data/*.json
 # so a statement dropped there would be published with the build
 frontend/public/*.pdf
 frontend/*.txt
+
+# Android — the release keystore and its passwords can never be regenerated;
+# losing them means the Play Store listing can never be updated again. Kept
+# out of version control entirely, back it up somewhere durable instead.
+/android-signing/
+frontend/android/keystore.properties
+frontend/android/app/google-services.json
+frontend/android/app/build/
+frontend/android/build/
+frontend/android/.gradle/
+frontend/android/capacitor-cordova-android-plugins/
+frontend/android/local.properties
+

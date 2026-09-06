@@ -7,12 +7,14 @@ import {
   linkWithPopup,
   onAuthStateChanged,
   signInAnonymously,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
 } from 'firebase/auth'
 import { getFirebaseAuth } from './config'
+import { isNative } from '../platform'
 
 export interface AuthUser {
   uid: string
@@ -61,8 +63,33 @@ export async function signInWithEmail(email: string, password: string): Promise<
   await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
 }
 
+/**
+ * On the web this is a popup. Inside the Android WebView there is no popup to
+ * open — `signInWithPopup` simply fails there — so the native build instead
+ * asks the OS for a Google credential (via `@capacitor-firebase/authentication`,
+ * configured with `skipNativeAuth: true`) and feeds the resulting idToken into
+ * this same Firebase JS session, which is what the rest of the app actually
+ * reads (see `onAuthChange`). Either path ends at the same place: this app's
+ * one Firebase Auth session, anonymous-linked the same way in both cases.
+ */
 export async function signInWithGoogle(): Promise<void> {
   const auth = getFirebaseAuth()
+
+  if (isNative()) {
+    const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+    const result = await FirebaseAuthentication.signInWithGoogle()
+    const idToken = result.credential?.idToken
+    if (!idToken) throw new Error('Google girişi tamamlanamadı.')
+
+    const credential = GoogleAuthProvider.credential(idToken)
+    if (auth.currentUser?.isAnonymous) {
+      await linkWithCredential(auth.currentUser, credential)
+    } else {
+      await signInWithCredential(auth, credential)
+    }
+    return
+  }
+
   const provider = new GoogleAuthProvider()
   if (auth.currentUser?.isAnonymous) {
     await linkWithPopup(auth.currentUser, provider)
@@ -78,6 +105,14 @@ export async function startAnonymousSession(): Promise<void> {
 
 export async function signOutSession(): Promise<void> {
   await signOut(getFirebaseAuth())
+  // Only clears the OS-level Google account cache the native plugin keeps;
+  // `skipNativeAuth` means there was never a second native Firebase session to
+  // sign out of. Without this, the next "Google ile devam et" would silently
+  // reuse the same account with no picker.
+  if (isNative()) {
+    const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+    await FirebaseAuthentication.signOut()
+  }
 }
 
 export async function deleteCurrentAccount(): Promise<void> {

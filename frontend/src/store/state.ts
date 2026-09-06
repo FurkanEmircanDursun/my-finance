@@ -33,6 +33,8 @@ export const defaultSettings: Settings = {
   useLocalOcr: false,
   ocrEndpoint: 'http://127.0.0.1:8005/api/ocr',
   periodGrouping: null,
+  lockPinHash: null,
+  lockPinSalt: null,
 }
 
 export const initialState: AppState = {

@@ -1,17 +1,31 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { CalendarClock, Receipt } from 'lucide-react'
 import { Badge, Empty, Grid, Meter, Section, Segmented, Stat } from '../ui/primitives'
 import { CashFlowChart, CommitmentChart, GoalTrajectoryChart } from '../ui/charts'
 import { GOAL_STATUS_LABEL, type GoalProgress } from '../analytics/goal'
 import { sliceForecast, type CashFlowForecast } from '../analytics/forecast'
+import { buildUpcomingPayments, type UpcomingPayment } from '../analytics/upcoming'
 import { money, count, percent } from '../core/money'
-import { monthLabel, fullDayLabel } from '../core/date'
+import { monthLabel, fullDayLabel, todayKey } from '../core/date'
 import { categoryLabel } from '../domain/categories'
 import type { Analysis } from '../analytics/types'
 import type { Money } from '../core/money'
-import type { Profile } from '../domain/types'
+import type { Profile, Statement } from '../domain/types'
 
-export function CommitmentsView({ analysis, profile }: { analysis: Analysis; profile: Profile }) {
+export function CommitmentsView({
+  analysis,
+  profile,
+  statements,
+}: {
+  analysis: Analysis
+  profile: Profile
+  statements: readonly Statement[]
+}) {
   const { installments, commitments, recurring, goal, forecast } = analysis
+  const upcoming = useMemo(
+    () => buildUpcomingPayments(recurring, statements, todayKey()),
+    [recurring, statements],
+  )
 
   const open = installments.filter((plan) => plan.remainingCount > 0)
   const remainingTotal = open.reduce((s, p) => s + p.remainingAmount, 0)
@@ -23,7 +37,7 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
   const income = profile.monthlyIncome
   const hasForecast = forecast.totalIn > 0 || forecast.totalOut > 0
 
-  if (!open.length && !activeRecurring.length && !goal && !hasForecast) {
+  if (!open.length && !activeRecurring.length && !goal && !hasForecast && !upcoming.length) {
     return (
       <Empty
         title="Bağlı bir ödeme yok"
@@ -34,7 +48,9 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
 
   return (
     <div className="space-y-4">
-      <p className="text-2xs text-faint">Tüm işlem geçmişiniz taranır; bu sekme bir döneme daraltılamaz.</p>
+      <p className="text-label text-faint">Tüm işlem geçmişiniz taranır; bu sekme bir döneme daraltılamaz.</p>
+
+      {upcoming.length > 0 && <UpcomingSection payments={upcoming} />}
 
       {hasForecast && <ForecastSection forecast={forecast} />}
 
@@ -71,7 +87,7 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
               <span className="num text-2xl font-semibold text-ink">
                 {percent((next.total / income) * 100)}
               </span>
-              <span className="text-2xs text-muted">
+              <span className="text-label text-muted">
                 {money(next.total)} / {money(income)}
               </span>
             </div>
@@ -80,7 +96,7 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
               max={income}
               tone={next.total > income * 0.4 ? 'negative' : next.total > income * 0.25 ? 'warning' : 'positive'}
             />
-            <p className="text-2xs text-muted">
+            <p className="text-label text-muted">
               %25 altı rahat, %40 üstü kırılgan kabul edilir. Kalan{' '}
               <span className="num font-medium text-ink">{money(income - next.total)}</span> serbest harcama
               ve tasarruf için kalır.
@@ -101,7 +117,7 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-line text-2xs text-faint">
+                <tr className="border-b border-line text-label text-faint">
                   <th className="px-4 py-2.5 font-medium">Plan</th>
                   <th className="hidden px-4 py-2.5 font-medium md:table-cell">Kategori</th>
                   <th className="px-4 py-2.5 text-right font-medium">Aylık</th>
@@ -114,8 +130,8 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
                 {open.map((plan) => (
                   <tr key={plan.id} className="border-b border-line last:border-b-0 hover:bg-hover">
                     <td className="max-w-[200px] px-4 py-2.5">
-                      <p className="truncate text-2xs font-medium text-ink">{plan.label}</p>
-                      <p className="text-2xs text-faint">
+                      <p className="truncate text-label font-medium text-ink">{plan.label}</p>
+                      <p className="text-label text-faint">
                         {plan.bank}
                         {plan.principal ? ` · ana tutar ${money(plan.principal)}` : ''}
                       </p>
@@ -123,21 +139,21 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
                     <td className="hidden px-4 py-2.5 md:table-cell">
                       <Badge>{categoryLabel(plan.category)}</Badge>
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                    <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                       {money(plan.monthlyAmount, { decimals: true })}
                     </td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <Meter value={plan.paidCount} max={plan.totalCount} className="w-20" />
-                        <span className="num text-2xs text-muted">
+                        <span className="num text-label text-muted">
                           {plan.paidCount}/{plan.totalCount}
                         </span>
                       </div>
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                    <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                       {money(plan.remainingAmount)}
                     </td>
-                    <td className="hidden px-4 py-2.5 text-right text-2xs text-faint lg:table-cell">
+                    <td className="hidden px-4 py-2.5 text-right text-label text-faint lg:table-cell">
                       {monthLabel(plan.endMonth, true)}
                     </td>
                   </tr>
@@ -152,7 +168,7 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-line text-2xs text-faint">
+              <tr className="border-b border-line text-label text-faint">
                 <th className="px-4 py-2.5 font-medium">Dönem</th>
                 <th className="px-4 py-2.5 text-right font-medium">Taksit</th>
                 <th className="px-4 py-2.5 text-right font-medium">Düzenli ödeme</th>
@@ -163,18 +179,18 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
             <tbody>
               {commitments.map((month) => (
                 <tr key={month.month} className="border-b border-line last:border-b-0 hover:bg-hover">
-                  <td className="px-4 py-2.5 text-2xs text-ink">{monthLabel(month.month)}</td>
-                  <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                  <td className="px-4 py-2.5 text-label text-ink">{monthLabel(month.month)}</td>
+                  <td className="num px-4 py-2.5 text-right text-label text-muted">
                     {month.installments ? money(month.installments) : '—'}
                   </td>
-                  <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                  <td className="num px-4 py-2.5 text-right text-label text-muted">
                     {month.recurring ? money(month.recurring) : '—'}
                   </td>
-                  <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                  <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                     {money(month.total)}
                   </td>
                   {income > 0 && (
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">
                       {percent((month.total / income) * 100)}
                     </td>
                   )}
@@ -185,6 +201,45 @@ export function CommitmentsView({ analysis, profile }: { analysis: Analysis; pro
         </div>
       </Section>
     </div>
+  )
+}
+
+function UpcomingSection({ payments }: { payments: UpcomingPayment[] }) {
+  return (
+    <Section
+      title="Yaklaşan ödemeler"
+      description="Önümüzdeki 45 gün · tespit edilen düzenli ödemeler ve ekstre son ödeme tarihleri"
+      padded={false}
+    >
+      <div className="divide-y divide-line">
+        {payments.map((payment, index) => (
+          <div
+            key={`${payment.kind}-${payment.date}-${index}`}
+            className="flex items-center gap-3 px-4 py-3"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-line bg-sunken text-faint">
+              {payment.kind === 'recurring' ? <CalendarClock size={14} /> : <Receipt size={14} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-label font-medium text-ink">{payment.label}</p>
+              <p className="mt-0.5 text-label text-faint">
+                {fullDayLabel(payment.date)}
+                {' · '}
+                {payment.kind === 'recurring' ? 'Düzenli ödeme' : 'Ekstre son ödeme tarihi'}
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              {payment.amount !== null && (
+                <p className="num text-label font-medium text-ink">{money(payment.amount)}</p>
+              )}
+              <p className="text-label text-faint">
+                {payment.daysUntil === 1 ? 'yarın' : `${count(payment.daysUntil)} gün kaldı`}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
   )
 }
 
@@ -240,19 +295,19 @@ function ForecastSection({ forecast }: { forecast: CashFlowForecast }) {
         <CashFlowChart points={view.points} height={220} negative={negative} />
 
         {negative && view.lowestDate && (
-          <p className="text-2xs leading-relaxed text-negative">
+          <p className="text-label leading-relaxed text-negative">
             {fullDayLabel(view.lowestDate)} civarında bakiye {money(view.lowestBalance)} seviyesine iniyor —
             bu tarihten önce planlanmamış büyük bir harcama sıkıntı yaratabilir.
           </p>
         )}
         {!forecast.hasOpeningBalance && (
-          <p className="text-2xs leading-relaxed text-muted">
+          <p className="text-label leading-relaxed text-muted">
             Sıfır çizgisi bugünü gösterir, banka bakiyenizi değil. Maaşla yaşayan herkes maaş gününden önce
             bu çizginin altına iner; bu normaldir. Gerçek bakiye üzerinden görmek için Ayarlar'dan{' '}
             <span className="font-medium text-ink">bugünkü nakit</span> tutarını girin.
           </p>
         )}
-        <p className="text-2xs text-faint">
+        <p className="text-label text-faint">
           {forecast.dailyDiscretionary > 0
             ? `Tespit edilen düzenli ödeme ve taksitlerin üzerine günlük ${money(forecast.dailyDiscretionary)} alışılmış harcama eklendi.`
             : 'Yalnızca bilinen taksit ve düzenli ödemelere göre hesaplandı.'}{' '}
@@ -321,7 +376,7 @@ function GoalSection({ goal, monthlyIncome }: { goal: GoalProgress; monthlyIncom
 
         <div>
           <GoalTrajectoryChart points={goal.points} height={220} onPace={onPace} />
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-2xs text-muted">
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-label text-muted">
             <span className="flex items-center gap-1.5">
               <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--text-faint)' }} />
               Gereken tempo
@@ -337,7 +392,7 @@ function GoalSection({ goal, monthlyIncome }: { goal: GoalProgress; monthlyIncom
         </div>
 
         {goal.projectedFinalAmount !== null && goal.status !== 'reached' && goal.status !== 'ended' && (
-          <p className="text-2xs leading-relaxed text-muted">
+          <p className="text-label leading-relaxed text-muted">
             Son {count(goal.monthsElapsed)} ayın ortalama temposuyla ({money(goal.averageMonthlyPaceSoFar ?? 0)}/ay)
             devam ederseniz {monthLabel(g.targetMonth)} sonunda yaklaşık{' '}
             <span className="num font-medium text-ink">{money(goal.projectedFinalAmount)}</span> birikmiş olur.

@@ -30,7 +30,7 @@ export function RecurringView({ analysis }: { analysis: Analysis }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-2xs text-faint">Tüm işlem geçmişiniz taranır; bu sekme bir döneme daraltılamaz.</p>
+      <p className="text-label text-faint">Tüm işlem geçmişiniz taranır; bu sekme bir döneme daraltılamaz.</p>
 
       <Grid className="sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Aktif düzenli ödeme" value={count(active.length)} hint={`${count(lapsed.length)} durmuş görünüyor`} />
@@ -71,7 +71,7 @@ export function RecurringView({ analysis }: { analysis: Analysis }) {
       </Section>
 
       <Section title="Tespit yöntemi">
-        <ul className="space-y-2 text-2xs leading-relaxed text-muted">
+        <ul className="space-y-2 text-label leading-relaxed text-muted">
           <li>
             <span className="font-medium text-ink">Aralık düzeni.</span> Ardışık ödemeler arasındaki gün
             farklarının medyanı bir periyot bandına (haftalık, aylık, üç aylık, yıllık) düşmelidir. Sapma
@@ -103,13 +103,13 @@ function RecurringRow({ item }: { item: RecurringPayment }) {
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 hover:bg-hover">
       <div className="min-w-[180px] flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[13px] font-medium text-ink">{item.label}</span>
+          <span className="text-body font-medium text-ink">{item.label}</span>
           <Badge>{categoryLabel(item.category)}</Badge>
           <Badge tone={item.status === 'active' ? 'accent' : 'neutral'}>{item.cadenceLabel}</Badge>
           {item.status === 'lapsed' && <Badge tone="warning">Durmuş</Badge>}
           {rise && <Badge tone="negative">{signedPercent(item.priceChangePct!)} zam</Badge>}
         </div>
-        <p className="mt-1 text-2xs text-faint">
+        <p className="mt-1 text-label text-faint">
           {count(item.occurrences)} ödeme · her {item.intervalDays} günde bir · {fullDayLabel(item.firstSeen)}
           {' — '}
           {fullDayLabel(item.lastSeen)}
@@ -134,8 +134,8 @@ function RecurringRow({ item }: { item: RecurringPayment }) {
 function Figure({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
   return (
     <div className="text-right">
-      <p className="text-2xs text-faint">{label}</p>
-      <p className={`num text-2xs font-medium ${muted ? 'text-muted' : 'text-ink'}`}>{value}</p>
+      <p className="text-label text-faint">{label}</p>
+      <p className={`num text-label font-medium ${muted ? 'text-muted' : 'text-ink'}`}>{value}</p>
     </div>
   )
 }

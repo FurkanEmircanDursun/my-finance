@@ -19,7 +19,7 @@ export function TrendPill({
 }) {
   if (value === null || !Number.isFinite(value)) {
     return (
-      <span className="inline-flex items-center gap-1 text-2xs text-faint">
+      <span className="inline-flex items-center gap-1 text-label text-faint">
         <Minus size={11} /> karşılaştırma yok
       </span>
     )
@@ -33,7 +33,7 @@ export function TrendPill({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 text-2xs font-medium',
+        'inline-flex items-center gap-1 text-label font-medium',
         bad ? 'text-negative' : good ? 'text-positive' : 'text-muted',
       )}
     >
@@ -73,13 +73,13 @@ export function InsightRow({
     <div className="flex gap-3 border-b border-line py-3 last:border-b-0 last:pb-0 first:pt-0">
       <Icon size={15} className={clsx('mt-0.5 shrink-0', SEVERITY_CLASS[insight.severity])} />
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium leading-snug text-ink">{insight.title}</p>
-        <p className="mt-1 text-2xs leading-relaxed text-muted">{insight.body}</p>
+        <p className="text-body font-medium leading-snug text-ink">{insight.title}</p>
+        <p className="mt-1 text-label leading-relaxed text-muted">{insight.body}</p>
         {insight.action && onAction && (
           <button
             type="button"
             onClick={() => onAction(insight.action!.view)}
-            className="mt-1.5 inline-flex items-center gap-1 text-2xs font-medium text-accent hover:underline"
+            className="mt-1.5 inline-flex items-center gap-1 text-label font-medium text-accent hover:underline"
           >
             {insight.action.label}
             <ArrowRight size={11} />
@@ -106,11 +106,11 @@ export function HealthPanel({ health }: { health: HealthReport }) {
     <div className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <div className="num text-[34px] font-semibold leading-none tracking-tight" style={{ color }}>
+          <div className="num text-figure font-semibold leading-none tracking-tight" style={{ color }}>
             {health.score}
             <span className="text-base font-normal text-faint">/100</span>
           </div>
-          <p className="mt-1.5 text-2xs text-muted">Ağırlıklı bileşen ortalaması</p>
+          <p className="mt-1.5 text-label text-muted">Ağırlıklı bileşen ortalaması</p>
         </div>
         <Badge tone={BAND_TONE[health.band]}>{health.label}</Badge>
       </div>
@@ -119,8 +119,8 @@ export function HealthPanel({ health }: { health: HealthReport }) {
         {health.components.map((component) => (
           <div key={component.id}>
             <div className="mb-1 flex items-baseline justify-between gap-2">
-              <span className="text-2xs font-medium text-ink">{component.label}</span>
-              <span className="num text-2xs text-muted">
+              <span className="text-label font-medium text-ink">{component.label}</span>
+              <span className="num text-label text-muted">
                 {Math.round(component.score)}
                 <span className="text-faint"> · ağırlık {percent(component.weight * 100, 0)}</span>
               </span>
@@ -130,7 +130,7 @@ export function HealthPanel({ health }: { health: HealthReport }) {
               max={100}
               tone={component.score >= 70 ? 'positive' : component.score >= 45 ? 'warning' : 'negative'}
             />
-            <p className="mt-1 text-2xs text-faint">{component.detail}</p>
+            <p className="mt-1 text-label text-faint">{component.detail}</p>
           </div>
         ))}
       </div>
@@ -172,9 +172,9 @@ export function CategoryList({
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: stat.color }} />
-                  <span className="truncate text-2xs font-medium text-ink">{stat.label}</span>
+                  <span className="truncate text-label font-medium text-ink">{stat.label}</span>
                 </span>
-                <span className="num shrink-0 text-2xs font-medium text-ink">{money(stat.total)}</span>
+                <span className="num shrink-0 text-label font-medium text-ink">{money(stat.total)}</span>
               </div>
               <div className="mt-1.5 flex items-center gap-2">
                 <div className="h-1 flex-1 overflow-hidden rounded-full bg-sunken">
@@ -183,7 +183,7 @@ export function CategoryList({
                     style={{ width: `${(stat.total / max) * 100}%`, background: stat.color }}
                   />
                 </div>
-                <span className="num w-12 shrink-0 text-right text-2xs text-faint">
+                <span className="num w-12 shrink-0 text-right text-label text-faint">
                   {percent(stat.share * 100)}
                 </span>
               </div>
@@ -220,7 +220,7 @@ export function NatureSplit({ natures }: { natures: NatureStat[] }) {
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {natures.map((n) => (
-          <span key={n.nature} className="flex items-center gap-1.5 text-2xs text-muted">
+          <span key={n.nature} className="flex items-center gap-1.5 text-label text-muted">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: NATURE_BAR_COLOR[n.nature] }} />
             {NATURE_LABEL[n.nature]}
             <span className="num font-medium text-ink">{percent(n.share * 100)}</span>

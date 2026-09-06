@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { Cloud, Download, LogIn, LogOut, RefreshCw, Target, Trash2, UserPlus } from 'lucide-react'
+import {
+  Cloud, Download, Lock, LockOpen, LogIn, LogOut, RefreshCw, ShieldCheck, Target, Trash2, UserPlus,
+} from 'lucide-react'
 import { Badge, Button, Empty, Field, Section, Segmented, TextInput } from '../ui/primitives'
 import { ConfirmDialog } from '../ui/Modal'
 import { money, toMinor, toMajor, count } from '../core/money'
 import { todayKey, monthOf, monthLabel, monthDiff } from '../core/date'
+import { hashPin, randomSalt, verifyPin, PIN_LENGTH } from '../core/pin'
 import { CATEGORIES, categoryLabel } from '../domain/categories'
 import type { CategoryId } from '../domain/categories'
 import type { SavingsGoal } from '../domain/types'
@@ -50,6 +53,8 @@ export function SettingsView() {
   return (
     <div className="mx-auto w-full max-w-3xl space-y-4">
       <AccountSection />
+
+      <AppLockSection />
 
       <Section
         title="Finansal profil"
@@ -103,7 +108,7 @@ export function SettingsView() {
         </div>
 
         {profile.monthlyIncome > 0 && (
-          <p className="mt-3 text-2xs leading-relaxed text-faint">
+          <p className="mt-3 text-label leading-relaxed text-faint">
             Kredi kartı ekstresinde maaş satırı yer almaz. Bu yüzden bir ayda gelir kaydı yoksa tasarruf ve
             hedef hesapları buradaki aylık geliri varsayar; gelir satırı olan aylarda gerçek tutar kullanılır.
           </p>
@@ -122,7 +127,7 @@ export function SettingsView() {
             return (
               <div key={def.id} className="flex items-center gap-2.5">
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: def.color }} />
-                <span className="min-w-0 flex-1 truncate text-2xs text-ink">{def.label}</span>
+                <span className="min-w-0 flex-1 truncate text-label text-ink">{def.label}</span>
                 <TextInput
                   inputMode="decimal"
                   className="h-8 w-28 text-right"
@@ -177,7 +182,7 @@ export function SettingsView() {
             onChange={(e) => dispatch({ type: 'setSettings', settings: { useLocalOcr: e.target.checked } })}
             className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
           />
-          <span className="text-2xs leading-relaxed text-muted">
+          <span className="text-label leading-relaxed text-muted">
             <span className="font-medium text-ink">Yerel OCR servisini kullan.</span> Kapalıyken taranmış
             PDF'ler tarayıcı içi OCR ile okunur; bu doğru ama yavaştır. Açtığınızda dosya yalnızca kendi
             makinenizde çalışan servise gönderilir — internete çıkmaz.
@@ -213,7 +218,7 @@ export function SettingsView() {
                 key={rule.id}
                 className="flex items-center gap-3 rounded border border-line bg-sunken px-3 py-2"
               >
-                <span className="min-w-0 flex-1 truncate text-2xs font-medium text-ink">{rule.merchant}</span>
+                <span className="min-w-0 flex-1 truncate text-label font-medium text-ink">{rule.merchant}</span>
                 <Badge>{categoryLabel(rule.category)}</Badge>
                 <button
                   type="button"
@@ -300,7 +305,7 @@ function AccountSection() {
   if (!isFirebaseConfigured()) {
     return (
       <Section title="Hesap ve bulut yedekleme" description="Bu kurulumda bulut senkronizasyonu yapılandırılmamış">
-        <p className="text-2xs text-muted">Veriler yalnızca bu tarayıcıda kalır.</p>
+        <p className="text-label text-muted">Veriler yalnızca bu tarayıcıda kalır.</p>
       </Section>
     )
   }
@@ -346,7 +351,7 @@ function AccountSection() {
             <SyncBadge status={syncStatus} />
           </div>
 
-          {error && <p className="text-2xs text-negative">{error}</p>}
+          {error && <p className="text-label text-negative">{error}</p>}
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={syncNow} disabled={syncStatus === 'syncing'}>
@@ -413,7 +418,7 @@ function AccountSection() {
           </Field>
         </div>
 
-        {error && <p className="text-2xs text-negative">{error}</p>}
+        {error && <p className="text-label text-negative">{error}</p>}
 
         <div className="flex flex-wrap gap-2">
           {mode === 'signup' ? (
@@ -451,7 +456,7 @@ function AccountSection() {
           )}
         </div>
 
-        <p className="text-2xs text-faint">
+        <p className="text-label text-faint">
           Hiçbir şey yapmazsanız veriler yalnızca bu tarayıcıda kalır — varsayılan budur. Kayıt olduğunuzda
           veya anonim yedeklemeyi başlattığınızda işlemler, ekstreler, kurallar ve profil ayarlarınız
           Firebase'e senkronize edilmeye başlar.
@@ -468,10 +473,203 @@ function SyncBadge({ status }: { status: SyncStatus }) {
   return <Badge tone="neutral">Bekliyor</Badge>
 }
 
+/**
+ * Only the salted hash lives in `Settings` (see `core/pin.ts`) — this
+ * component is the only place the actual 4-digit PIN passes through memory,
+ * and only for as long as it takes to hash or verify it.
+ */
+function AppLockSection() {
+  const { state, dispatch } = useStore()
+  const { lockPinHash, lockPinSalt } = state.settings
+  const hasPin = Boolean(lockPinHash && lockPinSalt)
+
+  const [mode, setMode] = useState<'idle' | 'setup' | 'change' | 'remove'>('idle')
+  const [currentPin, setCurrentPin] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [confirmPin, setConfirmPin] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const reset = () => {
+    setMode('idle')
+    setCurrentPin('')
+    setNewPin('')
+    setConfirmPin('')
+    setError(null)
+  }
+
+  const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, PIN_LENGTH)
+
+  const confirmCurrentPin = async (): Promise<boolean> => {
+    if (!lockPinHash || !lockPinSalt) return true
+    return verifyPin(currentPin, lockPinSalt, lockPinHash)
+  }
+
+  const saveNewPin = async () => {
+    setError(null)
+    if (newPin.length !== PIN_LENGTH) {
+      setError(`PIN ${PIN_LENGTH} haneli olmalı.`)
+      return
+    }
+    if (newPin !== confirmPin) {
+      setError('Girdiğiniz PIN\'ler eşleşmiyor.')
+      return
+    }
+    setBusy(true)
+    if (mode === 'change' && !(await confirmCurrentPin())) {
+      setError('Mevcut PIN yanlış.')
+      setBusy(false)
+      return
+    }
+    const salt = randomSalt()
+    const hash = await hashPin(newPin, salt)
+    dispatch({ type: 'setSettings', settings: { lockPinHash: hash, lockPinSalt: salt } })
+    setBusy(false)
+    reset()
+  }
+
+  const removePin = async () => {
+    setError(null)
+    setBusy(true)
+    if (!(await confirmCurrentPin())) {
+      setError('PIN yanlış.')
+      setBusy(false)
+      return
+    }
+    dispatch({ type: 'setSettings', settings: { lockPinHash: null, lockPinSalt: null } })
+    setBusy(false)
+    reset()
+  }
+
+  return (
+    <Section
+      title="Uygulama kilidi"
+      description="Açık uygulamaya bakan biri finansal verilerinizi görmesin"
+    >
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          {hasPin ? (
+            <Badge tone="positive">
+              <Lock size={11} /> Kilit açık
+            </Badge>
+          ) : (
+            <Badge tone="neutral">
+              <LockOpen size={11} /> Kilit kapalı
+            </Badge>
+          )}
+        </div>
+
+        {mode === 'idle' && (
+          <div className="flex flex-wrap gap-2">
+            {!hasPin && (
+              <Button size="sm" variant="primary" onClick={() => setMode('setup')}>
+                <ShieldCheck size={12} />
+                PIN belirle
+              </Button>
+            )}
+            {hasPin && (
+              <>
+                <Button size="sm" onClick={() => setMode('change')}>
+                  PIN değiştir
+                </Button>
+                <Button size="sm" variant="danger" onClick={() => setMode('remove')}>
+                  <Trash2 size={12} />
+                  Kilidi kaldır
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+
+        {(mode === 'setup' || mode === 'change') && (
+          <div className="space-y-3 rounded border border-line bg-sunken p-3">
+            {mode === 'change' && (
+              <Field label="Mevcut PIN">
+                <TextInput
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus
+                  value={currentPin}
+                  onChange={(e) => setCurrentPin(digitsOnly(e.target.value))}
+                  placeholder="••••"
+                />
+              </Field>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Yeni PIN" hint={`${PIN_LENGTH} haneli`}>
+                <TextInput
+                  type="password"
+                  inputMode="numeric"
+                  autoFocus={mode === 'setup'}
+                  value={newPin}
+                  onChange={(e) => setNewPin(digitsOnly(e.target.value))}
+                  placeholder="••••"
+                />
+              </Field>
+              <Field label="Yeni PIN (tekrar)">
+                <TextInput
+                  type="password"
+                  inputMode="numeric"
+                  value={confirmPin}
+                  onChange={(e) => setConfirmPin(digitsOnly(e.target.value))}
+                  placeholder="••••"
+                />
+              </Field>
+            </div>
+
+            {error && <p className="text-label text-negative">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button size="sm" variant="primary" disabled={busy} onClick={saveNewPin}>
+                Kaydet
+              </Button>
+              <Button size="sm" onClick={reset}>
+                Vazgeç
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {mode === 'remove' && (
+          <div className="space-y-3 rounded border border-line bg-sunken p-3">
+            <Field label="Mevcut PIN">
+              <TextInput
+                type="password"
+                inputMode="numeric"
+                autoFocus
+                value={currentPin}
+                onChange={(e) => setCurrentPin(digitsOnly(e.target.value))}
+                placeholder="••••"
+              />
+            </Field>
+            {error && <p className="text-label text-negative">{error}</p>}
+            <div className="flex gap-2">
+              <Button size="sm" variant="danger" disabled={busy} onClick={removePin}>
+                <Trash2 size={12} />
+                Kilidi kaldır
+              </Button>
+              <Button size="sm" onClick={reset}>
+                Vazgeç
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <p className="text-label text-faint">
+          PIN yalnızca bu cihazda tuzlanmış özet (hash) olarak saklanır — bulut senkronizasyonu açıksa bile
+          gerçek PIN hiçbir yere gönderilmez. PIN'i unutursanız kilit ekranından "PIN'i mi unuttunuz?" ile bu
+          cihazdaki verileri sıfırlayabilirsiniz; kalıcı olarak saklamak için bulut yedeğini (yukarıda) veya
+          JSON yedeğini (aşağıda, Veri bölümü) kullanın.
+        </p>
+      </div>
+    </Section>
+  )
+}
+
 function Figure({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded border border-line bg-sunken px-3 py-2">
-      <p className="text-2xs text-faint">{label}</p>
+      <p className="text-label text-faint">{label}</p>
       <p className="num mt-0.5 text-[15px] font-semibold text-ink">{value}</p>
     </div>
   )
@@ -586,9 +784,9 @@ function GoalForm({
         </Field>
       </div>
 
-      {error && <p className="text-2xs text-negative">{error}</p>}
+      {error && <p className="text-label text-negative">{error}</p>}
       {!error && monthsSpan !== null && monthsSpan >= 0 && (
-        <p className="text-2xs text-faint">
+        <p className="text-label text-faint">
           {monthsSpan === 0
             ? 'Başlangıç ve hedef ayı aynı — bu ayın sonunda tüm tutarın birikmiş olması beklenir.'
             : `${monthsSpan} ay içinde, ayda ortalama ${money(Math.round((amount - starting) / Math.max(monthsSpan, 1)))} biriktirmeniz gerekir.`}

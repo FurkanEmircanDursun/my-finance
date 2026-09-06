@@ -63,7 +63,7 @@ export function OverviewView({
       {/* ── The sentence ─────────────────────────────────────────────────── */}
       <section className="surface p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-2xs uppercase tracking-wide text-faint">{periodLabel}</p>
+          <p className="text-label uppercase tracking-wide text-faint">{periodLabel}</p>
           <Button size="sm" variant="ghost" onClick={() => setSummaryOpen(true)}>
             <Copy size={12} />
             Özet çıkar
@@ -71,7 +71,7 @@ export function OverviewView({
         </div>
 
         <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-2">
-          <span className="num text-[40px] font-semibold leading-none tracking-tight text-ink">
+          <span className="num text-hero font-semibold leading-none tracking-tight text-ink">
             {money(totals.netSpend)}
           </span>
           {/* A month-over-month pill with nothing to compare against is noise;
@@ -83,7 +83,7 @@ export function OverviewView({
           )}
         </div>
 
-        <p className="mt-3 max-w-2xl text-[13px] leading-relaxed text-muted">
+        <p className="mt-3 max-w-2xl text-body leading-relaxed text-muted">
           {meta.from && meta.to && (
             <>
               {dayLabel(meta.from)} — {dayLabel(meta.to)} arasında {count(meta.spendCount)} harcama,
@@ -245,9 +245,9 @@ export function OverviewView({
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: stat.color }} />
-                  <span className="truncate text-[13px] text-ink">{stat.label}</span>
+                  <span className="truncate text-body text-ink">{stat.label}</span>
                 </span>
-                <span className="num shrink-0 text-[13px] font-medium text-ink">{money(stat.total)}</span>
+                <span className="num shrink-0 text-body font-medium text-ink">{money(stat.total)}</span>
               </div>
               <div className="mt-1.5 flex items-center gap-3">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken">
@@ -259,7 +259,7 @@ export function OverviewView({
                     }}
                   />
                 </div>
-                <span className="num w-20 shrink-0 text-right text-2xs text-faint">
+                <span className="num w-20 shrink-0 text-right text-label text-faint">
                   {percent(stat.share * 100)} · {count(stat.count)} işlem
                 </span>
               </div>
@@ -305,7 +305,7 @@ export function OverviewView({
         description="Her bileşen kendi ekseninde puanlanır, ağırlığıyla toplanır"
       >
         <HealthPanel health={health} />
-        <p className="mt-4 rounded border border-line bg-sunken px-3 py-2.5 text-2xs leading-relaxed text-muted">
+        <p className="mt-4 rounded border border-line bg-sunken px-3 py-2.5 text-label leading-relaxed text-muted">
           Gelir girilmediğinde tasarruf bileşeni hesaplanamaz ve kalan bileşenlerin ağırlıkları yeniden
           ölçeklenir. Gelirinizi Ayarlar bölümünden girerseniz skor tamamlanır.
         </p>
@@ -347,7 +347,7 @@ function SummaryPanel({
 
   return (
     <div className="space-y-3">
-      <pre className="num max-h-[45vh] overflow-auto rounded border border-line bg-sunken p-3 text-2xs leading-relaxed text-ink">
+      <pre className="num max-h-[45vh] overflow-auto rounded border border-line bg-sunken p-3 text-label leading-relaxed text-ink">
         {text}
       </pre>
       <div className="flex flex-wrap gap-2">
@@ -379,13 +379,13 @@ function Tile({
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-2xs font-medium uppercase tracking-wide text-faint">{label}</span>
+        <span className="text-label font-medium uppercase tracking-wide text-faint">{label}</span>
         {(icon || onClick) && (
           <span className="text-faint">{icon ?? <ArrowRight size={13} />}</span>
         )}
       </div>
-      <div className="num mt-3 text-[28px] font-semibold leading-none tracking-tight text-ink">{value}</div>
-      {foot && <div className="mt-2 text-2xs leading-relaxed text-muted">{foot}</div>}
+      <div className="num mt-3 text-figure font-semibold leading-none tracking-tight text-ink">{value}</div>
+      {foot && <div className="mt-2 text-label leading-relaxed text-muted">{foot}</div>}
     </>
   )
 

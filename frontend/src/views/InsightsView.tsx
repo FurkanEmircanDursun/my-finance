@@ -53,7 +53,7 @@ export function InsightsView({
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-line text-2xs text-faint">
+                <tr className="border-b border-line text-label text-faint">
                   <th className="px-4 py-2.5 font-medium">İşyeri</th>
                   <th className="px-4 py-2.5 text-right font-medium">Tutar</th>
                   <th className="px-4 py-2.5 text-right font-medium">Tekrar</th>
@@ -67,17 +67,17 @@ export function InsightsView({
                     key={`${group.merchant}-${group.amount}-${index}`}
                     className="border-b border-line last:border-b-0 hover:bg-hover"
                   >
-                    <td className="max-w-[200px] truncate px-4 py-2.5 text-2xs font-medium text-ink">
+                    <td className="max-w-[200px] truncate px-4 py-2.5 text-label font-medium text-ink">
                       {group.label}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-ink">{money2(group.amount)}</td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                    <td className="num px-4 py-2.5 text-right text-label text-ink">{money2(group.amount)}</td>
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">
                       {count(group.transactions.length)}×
                     </td>
-                    <td className="px-4 py-2.5 text-2xs text-muted">
+                    <td className="px-4 py-2.5 text-label text-muted">
                       {group.transactions.map((tx) => fullDayLabel(tx.date)).join(' · ')}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs font-medium text-negative">
+                    <td className="num px-4 py-2.5 text-right text-label font-medium text-negative">
                       {money(group.amount * (group.transactions.length - 1))}
                     </td>
                   </tr>
@@ -99,7 +99,7 @@ export function InsightsView({
               <div key={anomaly.transaction.id} className="flex items-start gap-3 px-4 py-3 hover:bg-hover">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate text-2xs font-medium text-ink">
+                    <span className="truncate text-label font-medium text-ink">
                       {anomaly.transaction.description}
                     </span>
                     <Badge>{categoryLabel(anomaly.transaction.category)}</Badge>
@@ -107,16 +107,16 @@ export function InsightsView({
                       {anomaly.reason === 'merchant-outlier' ? 'İşyeri geçmişi' : 'Kategori normali'}
                     </Badge>
                   </div>
-                  <p className="mt-1 text-2xs text-muted">{anomaly.note}</p>
-                  <p className="mt-0.5 text-2xs text-faint">
+                  <p className="mt-1 text-label text-muted">{anomaly.note}</p>
+                  <p className="mt-0.5 text-label text-faint">
                     {fullDayLabel(anomaly.transaction.date)} · {anomaly.transaction.bank}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="num text-[13px] font-semibold text-ink">
+                  <p className="num text-body font-semibold text-ink">
                     {money2(anomaly.transaction.amount)}
                   </p>
-                  <p className="num text-2xs text-faint">z {anomaly.score}</p>
+                  <p className="num text-label text-faint">z {anomaly.score}</p>
                 </div>
               </div>
             ))}
@@ -125,7 +125,7 @@ export function InsightsView({
       )}
 
       <Section title="Yöntem notu">
-        <div className="space-y-2 text-2xs leading-relaxed text-muted">
+        <div className="space-y-2 text-label leading-relaxed text-muted">
           <p>
             Sıra dışılık testi ortalama ve standart sapma yerine medyan ve medyan mutlak sapma kullanır.
             Kişisel harcama dağılımı sağa çarpık olduğu için tek bir büyük ödeme ortalama tabanlı bir eşiği

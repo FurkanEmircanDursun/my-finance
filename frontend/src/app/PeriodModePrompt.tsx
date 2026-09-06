@@ -31,7 +31,7 @@ export function PeriodModePrompt() {
       size="sm"
     >
       <div className="space-y-4">
-        <p className="text-[13px] leading-relaxed text-ink">
+        <p className="text-body leading-relaxed text-ink">
           {spanning.label} dönemi{' '}
           <span className="num font-medium">
             {fullDayLabel(spanning.periodStart!)} — {fullDayLabel(spanning.periodEnd!)}
@@ -46,8 +46,8 @@ export function PeriodModePrompt() {
         >
           <CalendarDays size={16} className="mt-0.5 shrink-0 text-muted" />
           <span>
-            <span className="block text-[13px] font-medium text-ink">Takvim ayına göre</span>
-            <span className="mt-0.5 block text-2xs text-muted">
+            <span className="block text-body font-medium text-ink">Takvim ayına göre</span>
+            <span className="mt-0.5 block text-label text-muted">
               Her ay kendi dilimi olur. Bu ekstre iki aya bölünür.
             </span>
           </span>
@@ -60,14 +60,14 @@ export function PeriodModePrompt() {
         >
           <Receipt size={16} className="mt-0.5 shrink-0 text-muted" />
           <span>
-            <span className="block text-[13px] font-medium text-ink">Ekstre dönemine göre</span>
-            <span className="mt-0.5 block text-2xs text-muted">
+            <span className="block text-body font-medium text-ink">Ekstre dönemine göre</span>
+            <span className="mt-0.5 block text-label text-muted">
               Bu ekstrenin tüm harcamaları tek dönem sayılır, iki aya bölünmez.
             </span>
           </span>
         </button>
 
-        <p className="text-2xs text-faint">Bunu sonra Ayarlar bölümünden değiştirebilirsiniz.</p>
+        <p className="text-label text-faint">Bunu sonra Ayarlar bölümünden değiştirebilirsiniz.</p>
       </div>
     </Modal>
   )

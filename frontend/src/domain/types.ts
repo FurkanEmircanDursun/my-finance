@@ -150,6 +150,13 @@ export interface Settings {
    *                 span two calendar months.
    */
   periodGrouping: 'calendar' | 'statement' | null
+  /**
+   * A 4-digit app lock, salted and hashed (see `core/pin.ts`) — never the PIN
+   * itself, since this object is exactly what cloud sync pushes to Firestore.
+   * Both null or both set; never one without the other.
+   */
+  lockPinHash: string | null
+  lockPinSalt: string | null
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────

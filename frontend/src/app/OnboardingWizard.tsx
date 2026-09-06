@@ -142,7 +142,7 @@ export function OnboardingWizard() {
 
         {step === 0 && (
           <div className="space-y-3">
-            <p className="text-[13px] leading-relaxed text-ink">
+            <p className="text-body leading-relaxed text-ink">
               Kredi kartı ekstresi maaşınızı göstermez. Aylık net gelirinizi bir kez girin; ay sonunda
               artıda mı ekside mi olduğunuzu ancak böyle söyleyebiliriz.
             </p>
@@ -160,7 +160,7 @@ export function OnboardingWizard() {
 
         {step === 1 && (
           <div className="space-y-3">
-            <p className="text-[13px] leading-relaxed text-ink">
+            <p className="text-body leading-relaxed text-ink">
               Karttan geçmeyen sabit giderleriniz — kira, aidat, faturalar. Bunlar da ekstrede yoktur.
             </p>
 
@@ -170,7 +170,7 @@ export function OnboardingWizard() {
                   key={suggestion.label}
                   type="button"
                   onClick={() => addItem(suggestion.label, suggestion.category)}
-                  className="inline-flex items-center gap-1 rounded border border-line bg-sunken px-2.5 py-1 text-2xs text-muted hover:border-accent hover:text-ink"
+                  className="inline-flex items-center gap-1 rounded border border-line bg-sunken px-2.5 py-1 text-label text-muted hover:border-accent hover:text-ink"
                 >
                   <Plus size={11} />
                   {suggestion.label}
@@ -225,7 +225,7 @@ export function OnboardingWizard() {
 
         {step === 2 && (
           <div className="space-y-3">
-            <p className="text-[13px] leading-relaxed text-ink">
+            <p className="text-body leading-relaxed text-ink">
               Geriye dönük ayları da doldurmak ister misiniz? Seçtiğiniz her aya aynı gelir ve sabit
               giderler yazılır — sonra tek tek düzeltebilirsiniz.
             </p>
@@ -243,7 +243,7 @@ export function OnboardingWizard() {
                       )
                     }
                     aria-pressed={selected}
-                    className={`rounded border px-2.5 py-1 text-2xs transition-colors ${
+                    className={`rounded border px-2.5 py-1 text-label transition-colors ${
                       selected
                         ? 'border-transparent bg-ink text-inverse'
                         : 'border-line bg-raised text-muted hover:text-ink'
@@ -273,7 +273,7 @@ export function OnboardingWizard() {
 
         {step === 3 && (
           <div className="space-y-3">
-            <p className="text-[13px] leading-relaxed text-ink">Şunlar kaydedilecek:</p>
+            <p className="text-body leading-relaxed text-ink">Şunlar kaydedilecek:</p>
             <div className="space-y-2 rounded border border-line bg-sunken p-3">
               <Row label="Aylık gelir" value={incomeValue > 0 ? money(incomeValue) : 'girilmedi'} />
               <Row
@@ -296,7 +296,7 @@ export function OnboardingWizard() {
                 />
               )}
             </div>
-            <p className="text-2xs leading-relaxed text-muted">
+            <p className="text-label leading-relaxed text-muted">
               Bitirdikten sonra ekstrenizi yükleyin; kart harcamaları bu tabloya eklenir ve her ayın net
               durumu <Badge tone="accent">Gelir–Gider</Badge> sekmesinde görünür.
             </p>
@@ -310,9 +310,9 @@ export function OnboardingWizard() {
 function Row({ label, value, tone }: { label: string; value: string; tone?: 'positive' | 'negative' }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <span className="text-2xs text-muted">{label}</span>
+      <span className="text-label text-muted">{label}</span>
       <span
-        className={`num text-2xs font-medium ${
+        className={`num text-label font-medium ${
           tone === 'positive' ? 'text-positive' : tone === 'negative' ? 'text-negative' : 'text-ink'
         }`}
       >

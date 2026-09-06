@@ -127,7 +127,7 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-line text-2xs text-faint">
+              <tr className="border-b border-line text-label text-faint">
                 <th className="w-9 px-3 py-2.5">
                   <input
                     type="checkbox"
@@ -182,15 +182,15 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
                       className="h-3.5 w-3.5 accent-[var(--accent)]"
                     />
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-2xs text-muted">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-label text-muted">
                     {fullDayLabel(tx.date)}
                   </td>
                   <td className="max-w-[280px] px-3 py-2.5">
-                    <p className="truncate text-2xs font-medium text-ink" title={tx.description}>
+                    <p className="truncate text-label font-medium text-ink" title={tx.description}>
                       {tx.description}
                     </p>
                     {tx.installment && (
-                      <p className="text-2xs text-faint">
+                      <p className="text-label text-faint">
                         Taksit {tx.installment.current}/{tx.installment.total}
                         {tx.installment.principal ? ` · ana tutar ${money(tx.installment.principal)}` : ''}
                       </p>
@@ -202,12 +202,12 @@ export function TransactionsView({ transactions }: { transactions: Transaction[]
                       {tx.categoryLocked && <Check size={9} className="text-accent" />}
                     </Badge>
                   </td>
-                  <td className="hidden px-3 py-2.5 text-2xs text-muted lg:table-cell">
+                  <td className="hidden px-3 py-2.5 text-label text-muted lg:table-cell">
                     {KIND_LABEL[tx.kind]}
                   </td>
-                  <td className="hidden px-3 py-2.5 text-2xs text-muted md:table-cell">{tx.bank}</td>
+                  <td className="hidden px-3 py-2.5 text-label text-muted md:table-cell">{tx.bank}</td>
                   <td
-                    className={`num whitespace-nowrap px-3 py-2.5 text-right text-2xs font-medium ${
+                    className={`num whitespace-nowrap px-3 py-2.5 text-right text-label font-medium ${
                       tx.kind === 'expense' ? 'text-ink' : 'text-positive'
                     }`}
                   >
@@ -335,7 +335,7 @@ function CategoryAssignModal({
             key={def.id}
             type="button"
             onClick={() => setChoice(def.id)}
-            className={`flex items-center gap-2 rounded border px-2.5 py-2 text-left text-2xs transition-colors ${
+            className={`flex items-center gap-2 rounded border px-2.5 py-2 text-left text-label transition-colors ${
               choice === def.id
                 ? 'border-accent bg-accent-soft text-accent-text'
                 : 'border-line bg-sunken text-ink hover:bg-hover'
@@ -354,7 +354,7 @@ function CategoryAssignModal({
           onChange={(e) => setLearn(e.target.checked)}
           className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
         />
-        <span className="text-2xs leading-relaxed text-muted">
+        <span className="text-label leading-relaxed text-muted">
           <span className="font-medium text-ink">Kural olarak kaydet.</span> Seçili işyerlerinin tüm geçmiş
           ve gelecek işlemleri bu kategoriye atanır. Kuralları Ayarlar bölümünden kaldırabilirsiniz.
         </span>
@@ -362,7 +362,7 @@ function CategoryAssignModal({
 
       {merchants.length > 0 && (
         <div className="mt-3">
-          <p className="mb-1.5 text-2xs text-faint">Etkilenecek işyerleri</p>
+          <p className="mb-1.5 text-label text-faint">Etkilenecek işyerleri</p>
           <div className="flex flex-wrap gap-1">
             {merchants.slice(0, 12).map((merchant) => (
               <Badge key={merchant}>{merchant}</Badge>
@@ -481,7 +481,7 @@ function ManualTransactionModal({ open, onClose }: { open: boolean; onClose: () 
                 key={def.id}
                 type="button"
                 onClick={() => setCategory(def.id)}
-                className={`flex items-center gap-2 rounded border px-2.5 py-1.5 text-left text-2xs transition-colors ${
+                className={`flex items-center gap-2 rounded border px-2.5 py-1.5 text-left text-label transition-colors ${
                   category === def.id
                     ? 'border-accent bg-accent-soft text-accent-text'
                     : 'border-line bg-sunken text-ink hover:bg-hover'

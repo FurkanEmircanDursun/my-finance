@@ -68,7 +68,7 @@ export function FilterBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <span className="hidden text-2xs text-faint sm:inline">{count(visible.length)} işlem</span>
+        <span className="hidden text-label text-faint sm:inline">{count(visible.length)} işlem</span>
 
         <div className="relative">
           <Search size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-faint" />
@@ -78,7 +78,7 @@ export function FilterBar() {
             onChange={(e) => dispatch({ type: 'setFilters', filters: { query: e.target.value } })}
             placeholder="İşyeri ara"
             aria-label="İşlem ara"
-            className="h-8 w-36 rounded border border-line bg-raised pl-7 pr-2 text-2xs text-ink placeholder:text-faint focus:w-52 focus:border-accent focus:outline-none sm:w-44"
+            className="h-8 w-36 rounded border border-line bg-raised pl-7 pr-2 text-label text-ink placeholder:text-faint focus:w-52 focus:border-accent focus:outline-none sm:w-44"
           />
         </div>
 
@@ -91,7 +91,7 @@ export function FilterBar() {
                 filters: { month: 'all', categories: [], banks: [], query: '' },
               })
             }
-            className="inline-flex h-8 items-center gap-1 rounded border border-line bg-raised px-2 text-2xs text-muted hover:text-ink"
+            className="inline-flex h-8 items-center gap-1 rounded border border-line bg-raised px-2 text-label text-muted hover:text-ink"
           >
             <X size={11} />
             Sıfırla
@@ -117,7 +117,7 @@ function Chip({
       onClick={onClick}
       aria-pressed={active}
       className={clsx(
-        'h-7 shrink-0 rounded border px-2.5 text-2xs font-medium transition-colors',
+        'h-7 shrink-0 rounded border px-2.5 text-label font-medium transition-colors',
         active
           ? 'border-transparent bg-ink text-inverse'
           : 'border-line bg-raised text-muted hover:text-ink',

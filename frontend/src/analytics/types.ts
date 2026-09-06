@@ -2,6 +2,7 @@ import type { Money } from '../core/money'
 import type { DayKey, MonthKey } from '../core/date'
 import type { CategoryId, SpendNature } from '../domain/categories'
 import type { Transaction } from '../domain/types'
+import type { BudgetProgress } from './budgets'
 import type { CashFlowForecast } from './forecast'
 import type { GoalProgress } from './goal'
 
@@ -302,5 +303,7 @@ export interface Analysis {
   goal: GoalProgress | null
   /** 90-day forward projection; views slice it down to 30/60/90 as needed. */
   forecast: CashFlowForecast
+  /** Per-category progress against the limits set in Ayarlar, for the month the data currently covers. `items` is empty when no budgets are set. */
+  budgets: { month: MonthKey; items: BudgetProgress[] }
   insights: Insight[]
 }

@@ -17,7 +17,7 @@ export function buildInsights(
   profile: Profile,
 ): Insight[] {
   const out: Insight[] = []
-  const { totals, categories, recurring, commitments, anomalies, duplicates, habits, trend, meta } = analysis
+  const { totals, categories, recurring, commitments, anomalies, duplicates, habits, trend, meta, budgets } = analysis
 
   // ── Budget pace ─────────────────────────────────────────────────────────────
   if (profile.spendingLimit > 0 && trend.projectedMonthEnd !== null) {
@@ -38,6 +38,37 @@ export function buildInsights(
         title: 'Limit içinde ilerliyor',
         body: `Ay sonu projeksiyonu ${money(trend.projectedMonthEnd)}, limitin ${money(-overshoot)} altında.`,
         weight: 30,
+      })
+    }
+  }
+
+  // ── Category budgets ─────────────────────────────────────────────────────────
+  const overBudget = budgets.items.filter((b) => b.status === 'over')
+  if (overBudget.length) {
+    const worst = overBudget[0]
+    out.push({
+      id: 'budget-over',
+      severity: 'critical',
+      title: `${worst.label} bütçesi ${money(worst.spent - worst.limit)} aşıldı`,
+      body:
+        overBudget.length > 1
+          ? `${money(worst.spent)} harcandı, limit ${money(worst.limit)}. ${overBudget.length - 1} kategori daha bütçesini aştı.`
+          : `${money(worst.spent)} harcandı, limit ${money(worst.limit)}.`,
+      weight: 98,
+      action: { view: 'spending', label: 'Bütçeleri gör' },
+    })
+  } else {
+    const trending = budgets.items.find((b) => b.status === 'warning')
+    if (trending) {
+      out.push({
+        id: 'budget-warning',
+        severity: 'warning',
+        title: `${trending.label} bütçesine yaklaşılıyor`,
+        body: trending.projected
+          ? `Mevcut hızla ay sonu ${money(trending.projected)}, limit ${money(trending.limit)}.`
+          : `${money(trending.spent)} harcandı, limit ${money(trending.limit)}.`,
+        weight: 70,
+        action: { view: 'spending', label: 'Bütçeleri gör' },
       })
     }
   }

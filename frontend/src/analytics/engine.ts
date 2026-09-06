@@ -9,6 +9,7 @@ import { displayMerchant } from '../core/text'
 import { CATEGORIES, category, type CategoryId, type SpendNature } from '../domain/categories'
 import type { Profile, Transaction } from '../domain/types'
 import { detectAnomalies, detectDuplicates, detectHabits } from './anomaly'
+import { buildBudgetProgress } from './budgets'
 import { buildCommitmentLadder, buildInstallmentPlans } from './commitments'
 import { computeCashFlowForecast } from './forecast'
 import { computeGoalProgress } from './goal'
@@ -502,6 +503,21 @@ export function analyze(
     ? computeGoalProgress(profile.goal, monthly, lastCoveredMonth, profile.monthlyIncome)
     : null
 
+  // Elapsed-day pacing is a calendar-month idea (see the month-end projection
+  // above) — under statement grouping, or once the month is fully behind the
+  // data, budgets still show spent-vs-limit, just without an extrapolation.
+  const budgetElapsedDays =
+    calendarMonths && acc.maxDate && monthOf(acc.maxDate) === lastCoveredMonth
+      ? dayOfMonth(acc.maxDate)
+      : null
+  const budgets = {
+    month: lastCoveredMonth,
+    items: buildBudgetProgress(profile.budgets, acc.byMonthCategory.get(lastCoveredMonth) ?? new Map(), {
+      month: lastCoveredMonth,
+      elapsedDays: budgetElapsedDays,
+    }),
+  }
+
   const health = computeHealth({
     netSpend: acc.totals.netSpend,
     monthlyIncome: profile.monthlyIncome,
@@ -545,6 +561,7 @@ export function analyze(
     health,
     goal,
     forecast,
+    budgets,
   }
 
   return { ...partial, insights: buildInsights(partial, profile) }

@@ -66,18 +66,18 @@ export function ImportView({ onDone }: { onDone: () => void }) {
 
           {progress.running ? (
             <div className="space-y-1">
-              <p className="text-[13px] font-medium text-ink">{progress.fileName}</p>
-              <p className="text-2xs text-muted">{progress.message}</p>
-              <p className="text-2xs text-faint">
+              <p className="text-body font-medium text-ink">{progress.fileName}</p>
+              <p className="text-label text-muted">{progress.message}</p>
+              <p className="text-label text-faint">
                 {progress.done + 1} / {progress.total} dosya
               </p>
             </div>
           ) : (
             <div className="space-y-1">
-              <p className="text-[13px] font-medium text-ink">
+              <p className="text-body font-medium text-ink">
                 {isDragActive ? 'Bırakın, okumaya başlayalım' : 'Ekstrenizi buraya sürükleyin'}
               </p>
-              <p className="text-2xs text-muted">PDF, TXT veya CSV · birden fazla dosya seçebilirsiniz</p>
+              <p className="text-label text-muted">PDF, TXT veya CSV · birden fazla dosya seçebilirsiniz</p>
             </div>
           )}
 
@@ -89,7 +89,7 @@ export function ImportView({ onDone }: { onDone: () => void }) {
         </div>
 
         {rejected && (
-          <div className="mt-3 flex items-center gap-2 rounded border border-line bg-negative-soft px-3 py-2 text-2xs text-negative">
+          <div className="mt-3 flex items-center gap-2 rounded border border-line bg-negative-soft px-3 py-2 text-label text-negative">
             <AlertCircle size={13} />
             {rejected}
           </div>
@@ -105,8 +105,8 @@ export function ImportView({ onDone }: { onDone: () => void }) {
                 <div className="flex min-w-0 items-center gap-2.5">
                   <FileText size={14} className="shrink-0 text-faint" />
                   <div className="min-w-0">
-                    <p className="truncate text-2xs font-medium text-ink">{file.name}</p>
-                    <p className="text-2xs text-faint">{(file.size / 1024).toFixed(0)} KB</p>
+                    <p className="truncate text-label font-medium text-ink">{file.name}</p>
+                    <p className="text-label text-faint">{(file.size / 1024).toFixed(0)} KB</p>
                   </div>
                 </div>
                 <button
@@ -126,7 +126,7 @@ export function ImportView({ onDone }: { onDone: () => void }) {
           </div>
         )}
 
-        <p className="mt-4 flex items-center justify-center gap-1.5 text-2xs text-faint">
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-label text-faint">
           <Lock size={11} />
           Dosyalar tarayıcınızdan çıkmaz. Analiz cihazınızda çalışır.
         </p>
@@ -153,8 +153,8 @@ export function ImportView({ onDone }: { onDone: () => void }) {
                   <AlertCircle size={14} className="mt-0.5 shrink-0 text-negative" />
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-2xs font-medium text-ink">{outcome.fileName}</p>
-                  <p className="text-2xs text-muted">
+                  <p className="truncate text-label font-medium text-ink">{outcome.fileName}</p>
+                  <p className="text-label text-muted">
                     {outcome.ok
                       ? `${count(outcome.added)} işlem eklendi${
                           outcome.duplicates ? ` · ${count(outcome.duplicates)} yinelenen atlandı` : ''
@@ -190,10 +190,10 @@ export function ImportView({ onDone }: { onDone: () => void }) {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-2xs font-medium text-ink">{statement.label}</p>
+                      <p className="truncate text-label font-medium text-ink">{statement.label}</p>
                       <Badge tone="accent">{statement.bank}</Badge>
                     </div>
-                    <p className="mt-0.5 text-2xs text-faint">
+                    <p className="mt-0.5 text-label text-faint">
                       {count(statement.transactionCount)} işlem
                       {statement.periodEnd ? ` · ${fullDayLabel(statement.periodEnd)}` : ''}
                       {' · '}

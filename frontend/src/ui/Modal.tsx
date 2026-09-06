@@ -4,11 +4,15 @@ import { clsx } from 'clsx'
 import { IconButton } from './primitives'
 
 /**
- * Dialog and side-sheet in one component.
+ * Every secondary surface in the app is this one component.
  *
- * Handles the accessibility basics the previous inline modals skipped: Escape
- * to close, focus moved into the dialog and restored on close, background
- * scroll lock, and a labelled `role="dialog"`.
+ * It rises from the bottom edge on a phone — where a thumb can reach its close
+ * affordance and a downward flick is the expected way out — and docks as a
+ * centred panel from `sm` upwards. Escape closes it, focus moves in and is
+ * restored on close, the page behind it stops scrolling.
+ *
+ * `variant="sheet"` is the wide form used for drill-downs that carry a list;
+ * `dialog` is the short form used for a single decision.
  */
 export function Modal({
   open,
@@ -59,20 +63,14 @@ export function Modal({
   if (!open) return null
 
   const width =
-    variant === 'sheet'
-      ? 'h-full w-full max-w-2xl'
-      : size === 'sm'
-        ? 'w-full max-w-sm'
-        : size === 'lg'
-          ? 'w-full max-w-3xl'
-          : 'w-full max-w-lg'
+    variant === 'sheet' ? 'sm:max-w-2xl'
+    : size === 'sm' ? 'sm:max-w-sm'
+    : size === 'lg' ? 'sm:max-w-3xl'
+    : 'sm:max-w-lg'
 
   return (
     <div
-      className={clsx(
-        'fixed inset-0 z-50 flex bg-black/40 backdrop-blur-[2px] fade-in',
-        variant === 'sheet' ? 'justify-end' : 'items-center justify-center p-4',
-      )}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-[2px] fade-in sm:items-center sm:p-6"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
@@ -83,26 +81,32 @@ export function Modal({
         aria-modal="true"
         aria-label={title}
         className={clsx(
-          'flex flex-col overflow-hidden border border-line bg-raised shadow-overlay',
-          variant === 'sheet' ? 'rounded-none border-y-0 border-r-0' : 'rounded-lg rise-in',
+          'sheet-in flex w-full flex-col overflow-hidden bg-raised shadow-overlay',
+          'max-h-[88vh] rounded-t-[20px] sm:max-h-[85vh] sm:rounded-[var(--radius-lg)]',
           width,
-          variant === 'dialog' && 'max-h-[85vh]',
         )}
       >
-        <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+        {/* The grab handle is the phone's affordance for "flick this away". It
+            has no click target of its own — the close button is the pointer
+            path, this is the gesture's signpost. */}
+        <div className="flex justify-center pt-2.5 sm:hidden" aria-hidden>
+          <span className="h-1 w-9 rounded-full bg-line-strong" />
+        </div>
+
+        <header className="flex items-start justify-between gap-3 px-5 pb-4 pt-4">
           <div className="min-w-0">
-            <h2 className="text-[13px] font-semibold text-ink">{title}</h2>
-            {description && <p className="mt-0.5 text-2xs text-muted">{description}</p>}
+            <h2 className="text-title font-semibold text-ink">{title}</h2>
+            {description && <p className="mt-1 text-body text-muted">{description}</p>}
           </div>
-          <IconButton label="Kapat" onClick={onClose} className="-mr-1 -mt-0.5">
-            <X size={15} />
+          <IconButton label="Kapat" onClick={onClose} className="-mr-2 -mt-2 shrink-0">
+            <X size={18} />
           </IconButton>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">{children}</div>
 
         {footer && (
-          <footer className="flex items-center justify-end gap-2 border-t border-line bg-sunken px-4 py-3">
+          <footer className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
             {footer}
           </footer>
         )}
@@ -139,7 +143,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="h-8 rounded border border-line bg-raised px-3 text-2xs font-medium text-ink hover:bg-hover"
+            className="h-11 rounded-[var(--radius)] border border-line bg-raised px-4 text-body font-semibold text-ink hover:bg-hover"
           >
             Vazgeç
           </button>
@@ -147,7 +151,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             className={clsx(
-              'h-8 rounded px-3 text-2xs font-medium text-white',
+              'h-11 rounded-[var(--radius)] px-4 text-body font-semibold text-white',
               destructive ? 'bg-negative hover:brightness-110' : 'bg-accent hover:bg-accent-hover',
             )}
           >
@@ -156,7 +160,7 @@ export function ConfirmDialog({
         </>
       }
     >
-      <p className="text-[13px] leading-relaxed text-muted">{message}</p>
+      <p className="text-body text-muted">{message}</p>
     </Modal>
   )
 }

@@ -19,7 +19,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
   const [active, setActive] = useState<CategoryId | null>(null)
   const [sort, setSort] = useState<'total' | 'count' | 'median'>('total')
 
-  const { totals, categories, natures, merchants, monthly, weekday, trend, habits, meta } = analysis
+  const { totals, categories, natures, merchants, monthly, weekday, trend, habits, meta, budgets } = analysis
 
   if (!meta.transactionCount) {
     return <Empty title="Bu dönemde işlem yok" description="Dönem veya arama kriterlerini genişletin." />
@@ -80,7 +80,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
       >
         <MonthlyFlowChart data={monthly} height={200} showIncome />
         {monthly.some((m) => m.income > 0) && (
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-2xs text-muted">
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-label text-muted">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-sm" style={{ background: 'var(--accent)' }} />
               Harcama
@@ -95,8 +95,8 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
         {limit > 0 && latest && (
           <div className="mt-4 space-y-2 border-t border-line pt-4">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-2xs text-muted">{monthLabel(latest.month)} · aylık limit takibi</span>
-              <span className="num text-2xs text-muted">
+              <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit takibi</span>
+              <span className="num text-label text-muted">
                 {money(latest.spend)} / {money(limit)}
               </span>
             </div>
@@ -131,7 +131,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
-                <tr className="border-b border-line text-2xs text-faint">
+                <tr className="border-b border-line text-label text-faint">
                   <th className="px-4 py-2.5 font-medium">Kategori</th>
                   <th className="px-4 py-2.5 text-right font-medium">Toplam</th>
                   <th className="px-4 py-2.5 text-right font-medium">Pay</th>
@@ -152,23 +152,23 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
                     <td className="px-4 py-2.5">
                       <span className="flex items-center gap-2">
                         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: stat.color }} />
-                        <span className="text-2xs font-medium text-ink">{stat.label}</span>
-                        <span className="text-2xs text-faint">{NATURE_LABEL[stat.nature]}</span>
+                        <span className="text-label font-medium text-ink">{stat.label}</span>
+                        <span className="text-label text-faint">{NATURE_LABEL[stat.nature]}</span>
                       </span>
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                    <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                       {money(stat.total)}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">
                       {percent(stat.share * 100)}
                     </td>
-                    <td className="num hidden px-4 py-2.5 text-right text-2xs text-muted sm:table-cell">
+                    <td className="num hidden px-4 py-2.5 text-right text-label text-muted sm:table-cell">
                       {money(stat.median)}
                     </td>
-                    <td className="num hidden px-4 py-2.5 text-right text-2xs text-muted md:table-cell">
+                    <td className="num hidden px-4 py-2.5 text-right text-label text-muted md:table-cell">
                       {money(stat.monthlyAverage)}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">{count(stat.count)}</td>
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">{count(stat.count)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -176,6 +176,46 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
           </div>
         </Section>
       </div>
+
+      {/* ── Budgets ──────────────────────────────────────────────────────── */}
+      {budgets.items.length > 0 && (
+        <Section
+          title="Bütçeler"
+          description={`${monthLabel(budgets.month)} · Ayarlar'dan belirlenen kategori limitleri`}
+        >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {budgets.items.map((budget) => (
+              <div key={budget.category} className="surface space-y-2 p-3.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: budget.color }} />
+                    <span className="truncate text-label font-medium text-ink">{budget.label}</span>
+                  </span>
+                  {budget.status !== 'ok' && (
+                    <Badge tone={budget.status === 'over' ? 'negative' : 'warning'}>
+                      {budget.status === 'over' ? 'Aşıldı' : 'Yaklaşıyor'}
+                    </Badge>
+                  )}
+                </div>
+                <Meter
+                  value={budget.spent}
+                  max={budget.limit}
+                  tone={budget.status === 'over' ? 'negative' : budget.status === 'warning' ? 'warning' : 'positive'}
+                />
+                <div className="flex items-baseline justify-between">
+                  <span className="num text-label font-medium text-ink">
+                    {money(budget.spent)} <span className="font-normal text-faint">/ {money(budget.limit)}</span>
+                  </span>
+                  <span className="num text-label text-muted">{percent(budget.share * 100)}</span>
+                </div>
+                {budget.projected !== null && (
+                  <p className="text-label text-faint">Ay sonu tahmini {money(budget.projected)}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {/* ── Movers ───────────────────────────────────────────────────────── */}
       {trend.movers.length > 0 && (
@@ -200,7 +240,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
               <button
                 type="button"
                 onClick={() => setActive(null)}
-                className="text-2xs text-accent hover:underline"
+                className="text-label text-accent hover:underline"
               >
                 Filtreyi kaldır
               </button>
@@ -221,7 +261,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-line text-2xs text-faint">
+              <tr className="border-b border-line text-label text-faint">
                 <th className="px-4 py-2.5 font-medium">İşyeri</th>
                 <th className="hidden px-4 py-2.5 font-medium md:table-cell">Kategori</th>
                 <th className="px-4 py-2.5 text-right font-medium">Toplam</th>
@@ -233,20 +273,20 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
             <tbody>
               {merchantRows.map((merchant) => (
                 <tr key={merchant.merchant} className="border-b border-line last:border-b-0 hover:bg-hover">
-                  <td className="max-w-[220px] truncate px-4 py-2.5 text-2xs font-medium text-ink">
+                  <td className="max-w-[220px] truncate px-4 py-2.5 text-label font-medium text-ink">
                     {merchant.label}
                   </td>
                   <td className="hidden px-4 py-2.5 md:table-cell">
                     <Badge>{categoryLabel(merchant.category)}</Badge>
                   </td>
-                  <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                  <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                     {money(merchant.total)}
                   </td>
-                  <td className="num px-4 py-2.5 text-right text-2xs text-muted">{count(merchant.count)}</td>
-                  <td className="num hidden px-4 py-2.5 text-right text-2xs text-muted sm:table-cell">
+                  <td className="num px-4 py-2.5 text-right text-label text-muted">{count(merchant.count)}</td>
+                  <td className="num hidden px-4 py-2.5 text-right text-label text-muted sm:table-cell">
                     {money(merchant.median)}
                   </td>
-                  <td className="hidden px-4 py-2.5 text-right text-2xs text-faint lg:table-cell">
+                  <td className="hidden px-4 py-2.5 text-right text-label text-faint lg:table-cell">
                     {fullDayLabel(merchant.lastSeen)}
                   </td>
                 </tr>
@@ -267,7 +307,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
-                  <tr className="border-b border-line text-2xs text-faint">
+                  <tr className="border-b border-line text-label text-faint">
                     <th className="px-4 py-2.5 font-medium">İşyeri</th>
                     <th className="px-4 py-2.5 text-right font-medium">Tipik</th>
                     <th className="px-4 py-2.5 text-right font-medium">Ayda</th>
@@ -277,14 +317,14 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
                 <tbody>
                   {habits.slice(0, 8).map((habit) => (
                     <tr key={habit.merchant} className="border-b border-line last:border-b-0 hover:bg-hover">
-                      <td className="max-w-[180px] truncate px-4 py-2.5 text-2xs font-medium text-ink">
+                      <td className="max-w-[180px] truncate px-4 py-2.5 text-label font-medium text-ink">
                         {habit.label}
                       </td>
-                      <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                      <td className="num px-4 py-2.5 text-right text-label text-muted">
                         {money(habit.medianAmount)}
                       </td>
-                      <td className="num px-4 py-2.5 text-right text-2xs text-muted">{habit.perMonth}</td>
-                      <td className="num px-4 py-2.5 text-right text-2xs font-medium text-ink">
+                      <td className="num px-4 py-2.5 text-right text-label text-muted">{habit.perMonth}</td>
+                      <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
                         {money(habit.annualProjection)}
                       </td>
                     </tr>
@@ -315,7 +355,7 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
             />
             <Row label="Sınıflandırma" value={percent(meta.classifiedShare * 100)} />
           </dl>
-          <p className="text-2xs leading-relaxed text-faint">
+          <p className="text-label leading-relaxed text-faint">
             Aylık eğim {money(trend.slopePerMonth)} (R² {trend.trendFit}). R² 0,5'in üzerindeyse gerçek bir
             eğilimden, altındaysa dalgalanmadan söz edilir. Yoğunlaşma endeksi {analysis.merchantConcentration}
             : 0 harcamanın çok sayıda işyerine dağıldığını, 1 tek işyerinde toplandığını gösterir.
@@ -341,15 +381,15 @@ function Figure({
 }) {
   return (
     <div className="surface p-4">
-      <p className="text-2xs font-medium uppercase tracking-wide text-faint">{label}</p>
+      <p className="text-label font-medium uppercase tracking-wide text-faint">{label}</p>
       <p
         className={`num mt-2 text-xl font-semibold leading-none tracking-tight ${
           tone === 'positive' ? 'text-positive' : tone === 'negative' ? 'text-negative' : 'text-ink'
-        } ${strong ? 'text-[26px]' : ''}`}
+        } ${strong ? 'text-figure' : ''}`}
       >
         {value}
       </p>
-      {foot && <p className="mt-1.5 text-2xs text-muted">{foot}</p>}
+      {foot && <p className="mt-1.5 text-label text-muted">{foot}</p>}
     </div>
   )
 }
@@ -357,8 +397,8 @@ function Figure({
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-2xs text-muted">{label}</dt>
-      <dd className="num text-2xs font-medium text-ink">{value}</dd>
+      <dt className="text-label text-muted">{label}</dt>
+      <dd className="num text-label font-medium text-ink">{value}</dd>
     </div>
   )
 }
@@ -366,16 +406,16 @@ function Row({ label, value }: { label: string; value: string }) {
 function MoverColumn({ title, movers }: { title: string; movers: Analysis['trend']['movers'] }) {
   return (
     <div className="rounded border border-line bg-sunken p-3">
-      <p className="mb-2 text-2xs font-medium text-muted">{title}</p>
+      <p className="mb-2 text-label font-medium text-muted">{title}</p>
       {movers.length === 0 ? (
-        <p className="text-2xs text-faint">Kayda değer değişim yok.</p>
+        <p className="text-label text-faint">Kayda değer değişim yok.</p>
       ) : (
         <ul className="space-y-2">
           {movers.map((mover) => (
             <li key={mover.id} className="flex items-center gap-2">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: mover.color }} />
-              <span className="min-w-0 flex-1 truncate text-2xs text-ink">{mover.label}</span>
-              <span className="num text-2xs text-muted">{money(mover.delta, { sign: true })}</span>
+              <span className="min-w-0 flex-1 truncate text-label text-ink">{mover.label}</span>
+              <span className="num text-label text-muted">{money(mover.delta, { sign: true })}</span>
               <TrendPill value={mover.deltaPct} />
             </li>
           ))}

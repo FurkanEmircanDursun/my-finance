@@ -3,6 +3,10 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
+/**
+ * A raised, self-contained block. Reserved for the one or two headline figures
+ * on a screen; ordinary content uses `Section`, which draws no box at all.
+ */
 export function Card({
   children,
   className,
@@ -12,38 +16,46 @@ export function Card({
   className?: string
   padded?: boolean
 }) {
-  return <div className={clsx('surface', padded && 'p-4 sm:p-5', className)}>{children}</div>
+  return <div className={clsx('surface', padded && 'p-5', className)}>{children}</div>
 }
 
+/**
+ * A titled block of content, separated from its neighbours by space rather than
+ * by a frame.
+ *
+ * The previous version wrapped every section in a bordered card, so a screen was
+ * a stack of boxes containing boxes and the border carried no information. Here
+ * a border means one thing: you can touch this. Sections are quiet; rows and
+ * tiles are the things that look pressable.
+ *
+ * `description` is deliberately rare — a section that needs a sentence to
+ * explain what it is usually needs a better title.
+ */
 export function Section({
   title,
   description,
   actions,
   children,
   className,
-  padded = true,
 }: {
   title?: ReactNode
   description?: ReactNode
   actions?: ReactNode
   children: ReactNode
   className?: string
-  padded?: boolean
 }) {
   return (
-    <section className={clsx('surface flex flex-col', className)}>
+    <section className={clsx('flex flex-col', className)}>
       {(title || actions) && (
-        <header className="flex items-start justify-between gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
+        <header className="mb-3 flex items-baseline justify-between gap-3">
           <div className="min-w-0">
-            {title && <h2 className="text-[13px] font-semibold tracking-tight text-ink">{title}</h2>}
-            {description && <p className="mt-0.5 text-2xs text-muted">{description}</p>}
+            {title && <h2 className="text-title font-semibold text-ink">{title}</h2>}
+            {description && <p className="mt-1 text-label text-faint">{description}</p>}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
         </header>
       )}
-      <div className={clsx('min-w-0 flex-1', padded && 'p-4 sm:p-5', title && padded && 'pt-3 sm:pt-4')}>
-        {children}
-      </div>
+      <div className="min-w-0 flex-1">{children}</div>
     </section>
   )
 }
@@ -52,24 +64,62 @@ export function Grid({ children, className }: { children: ReactNode; className?:
   return <div className={clsx('grid gap-3', className)}>{children}</div>
 }
 
+/**
+ * One tappable line in a list — a category, a subscription, an instalment plan.
+ *
+ * Rows are the workhorse of this interface: almost every drill-down starts with
+ * one. They carry the hairline that says "pressable", a 44px minimum height for
+ * a thumb, and nothing else.
+ */
+export function Row({
+  children,
+  onClick,
+  className,
+  active,
+}: {
+  children: ReactNode
+  onClick?: () => void
+  className?: string
+  active?: boolean
+}) {
+  const shared = clsx(
+    'flex min-h-[44px] w-full items-center gap-3 rounded-[var(--radius)] px-3 py-2.5 text-left',
+    'transition-colors duration-200',
+    active && 'bg-hover',
+    className,
+  )
+
+  if (!onClick) return <div className={shared}>{children}</div>
+
+  return (
+    <button type="button" onClick={onClick} className={clsx(shared, 'hover:bg-hover')}>
+      {children}
+    </button>
+  )
+}
+
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md'
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-1.5 rounded font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-semibold whitespace-nowrap transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40'
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-white hover:bg-accent-hover border border-transparent',
   secondary: 'bg-raised text-ink border border-line hover:bg-hover',
   ghost: 'bg-transparent text-muted hover:text-ink hover:bg-hover border border-transparent',
-  danger: 'bg-negative-soft text-negative border border-transparent hover:brightness-95',
+  // Destructive work is never the accent colour: the loudest button on a screen
+  // should be the one you are meant to press.
+  danger: 'bg-transparent text-negative border border-line hover:bg-negative-soft',
 }
 
+// 44px is the smallest target a thumb hits reliably, and this app ships as an
+// Android build too. `sm` exists for inline actions inside an already dense row.
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-7 px-2.5 text-2xs',
-  md: 'h-9 px-3.5 text-[13px]',
+  sm: 'h-9 px-3 text-label',
+  md: 'h-11 px-4 text-body',
 }
 
 export function Button({
@@ -98,7 +148,8 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={clsx(
-        'inline-flex h-8 w-8 items-center justify-center rounded text-muted transition-colors hover:bg-hover hover:text-ink',
+        'inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius)] text-muted',
+        'transition-colors duration-200 hover:bg-hover hover:text-ink',
         className,
       )}
       {...props}
@@ -111,11 +162,11 @@ export function IconButton({
 type Tone = 'neutral' | 'accent' | 'positive' | 'negative' | 'warning'
 
 const TONE_CLASS: Record<Tone, string> = {
-  neutral: 'bg-sunken text-muted border-line',
-  accent: 'bg-accent-soft text-accent-text border-transparent',
-  positive: 'bg-positive-soft text-positive border-transparent',
-  negative: 'bg-negative-soft text-negative border-transparent',
-  warning: 'bg-warning-soft text-warning border-transparent',
+  neutral: 'bg-sunken text-muted',
+  accent: 'bg-accent-soft text-accent-text',
+  positive: 'bg-positive-soft text-positive',
+  negative: 'bg-negative-soft text-negative',
+  warning: 'bg-warning-soft text-warning',
 }
 
 export function Badge({
@@ -132,7 +183,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded border px-1.5 py-0.5 text-2xs font-medium leading-tight',
+        'inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-label font-semibold leading-tight',
         TONE_CLASS[tone],
         className,
       )}
@@ -143,35 +194,50 @@ export function Badge({
   )
 }
 
+/**
+ * A headline figure. The label sits under the number, not above it: the number
+ * is what the eye should land on first, and the caption then reads as its
+ * explanation rather than as a form field's name.
+ */
 export function Stat({
   label,
   value,
   hint,
   tone = 'neutral',
   action,
+  onClick,
 }: {
   label: ReactNode
   value: ReactNode
   hint?: ReactNode
   tone?: Tone
   action?: ReactNode
+  onClick?: () => void
 }) {
   const valueTone =
     tone === 'positive' ? 'text-positive' : tone === 'negative' ? 'text-negative' : 'text-ink'
 
-  return (
-    <div className="surface flex flex-col justify-between gap-3 p-4">
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-2xs font-medium uppercase tracking-wide text-faint">{label}</span>
+        <div className={clsx('num text-figure font-semibold', valueTone)}>{value}</div>
         {action}
       </div>
-      <div>
-        <div className={clsx('num text-[26px] font-semibold leading-none tracking-tight', valueTone)}>
-          {value}
-        </div>
-        {hint && <div className="mt-1.5 text-2xs text-muted">{hint}</div>}
-      </div>
-    </div>
+      <div className="mt-2 text-body text-muted">{label}</div>
+      {hint && <div className="mt-1 text-label text-faint">{hint}</div>}
+    </>
+  )
+
+  if (!onClick) return <div className="surface p-5">{body}</div>
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="surface p-5 text-left transition-colors duration-200 hover:bg-hover"
+    >
+      {body}
+    </button>
   )
 }
 
@@ -223,7 +289,7 @@ export function Segmented<T extends string>({
   className?: string
 }) {
   return (
-    <div className={clsx('inline-flex rounded border border-line bg-sunken p-0.5', className)}>
+    <div className={clsx('inline-flex rounded-[var(--radius)] bg-sunken p-1', className)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -231,7 +297,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
           className={clsx(
-            'rounded-[6px] px-2.5 py-1 text-2xs font-medium transition-colors',
+            'rounded-[6px] px-3 py-1.5 text-label font-semibold transition-colors duration-200',
             value === option.value ? 'bg-raised text-ink shadow-sm' : 'text-muted hover:text-ink',
           )}
         >
@@ -246,7 +312,7 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={clsx(
-        'h-9 w-full rounded border border-line bg-raised px-2.5 text-[13px] text-ink',
+        'h-11 w-full rounded-[var(--radius)] border border-line bg-raised px-3 text-body text-ink',
         'placeholder:text-faint focus:border-accent focus:outline-none',
         className,
       )}
@@ -266,15 +332,20 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-2xs font-medium text-muted">{label}</span>
+      <span className="mb-2 block text-body text-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-2xs text-faint">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-label text-faint">{hint}</span>}
     </label>
   )
 }
 
 /* ── States ──────────────────────────────────────────────────────────────── */
 
+/**
+ * An empty state is a title and, at most, one thing to do. The explanatory
+ * paragraph that used to sit between them told people what they had already
+ * worked out from the title.
+ */
 export function Empty({
   icon,
   title,
@@ -291,18 +362,18 @@ export function Empty({
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-2 text-center',
-        compact ? 'py-6' : 'py-12',
+        'flex flex-col items-center justify-center gap-3 text-center',
+        compact ? 'py-8' : 'py-16',
       )}
     >
       {icon && <div className="text-faint">{icon}</div>}
-      <p className="text-[13px] font-medium text-ink">{title}</p>
-      {description && <p className="max-w-sm text-2xs leading-relaxed text-muted">{description}</p>}
-      {action && <div className="mt-1">{action}</div>}
+      <p className="text-title font-semibold text-ink">{title}</p>
+      {description && <p className="max-w-xs text-body text-muted">{description}</p>}
+      {action}
     </div>
   )
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('animate-pulse rounded bg-sunken', className)} />
+  return <div className={clsx('animate-pulse rounded-[var(--radius)] bg-sunken', className)} />
 }

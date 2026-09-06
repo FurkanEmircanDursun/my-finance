@@ -1,55 +1,63 @@
-import {
-  CalendarClock, LayoutDashboard, Lightbulb, PieChart, Receipt, RefreshCcw,
-  Settings, Upload, Wallet,
-} from 'lucide-react'
+import { CalendarClock, LayoutDashboard, PieChart } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type ViewId =
-  | 'overview'
-  | 'ledger'
-  | 'spending'
-  | 'recurring'
-  | 'commitments'
-  | 'transactions'
-  | 'insights'
-  | 'import'
-  | 'settings'
+export type ViewId = 'overview' | 'spending' | 'future'
 
 export interface NavItem {
   id: ViewId
   label: string
   icon: ComponentType<{ size?: number | string; className?: string }>
-  /** Reached from a link or the header, not from the tab strip. */
-  secondary?: boolean
 }
 
 /**
- * Six tabs, in the order someone actually asks their questions:
- * what happened → did I end up or down → where did it go → what repeats →
- * what is already owed → show me the rows.
+ * Three tabs, one per tense.
  *
- * An earlier build had seven, splitting cash flow from categories and giving
- * findings a tab of their own. Both splits made the first screen a menu rather
- * than an answer, so cash flow and categories are one "Harcamalar" page and the
- * findings surface on the overview. "Gelir–Gider" earns its place instead by
- * being the only screen that takes input rather than reporting: a statement
- * cannot know a salary or a rent, and without them no page can answer whether
- * a month ended up or down.
+ *   Özet       what is true right now
+ *   Harcamalar what already happened, and where it went
+ *   Gelecek    what is already committed
+ *
+ * The build before this one had nine destinations, six of them in the tab
+ * strip. Five of those nine were not places at all:
+ *
+ *   Bulgular  rendered the same insight rows the overview already showed
+ *   Ekstreler was an action ("import a statement"), so it is now the `+` button
+ *             and a drop target on every screen
+ *   Düzenli   was one table, and belongs beside the categories it explains
+ *   Gelir–Gider was data entry for a setting, so it opens as a sheet
+ *   İşlemler  is a destination you arrive at from a category or a merchant,
+ *             never something you set out for — so it is a drill-down sheet
+ *   Ayarlar   is a sheet, as settings almost always should be
+ *
+ * A first screen that offers nine doors is a menu. This one is an answer.
  */
 export const NAV: NavItem[] = [
   { id: 'overview', label: 'Özet', icon: LayoutDashboard },
-  { id: 'ledger', label: 'Gelir–Gider', icon: Wallet },
   { id: 'spending', label: 'Harcamalar', icon: PieChart },
-  { id: 'recurring', label: 'Düzenli ödemeler', icon: RefreshCcw },
-  { id: 'commitments', label: 'Gelecek', icon: CalendarClock },
-  { id: 'transactions', label: 'İşlemler', icon: Receipt },
-  { id: 'insights', label: 'Bulgular', icon: Lightbulb, secondary: true },
-  { id: 'import', label: 'Ekstreler', icon: Upload, secondary: true },
-  { id: 'settings', label: 'Ayarlar', icon: Settings, secondary: true },
+  { id: 'future', label: 'Gelecek', icon: CalendarClock },
 ]
 
-export const PRIMARY_NAV = NAV.filter((item) => !item.secondary)
+/**
+ * Old view ids still arrive from two places: a bookmarked `#/recurring` hash,
+ * and the `action.view` deep links the analytics layer attaches to insights.
+ * Both are mapped to wherever that content now lives rather than being dropped
+ * on the floor, so no insight loses its "take me there" link.
+ */
+const LEGACY: Record<string, ViewId> = {
+  insights: 'overview',
+  ledger: 'overview',
+  import: 'overview',
+  settings: 'overview',
+  recurring: 'spending',
+  transactions: 'spending',
+  commitments: 'future',
+}
 
 export function isViewId(value: string): value is ViewId {
   return NAV.some((item) => item.id === value)
+}
+
+/** Resolves any id — current, legacy or nonsense — to a tab that exists. */
+export function resolveView(value: string): ViewId {
+  if (isViewId(value)) return value
+  return LEGACY[value] ?? 'overview'
 }

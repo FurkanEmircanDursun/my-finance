@@ -25,10 +25,10 @@ const AXIS = {
 function TooltipShell({ title, rows }: { title: string; rows: Array<{ label: string; value: ReactNode; color?: string }> }) {
   return (
     <div className="rounded border border-line bg-raised px-2.5 py-2 shadow-overlay">
-      <p className="mb-1 text-2xs font-medium text-ink">{title}</p>
+      <p className="mb-1 text-label font-medium text-ink">{title}</p>
       <div className="space-y-0.5">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center gap-2 text-2xs">
+          <div key={row.label} className="flex items-center gap-2 text-label">
             {row.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />}
             <span className="text-muted">{row.label}</span>
             <span className="num ml-auto font-medium text-ink">{row.value}</span>
@@ -222,7 +222,7 @@ export function CategoryDonut({
       </ResponsiveContainer>
 
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xs text-faint">Toplam</span>
+        <span className="text-label text-faint">Toplam</span>
         <span className="num text-base font-semibold text-ink">{money(total)}</span>
       </div>
     </div>

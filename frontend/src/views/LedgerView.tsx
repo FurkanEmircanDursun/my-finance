@@ -78,7 +78,7 @@ export function LedgerView() {
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-line text-2xs text-faint">
+              <tr className="border-b border-line text-label text-faint">
                 <th className="px-4 py-2.5 font-medium">Ay</th>
                 <th className="px-4 py-2.5 text-right font-medium">Gelir</th>
                 <th className="px-4 py-2.5 text-right font-medium">Ekstre gideri</th>
@@ -93,23 +93,23 @@ export function LedgerView() {
                 return (
                   <tr key={row.month} className="border-b border-line last:border-b-0 hover:bg-hover">
                     <td className="px-4 py-2.5">
-                      <span className="flex items-center gap-2 text-2xs font-medium text-ink">
+                      <span className="flex items-center gap-2 text-label font-medium text-ink">
                         {monthLabel(row.month)}
                         {row.month === thisMonth && <Badge tone="accent">bu ay</Badge>}
                         {untouched && <Badge tone="warning">boş</Badge>}
                       </span>
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-positive">
+                    <td className="num px-4 py-2.5 text-right text-label text-positive">
                       {row.income ? money(row.income) : '—'}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">
                       {row.statementSpend ? money(row.statementSpend) : '—'}
                     </td>
-                    <td className="num px-4 py-2.5 text-right text-2xs text-muted">
+                    <td className="num px-4 py-2.5 text-right text-label text-muted">
                       {row.manualSpend ? money(row.manualSpend) : '—'}
                     </td>
                     <td
-                      className={`num px-4 py-2.5 text-right text-2xs font-semibold ${
+                      className={`num px-4 py-2.5 text-right text-label font-semibold ${
                         row.net >= 0 ? 'text-positive' : 'text-negative'
                       }`}
                     >
@@ -134,7 +134,7 @@ export function LedgerView() {
       {emptyMonths.length > 0 && (
         <Section title="Geriye dönük doldurma" description="Boş bırakılan aylar analizden düşer">
           <div className="space-y-3">
-            <p className="text-2xs leading-relaxed text-muted">
+            <p className="text-label leading-relaxed text-muted">
               {year} yılının{' '}
               <span className="font-medium text-ink">{emptyMonths.length} ayında</span> hiç kayıt yok. Bu
               aylara maaşınızı ve kira gibi sabit giderlerinizi girerseniz yıllık net tutar ve tasarruf
@@ -146,7 +146,7 @@ export function LedgerView() {
                   key={m.month}
                   type="button"
                   onClick={() => setEditing(m.month)}
-                  className="rounded border border-line bg-sunken px-2.5 py-1 text-2xs text-muted hover:border-accent hover:text-ink"
+                  className="rounded border border-line bg-sunken px-2.5 py-1 text-label text-muted hover:border-accent hover:text-ink"
                 >
                   {monthLabel(m.month, true)}
                 </button>
@@ -269,7 +269,7 @@ function MonthEntryModal({
                   setLabel(quick.label)
                   setCategory(quick.category)
                 }}
-                className={`rounded border px-2.5 py-1 text-2xs transition-colors ${
+                className={`rounded border px-2.5 py-1 text-label transition-colors ${
                   label === quick.label
                     ? 'border-accent bg-accent-soft text-accent-text'
                     : 'border-line bg-sunken text-muted hover:text-ink'
@@ -307,7 +307,7 @@ function MonthEntryModal({
                   key={def.id}
                   type="button"
                   onClick={() => setCategory(def.id)}
-                  className={`flex items-center gap-1.5 rounded border px-2 py-1 text-2xs transition-colors ${
+                  className={`flex items-center gap-1.5 rounded border px-2 py-1 text-label transition-colors ${
                     category === def.id
                       ? 'border-accent bg-accent-soft text-accent-text'
                       : 'border-line bg-sunken text-muted hover:text-ink'
@@ -329,7 +329,7 @@ function MonthEntryModal({
               onChange={(e) => setRepeat(e.target.checked)}
               className="mt-0.5 h-3.5 w-3.5 accent-[var(--accent)]"
             />
-            <span className="text-2xs leading-relaxed text-muted">
+            <span className="text-label leading-relaxed text-muted">
               <span className="font-medium text-ink">Sonraki aylara da uygula.</span> Aynı tutar{' '}
               {monthLabel(laterMonths[laterMonths.length - 1], true)} ayına kadar {laterMonths.length} aya
               daha eklenir. Tutar değişirse o ayı tek tek düzeltebilirsiniz.
@@ -339,7 +339,7 @@ function MonthEntryModal({
 
         {entries.length > 0 && (
           <div>
-            <p className="mb-1.5 text-2xs text-faint">Bu ayın kayıtları</p>
+            <p className="mb-1.5 text-label text-faint">Bu ayın kayıtları</p>
             <div className="space-y-1.5">
               {entries.map((entry) => (
                 <div
@@ -347,10 +347,10 @@ function MonthEntryModal({
                   className="flex items-center gap-2.5 rounded border border-line bg-sunken px-3 py-2"
                 >
                   <Wallet size={12} className={entry.kind === 'income' ? 'text-positive' : 'text-faint'} />
-                  <span className="min-w-0 flex-1 truncate text-2xs text-ink">{entry.description}</span>
+                  <span className="min-w-0 flex-1 truncate text-label text-ink">{entry.description}</span>
                   {entry.kind !== 'income' && <Badge>{categoryLabel(entry.category)}</Badge>}
                   <span
-                    className={`num text-2xs font-medium ${
+                    className={`num text-label font-medium ${
                       entry.kind === 'income' ? 'text-positive' : 'text-ink'
                     }`}
                   >
