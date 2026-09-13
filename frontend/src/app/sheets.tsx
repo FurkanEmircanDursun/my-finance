@@ -1,9 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode,
+} from 'react'
 import { ImportSheet } from './ImportSheet'
-import { SettingsSheet } from './SettingsSheet'
-import { IncomeSheet } from './IncomeSheet'
-import { BudgetSheet } from './BudgetSheet'
-import { TransactionsSheet } from '../views/TransactionsSheet'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
 
@@ -15,7 +13,20 @@ import { categoryLabel, type CategoryId } from '../domain/categories'
  * carrying their own modal state and their own copy of the list-building logic.
  * That is what lets a category row, a merchant row, a subscription and an
  * insight all lead to the same place without any of them knowing about it.
+ *
+ * Every sheet except the importer is lazily loaded and only mounted once it has
+ * been opened. Ayarlar is the one that matters: it is the only module that
+ * touches Firebase, and importing it eagerly would put ~178 kB gzipped of cloud
+ * sync in front of the first paint for everyone, including the majority who
+ * never sign in.
  */
+
+const SettingsSheet = lazy(() => import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })))
+const IncomeSheet = lazy(() => import('./IncomeSheet').then((m) => ({ default: m.IncomeSheet })))
+const BudgetSheet = lazy(() => import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })))
+const TransactionsSheet = lazy(() =>
+  import('../views/TransactionsSheet').then((m) => ({ default: m.TransactionsSheet })),
+)
 
 export interface TransactionQuery {
   category?: CategoryId
@@ -70,23 +81,22 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     )
   }, [source, txQuery])
 
-  const title =
-    txQuery?.title ?? (txQuery?.category ? categoryLabel(txQuery.category) : 'İşlemler')
+  const title = txQuery?.title ?? (txQuery?.category ? categoryLabel(txQuery.category) : 'İşlemler')
 
   return (
     <SheetContext.Provider value={api}>
       {children}
 
       <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} />
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <IncomeSheet open={incomeOpen} onClose={() => setIncomeOpen(false)} />
-      <BudgetSheet open={budgetsOpen} onClose={() => setBudgetsOpen(false)} />
-      <TransactionsSheet
-        open={txQuery !== null}
-        onClose={() => setTxQuery(null)}
-        title={title}
-        transactions={rows}
-      />
+
+      <Suspense fallback={null}>
+        {settingsOpen && <SettingsSheet open onClose={() => setSettingsOpen(false)} />}
+        {incomeOpen && <IncomeSheet open onClose={() => setIncomeOpen(false)} />}
+        {budgetsOpen && <BudgetSheet open onClose={() => setBudgetsOpen(false)} />}
+        {txQuery !== null && (
+          <TransactionsSheet open onClose={() => setTxQuery(null)} title={title} transactions={rows} />
+        )}
+      </Suspense>
     </SheetContext.Provider>
   )
 }

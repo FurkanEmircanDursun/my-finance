@@ -1,7 +1,7 @@
 import { parseEnAmount, type Money } from '../../core/money'
 import { parseSlashDate, type DayKey } from '../../core/date'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
-import { PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS } from './types'
+import { PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, resolvePeriodStart } from './types'
 import type { Installment, TxKind } from '../../domain/types'
 
 /**
@@ -25,6 +25,17 @@ const AMOUNT_TOKEN_RE = /^[\d,]+\.\d{2}(?:\(-\))?(?:x\d+)?$|^[\d,]+(?:\(-\))?(?:
 
 const DUE_DATE_RE = /Son\s+Ödeme\s+Tarihi[\s:]*([\d]{2}[./][\d]{2}[./][\d]{4})/i
 const CUT_DATE_RE = /(?:Hesap\s+Kesim|Hesap\s+Özeti)\s+Tarihi[\s:]*([\d]{2}[./][\d]{2}[./][\d]{4})/i
+/**
+ * Akbank prints the cycle it is billing for, verbatim:
+ *
+ *   Ekstre  Dönemi 27/07/2026-28/08/2026
+ *
+ * This is the authority on the period. Deriving it from the rows instead read
+ * an instalment's original purchase date as the start of the cycle — see
+ * `resolvePeriodStart`.
+ */
+const PERIOD_RE =
+  /Ekstre\s+D[öo]nemi[\s:]*(\d{2}\/\d{2}\/\d{4})\s*[-‐-―]\s*(\d{2}\/\d{2}\/\d{4})/i
 const CARD_RE = /\b(Axess|Wings|Free Card|Fish|Neo)\b/i
 
 function looksLikeAmount(token: string): boolean {
@@ -128,12 +139,20 @@ function parse(text: string): AdapterOutput {
   const dueMatch = DUE_DATE_RE.exec(text)
   const cutMatch = CUT_DATE_RE.exec(text)
   const cardMatch = CARD_RE.exec(text)
+  const periodMatch = PERIOD_RE.exec(text)
+
+  const printedStart = periodMatch ? parseSlashDate(periodMatch[1]) : null
+  const printedEnd = periodMatch ? parseSlashDate(periodMatch[2]) : null
 
   return {
     rows,
     skipped,
-    periodStart: minDate,
-    periodEnd: cutMatch ? parseSlashDate(cutMatch[1]) ?? maxDate : maxDate,
+    periodStart: resolvePeriodStart({
+      printed: printedStart,
+      earliestRow: minDate,
+      periodEnd: printedEnd ?? (cutMatch ? parseSlashDate(cutMatch[1]) : null) ?? maxDate,
+    }),
+    periodEnd: printedEnd ?? (cutMatch ? parseSlashDate(cutMatch[1]) ?? maxDate : maxDate),
     dueDate: dueMatch ? parseSlashDate(dueMatch[1]) : null,
     accountLabel: cardMatch ? `Akbank ${cardMatch[1]}` : 'Akbank',
   }

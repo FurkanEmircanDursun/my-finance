@@ -35,6 +35,7 @@ export const defaultSettings: Settings = {
   periodGrouping: null,
   lockPinHash: null,
   lockPinSalt: null,
+  onboardingSeen: false,
 }
 
 export const initialState: AppState = {

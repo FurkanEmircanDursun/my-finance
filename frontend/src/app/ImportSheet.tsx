@@ -139,14 +139,34 @@ function Picker({
 /* ── First run ───────────────────────────────────────────────────────────── */
 
 /**
- * The whole first screen: one action, one sentence, nothing else. No setup
- * wizard, no income question, no grouping question — the app earns those by
- * showing something useful first.
+ * The empty state of an app that has a shape — the tab bar and header are
+ * already there around it, so this is one screen's worth of content rather
+ * than a separate pre-app.
+ *
+ * Still one action. The intro has just made the pitch; repeating it here would
+ * be the app talking to itself instead of getting on with the job. What it
+ * does add is the answer to the only question left at this point: which
+ * statements does it understand, and where do I get the file.
  */
 export function FirstRun() {
   return (
-    <div className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col justify-center">
+    <div className="mx-auto w-full max-w-md space-y-6 py-6">
+      <div>
+        <h1 className="text-display font-semibold tracking-tight text-ink">Başlayalım</h1>
+        <p className="mt-2 text-body leading-relaxed text-muted">
+          Bankandan indirdiğin ekstre dosyasını bırak. Birkaç saniyede kategorilenir, analiz hazır olur.
+        </p>
+      </div>
+
       <Picker primaryLabel="Analizi başlat" />
+
+      <div className="rounded-[var(--radius)] bg-sunken px-4 py-3">
+        <p className="text-label font-semibold text-muted">Tanıdığı ekstreler</p>
+        <p className="mt-1 text-label leading-relaxed text-faint">
+          Akbank Axess · Garanti BBVA Bonus · genel CSV. Bankanın internet şubesinden "ekstre indir"
+          dediğinde gelen PDF doğrudan çalışır.
+        </p>
+      </div>
     </div>
   )
 }

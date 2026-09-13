@@ -38,7 +38,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="h-9 w-full rounded bg-accent px-3 text-body font-medium text-white hover:bg-accent-hover"
+            className="h-9 w-full rounded bg-accent px-3 text-body font-semibold text-white hover:bg-accent-hover"
           >
             Sayfayı yenile
           </button>

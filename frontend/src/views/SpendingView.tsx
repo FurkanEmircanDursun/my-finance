@@ -1,101 +1,106 @@
 import { useState } from 'react'
-import { Badge, Empty, Meter, Section, Segmented } from '../ui/primitives'
-import { CategoryDonut, MonthlyFlowChart, WeekdayChart } from '../ui/charts'
-import { NatureSplit, TrendPill } from '../ui/finance'
-import { money, count, percent } from '../core/money'
-import { fullDayLabel, monthLabel } from '../core/date'
-import { categoryLabel, NATURE_LABEL, type CategoryId } from '../domain/categories'
-import type { Analysis } from '../analytics/types'
-import type { Profile } from '../domain/types'
+import { ChevronDown } from 'lucide-react'
+import { clsx } from 'clsx'
+import { Badge, Button, Empty, Meter, Section } from '../ui/primitives'
+import { MonthlyFlowChart } from '../ui/charts'
+import { TrendPill } from '../ui/finance'
+import { money, count, percent, signedPercent } from '../core/money'
+import { monthLabel } from '../core/date'
+import { categoryLabel } from '../domain/categories'
+import { useStore } from '../store/AppStore'
+import { useSheets } from '../app/sheets'
+import type { RecurringPayment } from '../analytics/types'
 
 /**
- * Everything about where the money went, on one scrollable page.
+ * Where the money went — the detail page, and the only one.
  *
- * Cash flow and categories used to be separate tabs, which forced the reader to
- * hold one page in their head while looking at the other — the monthly total
- * and the category that caused it belong side by side.
+ * Three screens folded into this one. Cash flow and categories were separate
+ * tabs, which forced the reader to hold one page in their head while looking at
+ * the other; the monthly total and the category that caused it belong side by
+ * side. "Düzenli ödemeler" was a third tab holding a single table that only
+ * makes sense next to the categories it explains.
+ *
+ * Gone with them: the donut (a second drawing of the bar list beside it, and
+ * worse at comparing shares), the six-column category table (four of those
+ * columns answered questions nobody had), the merchant sort control (total is
+ * the answer), and two long methodology essays that explained the algorithm to
+ * people who wanted to know what they spent on food.
  */
-export function SpendingView({ analysis, profile }: { analysis: Analysis; profile: Profile }) {
-  const [active, setActive] = useState<CategoryId | null>(null)
-  const [sort, setSort] = useState<'total' | 'count' | 'median'>('total')
+export function SpendingView() {
+  const { state, analysis, overall } = useStore()
+  const { openBudgets, openTransactions } = useSheets()
+  const [detail, setDetail] = useState(false)
 
-  const { totals, categories, natures, merchants, monthly, weekday, trend, habits, meta, budgets } = analysis
+  const { totals, categories, merchants, monthly, trend, habits, meta, budgets } = analysis
+  const limit = state.profile.spendingLimit
+  const latest = monthly[monthly.length - 1]
 
   if (!meta.transactionCount) {
-    return <Empty title="Bu dönemde işlem yok" description="Dönem veya arama kriterlerini genişletin." />
+    return <Empty title="Bu dönemde işlem yok" description="Üstteki dönem seçiminden başka bir ay seç." />
   }
 
-  const limit = profile.spendingLimit
-  const latest = monthly[monthly.length - 1]
-  const merchantRows = (active ? merchants.filter((m) => m.category === active) : merchants)
-    .slice()
-    .sort((a, b) =>
-      sort === 'count' ? b.count - a.count : sort === 'median' ? b.median - a.median : b.total - a.total,
-    )
-    .slice(0, 20)
-
   return (
-    <div className="space-y-4">
-      {/* ── Totals ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <Figure
-          label="Gelir"
-          value={money(totals.incomeBasis)}
-          foot={
-            totals.incomeAssumed
-              ? `${meta.monthsEquivalent} aylık varsayılan gelir`
-              : totals.income > 0
-                ? 'ekstredeki gelir satırları'
-                : "Ayarlar'dan aylık gelir girin"
-          }
-          tone={totals.incomeBasis > 0 ? 'positive' : undefined}
-        />
-        <Figure label="Brüt harcama" value={money(totals.spend)} foot={`${count(meta.spendCount)} işlem`} />
-        <Figure
-          label="İadeler"
-          value={money(totals.refunds)}
-          foot={totals.spend ? `brütün ${percent((totals.refunds / totals.spend) * 100)}'i` : undefined}
-          tone={totals.refunds > 0 ? 'positive' : undefined}
-        />
-        <Figure label="Net harcama" value={money(totals.netSpend)} foot="brüt − iade" strong />
-        <Figure
-          label="Net durum"
-          value={money(totals.savings, { sign: true })}
-          foot="gelir − net harcama"
-          tone={totals.savings >= 0 ? 'positive' : 'negative'}
-          strong
-        />
-        <Figure
-          label="Kart borcu ödemesi"
-          value={money(totals.payments)}
-          foot="harcama değil, nakit hareketi"
-        />
-      </div>
+    <div className="space-y-10">
+      {/* ── Two figures, and the rest folded away ────────────────────────── */}
+      <section>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="surface p-5">
+            <div className="num text-figure font-semibold text-ink">{money(totals.netSpend)}</div>
+            <div className="mt-2 text-body text-muted">Net harcama</div>
+          </div>
+          <div className="surface p-5">
+            <div
+              className={clsx(
+                'num text-figure font-semibold',
+                totals.savings >= 0 ? 'text-positive' : 'text-negative',
+              )}
+            >
+              {money(totals.savings, { sign: true })}
+            </div>
+            <div className="mt-2 text-body text-muted">Kalan</div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setDetail((v) => !v)}
+          aria-expanded={detail}
+          className="-ml-2 mt-3 flex h-11 items-center gap-1.5 rounded-[var(--radius)] px-2 text-body text-muted transition-colors duration-200 hover:bg-hover hover:text-ink"
+        >
+          Detay
+          <ChevronDown size={16} className={clsx('transition-transform duration-200', detail && 'rotate-180')} />
+        </button>
+
+        {detail && (
+          <dl className="rise-in mt-1 space-y-1">
+            <DetailRow
+              label="Gelir"
+              value={money(totals.incomeBasis)}
+              note={
+                totals.incomeAssumed ? 'ayarlardaki aylık gelirden'
+                : totals.income > 0 ? 'ekstredeki gelir satırları'
+                : 'girilmedi'
+              }
+            />
+            <DetailRow label="Brüt harcama" value={money(totals.spend)} note={`${count(meta.spendCount)} işlem`} />
+            <DetailRow label="İadeler" value={money(totals.refunds)} />
+            <DetailRow label="Kart borcu ödemesi" value={money(totals.payments)} note="harcama değil" />
+          </dl>
+        )}
+      </section>
 
       {/* ── Month by month ───────────────────────────────────────────────── */}
       <Section
-        title="Gelir ve harcama"
-        description="Soluk sütunlar kısmi dönemleri gösterir"
+        title="Ay ay"
+        description="Soluk sütunlar kısmi dönemler"
         actions={<TrendPill value={trend.momPct} suffix="son iki tam ay" />}
       >
         <MonthlyFlowChart data={monthly} height={200} showIncome />
-        {monthly.some((m) => m.income > 0) && (
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-label text-muted">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-sm" style={{ background: 'var(--accent)' }} />
-              Harcama
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-0.5 w-4 rounded-full" style={{ background: 'var(--positive)' }} />
-              Gelir
-            </span>
-          </div>
-        )}
 
         {limit > 0 && latest && (
-          <div className="mt-4 space-y-2 border-t border-line pt-4">
+          <div className="mt-5 space-y-2">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit takibi</span>
+              <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit</span>
               <span className="num text-label text-muted">
                 {money(latest.spend)} / {money(limit)}
               </span>
@@ -110,317 +115,219 @@ export function SpendingView({ analysis, profile }: { analysis: Analysis; profil
       </Section>
 
       {/* ── Categories ───────────────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
-        <Section title="Dağılım" description={`${categories.length} kategori`}>
-          <div className="space-y-4">
-            <CategoryDonut
-              data={categories.map((c) => ({ id: c.id, label: c.label, value: c.total, color: c.color }))}
-              activeId={active}
-              onSelect={(id) => setActive((prev) => (prev === id ? (null as null) : (id as CategoryId)))}
-              height={190}
-            />
-            <NatureSplit natures={natures} />
-          </div>
-        </Section>
+      <Section
+        title="Kategoriler"
+        actions={
+          <Button size="sm" variant="ghost" onClick={openBudgets}>
+            Limitler
+          </Button>
+        }
+      >
+        <ul className="-mx-2">
+          {categories.map((stat) => {
+            const budget = budgets.items.find((b) => b.category === stat.id)
+            return (
+              <li key={stat.id}>
+                <button
+                  type="button"
+                  onClick={() => openTransactions({ category: stat.id })}
+                  className="w-full rounded-[var(--radius)] px-2 py-3 text-left transition-colors duration-200 hover:bg-hover"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                        style={{ background: stat.color }}
+                        aria-hidden
+                      />
+                      <span className="truncate text-body text-ink">{stat.label}</span>
+                      {budget && budget.status !== 'ok' && (
+                        <Badge tone={budget.status === 'over' ? 'negative' : 'warning'}>
+                          {budget.status === 'over' ? 'Aşıldı' : 'Yaklaşıyor'}
+                        </Badge>
+                      )}
+                    </span>
+                    <span className="num shrink-0 text-body font-semibold text-ink">{money(stat.total)}</span>
+                  </div>
 
-        <Section
-          title="Kategoriler"
-          description="Satıra tıklayınca aşağıdaki işyeri listesi filtrelenir"
-          padded={false}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-line text-label text-faint">
-                  <th className="px-4 py-2.5 font-medium">Kategori</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Toplam</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Pay</th>
-                  <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">Tipik</th>
-                  <th className="hidden px-4 py-2.5 text-right font-medium md:table-cell">Aylık ort.</th>
-                  <th className="px-4 py-2.5 text-right font-medium">İşlem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map((stat) => (
-                  <tr
-                    key={stat.id}
-                    onClick={() => setActive((prev) => (prev === stat.id ? null : stat.id))}
-                    className={`cursor-pointer border-b border-line last:border-b-0 hover:bg-hover ${
-                      active === stat.id ? 'bg-hover' : ''
-                    }`}
-                  >
-                    <td className="px-4 py-2.5">
-                      <span className="flex items-center gap-2">
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: stat.color }} />
-                        <span className="text-label font-medium text-ink">{stat.label}</span>
-                        <span className="text-label text-faint">{NATURE_LABEL[stat.nature]}</span>
-                      </span>
-                    </td>
-                    <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
-                      {money(stat.total)}
-                    </td>
-                    <td className="num px-4 py-2.5 text-right text-label text-muted">
-                      {percent(stat.share * 100)}
-                    </td>
-                    <td className="num hidden px-4 py-2.5 text-right text-label text-muted sm:table-cell">
-                      {money(stat.median)}
-                    </td>
-                    <td className="num hidden px-4 py-2.5 text-right text-label text-muted md:table-cell">
-                      {money(stat.monthlyAverage)}
-                    </td>
-                    <td className="num px-4 py-2.5 text-right text-label text-muted">{count(stat.count)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Section>
-      </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    {/* A category with a ceiling is measured against its ceiling;
+                        one without is measured against the biggest category.
+                        Same bar, two honest meanings. */}
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.min(100, (stat.total / (budget?.limit || categories[0]?.total || 1)) * 100)}%`,
+                          background:
+                            budget?.status === 'over' ? 'var(--negative)'
+                            : budget?.status === 'warning' ? 'var(--warning)'
+                            : stat.color,
+                        }}
+                      />
+                    </div>
+                    <span className="num w-24 shrink-0 text-right text-label text-faint">
+                      {budget ? `/ ${money(budget.limit)}` : `${percent(stat.share * 100)} · ${count(stat.count)}`}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </Section>
 
-      {/* ── Budgets ──────────────────────────────────────────────────────── */}
-      {budgets.items.length > 0 && (
-        <Section
-          title="Bütçeler"
-          description={`${monthLabel(budgets.month)} · Ayarlar'dan belirlenen kategori limitleri`}
-        >
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {budgets.items.map((budget) => (
-              <div key={budget.category} className="surface space-y-2 p-3.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: budget.color }} />
-                    <span className="truncate text-label font-medium text-ink">{budget.label}</span>
+      {/* ── Subscriptions ────────────────────────────────────────────────── */}
+      {/* Read from `overall`, never the selected period: recurring detection
+          needs the whole history to see a rhythm at all. */}
+      <RecurringSection
+        items={overall.recurring}
+        onOpen={(item) => openTransactions({ merchant: item.merchant, title: item.label, overall: true })}
+      />
+
+      {/* ── Merchants ────────────────────────────────────────────────────── */}
+      <Section title="En çok harcadığın yerler">
+        <ul className="-mx-2">
+          {merchants.slice(0, 8).map((merchant) => (
+            <li key={merchant.merchant}>
+              <button
+                type="button"
+                onClick={() => openTransactions({ merchant: merchant.merchant, title: merchant.label })}
+                className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius)] px-2 py-2.5 text-left transition-colors duration-200 hover:bg-hover"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body text-ink">{merchant.label}</span>
+                  <span className="mt-0.5 block text-label text-faint">
+                    {categoryLabel(merchant.category)} · {count(merchant.count)} işlem
                   </span>
-                  {budget.status !== 'ok' && (
-                    <Badge tone={budget.status === 'over' ? 'negative' : 'warning'}>
-                      {budget.status === 'over' ? 'Aşıldı' : 'Yaklaşıyor'}
-                    </Badge>
-                  )}
-                </div>
-                <Meter
-                  value={budget.spent}
-                  max={budget.limit}
-                  tone={budget.status === 'over' ? 'negative' : budget.status === 'warning' ? 'warning' : 'positive'}
-                />
-                <div className="flex items-baseline justify-between">
-                  <span className="num text-label font-medium text-ink">
-                    {money(budget.spent)} <span className="font-normal text-faint">/ {money(budget.limit)}</span>
+                </span>
+                <span className="num shrink-0 text-body font-semibold text-ink">{money(merchant.total)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      {/* ── Small but frequent ───────────────────────────────────────────── */}
+      {habits.length > 0 && (
+        <Section title="Küçük ama sık" description="Tek tek küçük, yıllık toplamı büyük">
+          <ul className="-mx-2">
+            {habits.slice(0, 5).map((habit) => (
+              <li key={habit.merchant}>
+                <button
+                  type="button"
+                  onClick={() => openTransactions({ merchant: habit.merchant, title: habit.label })}
+                  className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius)] px-2 py-2.5 text-left transition-colors duration-200 hover:bg-hover"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body text-ink">{habit.label}</span>
+                    <span className="mt-0.5 block text-label text-faint">
+                      ayda {habit.perMonth} kez · {money(habit.medianAmount)}
+                    </span>
                   </span>
-                  <span className="num text-label text-muted">{percent(budget.share * 100)}</span>
-                </div>
-                {budget.projected !== null && (
-                  <p className="text-label text-faint">Ay sonu tahmini {money(budget.projected)}</p>
-                )}
-              </div>
+                  <span className="num shrink-0 text-body font-semibold text-ink">
+                    {money(habit.annualProjection)}
+                    <span className="ml-1 text-label font-normal text-faint">/yıl</span>
+                  </span>
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </Section>
       )}
 
       {/* ── Movers ───────────────────────────────────────────────────────── */}
       {trend.movers.length > 0 && (
-        <Section title="Aylar arası değişim" description="Son iki dönemin karşılaştırması">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <MoverColumn title="Artanlar" movers={trend.movers.filter((m) => m.delta > 0).slice(0, 5)} />
-            <MoverColumn
-              title="Azalanlar"
-              movers={[...trend.movers].reverse().filter((m) => m.delta < 0).slice(0, 5)}
-            />
-          </div>
+        <Section title="Geçen aya göre">
+          <ul className="-mx-2">
+            {trend.movers.slice(0, 6).map((mover) => (
+              <li key={mover.id} className="flex min-h-[44px] items-center gap-3 px-2">
+                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: mover.color }} />
+                <span className="min-w-0 flex-1 truncate text-body text-ink">{mover.label}</span>
+                <span className="num shrink-0 text-body text-muted">{money(mover.delta, { sign: true })}</span>
+                <span className="w-16 shrink-0 text-right">
+                  <TrendPill value={mover.deltaPct} />
+                </span>
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
+    </div>
+  )
+}
 
-      {/* ── Merchants ────────────────────────────────────────────────────── */}
-      <Section
-        title={active ? `İşyerleri · ${categoryLabel(active)}` : 'İşyerleri'}
-        description={`${merchantRows.length} işyeri gösteriliyor`}
-        actions={
-          <div className="flex items-center gap-2">
-            {active && (
+/* ── Pieces ──────────────────────────────────────────────────────────────── */
+
+function DetailRow({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="flex min-h-[36px] items-baseline justify-between gap-3 px-2">
+      <dt className="text-body text-muted">
+        {label}
+        {note && <span className="ml-2 text-label text-faint">{note}</span>}
+      </dt>
+      <dd className="num text-body text-ink">{value}</dd>
+    </div>
+  )
+}
+
+function RecurringSection({
+  items,
+  onOpen,
+}: {
+  items: RecurringPayment[]
+  onOpen: (item: RecurringPayment) => void
+}) {
+  const [showLapsed, setShowLapsed] = useState(false)
+
+  const active = items.filter((r) => r.status === 'active')
+  const lapsed = items.filter((r) => r.status === 'lapsed')
+  const rows = showLapsed ? [...active, ...lapsed] : active
+
+  if (!items.length) return null
+
+  const monthly = active.reduce((s, r) => s + r.monthlyEquivalent, 0)
+
+  return (
+    <Section
+      title="Düzenli ödemeler"
+      description={`Ayda ${money(monthly)} · yılda ${money(active.reduce((s, r) => s + r.annualCost, 0))}`}
+      actions={
+        lapsed.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => setShowLapsed((v) => !v)}>
+            {showLapsed ? 'Durmuşları gizle' : `Durmuş (${lapsed.length})`}
+          </Button>
+        )
+      }
+    >
+      <ul className="-mx-2">
+        {rows.map((item) => {
+          const rise = item.priceChangePct !== null && item.priceChangePct >= 10
+          return (
+            <li key={item.merchant}>
               <button
                 type="button"
-                onClick={() => setActive(null)}
-                className="text-label text-accent hover:underline"
+                onClick={() => onOpen(item)}
+                className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius)] px-2 py-2.5 text-left transition-colors duration-200 hover:bg-hover"
               >
-                Filtreyi kaldır
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-body text-ink">{item.label}</span>
+                    {item.status === 'lapsed' && <Badge tone="warning">Durmuş</Badge>}
+                    {rise && <Badge tone="negative">{signedPercent(item.priceChangePct!)}</Badge>}
+                  </span>
+                  <span className="mt-0.5 block text-label text-faint">
+                    {item.cadenceLabel} · yılda {money(item.annualCost)}
+                  </span>
+                </span>
+                <span className="num shrink-0 text-body font-semibold text-ink">
+                  {money(item.lastAmount, { decimals: true })}
+                </span>
               </button>
-            )}
-            <Segmented
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: 'total', label: 'Tutar' },
-                { value: 'count', label: 'Sıklık' },
-                { value: 'median', label: 'Tipik' },
-              ]}
-            />
-          </div>
-        }
-        padded={false}
-      >
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-line text-label text-faint">
-                <th className="px-4 py-2.5 font-medium">İşyeri</th>
-                <th className="hidden px-4 py-2.5 font-medium md:table-cell">Kategori</th>
-                <th className="px-4 py-2.5 text-right font-medium">Toplam</th>
-                <th className="px-4 py-2.5 text-right font-medium">İşlem</th>
-                <th className="hidden px-4 py-2.5 text-right font-medium sm:table-cell">Tipik</th>
-                <th className="hidden px-4 py-2.5 text-right font-medium lg:table-cell">Son</th>
-              </tr>
-            </thead>
-            <tbody>
-              {merchantRows.map((merchant) => (
-                <tr key={merchant.merchant} className="border-b border-line last:border-b-0 hover:bg-hover">
-                  <td className="max-w-[220px] truncate px-4 py-2.5 text-label font-medium text-ink">
-                    {merchant.label}
-                  </td>
-                  <td className="hidden px-4 py-2.5 md:table-cell">
-                    <Badge>{categoryLabel(merchant.category)}</Badge>
-                  </td>
-                  <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
-                    {money(merchant.total)}
-                  </td>
-                  <td className="num px-4 py-2.5 text-right text-label text-muted">{count(merchant.count)}</td>
-                  <td className="num hidden px-4 py-2.5 text-right text-label text-muted sm:table-cell">
-                    {money(merchant.median)}
-                  </td>
-                  <td className="hidden px-4 py-2.5 text-right text-label text-faint lg:table-cell">
-                    {fullDayLabel(merchant.lastSeen)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
-
-      {/* ── Habits and rhythm ────────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {habits.length > 0 && (
-          <Section
-            title="Küçük ama sık"
-            description="Tek tek küçük, yıllık toplamı büyük harcamalar"
-            padded={false}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b border-line text-label text-faint">
-                    <th className="px-4 py-2.5 font-medium">İşyeri</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Tipik</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Ayda</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Yıllık</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {habits.slice(0, 8).map((habit) => (
-                    <tr key={habit.merchant} className="border-b border-line last:border-b-0 hover:bg-hover">
-                      <td className="max-w-[180px] truncate px-4 py-2.5 text-label font-medium text-ink">
-                        {habit.label}
-                      </td>
-                      <td className="num px-4 py-2.5 text-right text-label text-muted">
-                        {money(habit.medianAmount)}
-                      </td>
-                      <td className="num px-4 py-2.5 text-right text-label text-muted">{habit.perMonth}</td>
-                      <td className="num px-4 py-2.5 text-right text-label font-medium text-ink">
-                        {money(habit.annualProjection)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-        )}
-
-        <Section title="Haftalık ritim" description="Hangi günler daha çok harcanıyor">
-          <WeekdayChart data={weekday} height={170} />
-        </Section>
-      </div>
-
-      {/* ── Method note ──────────────────────────────────────────────────── */}
-      <Section title="Dönem istatistikleri">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <dl className="space-y-2.5">
-            <Row label="Günlük ortalama" value={money(trend.averageDailySpend)} />
-            <Row
-              label="Aylık ortalama"
-              value={money(Math.round(totals.netSpend / Math.max(meta.monthsEquivalent, 1)))}
-            />
-            <Row
-              label="Kapsanan dönem"
-              value={`${count(meta.coveredDays || meta.days)} gün · ${meta.monthsEquivalent} ay`}
-            />
-            <Row label="Sınıflandırma" value={percent(meta.classifiedShare * 100)} />
-          </dl>
-          <p className="text-label leading-relaxed text-faint">
-            Aylık eğim {money(trend.slopePerMonth)} (R² {trend.trendFit}). R² 0,5'in üzerindeyse gerçek bir
-            eğilimden, altındaysa dalgalanmadan söz edilir. Yoğunlaşma endeksi {analysis.merchantConcentration}
-            : 0 harcamanın çok sayıda işyerine dağıldığını, 1 tek işyerinde toplandığını gösterir.
-          </p>
-        </div>
-      </Section>
-    </div>
-  )
-}
-
-function Figure({
-  label,
-  value,
-  foot,
-  tone,
-  strong,
-}: {
-  label: string
-  value: string
-  foot?: string
-  tone?: 'positive' | 'negative'
-  strong?: boolean
-}) {
-  return (
-    <div className="surface p-4">
-      <p className="text-label font-medium uppercase tracking-wide text-faint">{label}</p>
-      <p
-        className={`num mt-2 text-xl font-semibold leading-none tracking-tight ${
-          tone === 'positive' ? 'text-positive' : tone === 'negative' ? 'text-negative' : 'text-ink'
-        } ${strong ? 'text-figure' : ''}`}
-      >
-        {value}
-      </p>
-      {foot && <p className="mt-1.5 text-label text-muted">{foot}</p>}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="text-label text-muted">{label}</dt>
-      <dd className="num text-label font-medium text-ink">{value}</dd>
-    </div>
-  )
-}
-
-function MoverColumn({ title, movers }: { title: string; movers: Analysis['trend']['movers'] }) {
-  return (
-    <div className="rounded border border-line bg-sunken p-3">
-      <p className="mb-2 text-label font-medium text-muted">{title}</p>
-      {movers.length === 0 ? (
-        <p className="text-label text-faint">Kayda değer değişim yok.</p>
-      ) : (
-        <ul className="space-y-2">
-          {movers.map((mover) => (
-            <li key={mover.id} className="flex items-center gap-2">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: mover.color }} />
-              <span className="min-w-0 flex-1 truncate text-label text-ink">{mover.label}</span>
-              <span className="num text-label text-muted">{money(mover.delta, { sign: true })}</span>
-              <TrendPill value={mover.deltaPct} />
             </li>
-          ))}
-        </ul>
-      )}
-    </div>
+          )
+        })}
+      </ul>
+    </Section>
   )
 }

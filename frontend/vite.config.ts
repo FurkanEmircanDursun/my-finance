@@ -9,8 +9,17 @@ import react from '@vitejs/plugin-react'
  * stays out of the eager bundle for the far more common visitor who never
  * touches cloud sync.
  */
+import { readFileSync } from 'node:fs'
+
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
+  version: string
+}
+
 export default defineConfig({
   plugins: [react()],
+  // Surfaced in Ayarlar. A support conversation that starts with "which
+  // version?" is the one thing a shipped app should never have to guess at.
+  define: { __APP_VERSION__: JSON.stringify(version) },
   server: {
     port: 3003,
     strictPort: false,

@@ -157,6 +157,12 @@ export interface Settings {
    */
   lockPinHash: string | null
   lockPinSalt: string | null
+  /**
+   * Whether the intro has been through once. Kept in settings rather than in
+   * component state so it survives a reload, and so "Tanıtımı tekrar göster"
+   * in Ayarlar is a single flag flip rather than a special route.
+   */
+  onboardingSeen: boolean
 }
 
 // ─── Filters ──────────────────────────────────────────────────────────────────

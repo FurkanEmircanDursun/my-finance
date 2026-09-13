@@ -70,7 +70,7 @@ export function LockScreen({
         <span className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-raised text-muted">
           <Lock size={18} />
         </span>
-        <p className="text-body font-medium text-ink">
+        <p className="text-body font-semibold text-ink">
           {error ? 'PIN yanlış, tekrar deneyin' : 'Devam etmek için PIN girin'}
         </p>
       </div>
@@ -92,7 +92,7 @@ export function LockScreen({
             key={digit}
             type="button"
             onClick={() => press(digit)}
-            className="num flex h-16 w-16 items-center justify-center rounded-full text-xl font-medium text-ink transition-colors hover:bg-hover active:bg-hover"
+            className="num flex h-16 w-16 items-center justify-center rounded-full text-figure font-semibold text-ink transition-colors hover:bg-hover active:bg-hover"
           >
             {digit}
           </button>
@@ -101,7 +101,7 @@ export function LockScreen({
         <button
           type="button"
           onClick={() => press('0')}
-          className="num flex h-16 w-16 items-center justify-center rounded-full text-xl font-medium text-ink transition-colors hover:bg-hover active:bg-hover"
+          className="num flex h-16 w-16 items-center justify-center rounded-full text-figure font-semibold text-ink transition-colors hover:bg-hover active:bg-hover"
         >
           0
         </button>
@@ -133,7 +133,7 @@ export function LockScreen({
             <button
               type="button"
               onClick={onForgotPin}
-              className="rounded border border-negative bg-negative-soft px-2.5 py-1.5 text-label font-medium text-negative"
+              className="rounded border border-negative bg-negative-soft px-2.5 py-1.5 text-label font-semibold text-negative"
             >
               Verileri sil, kilidi kaldır
             </button>

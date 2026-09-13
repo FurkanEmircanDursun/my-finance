@@ -3,7 +3,7 @@ import { parseTurkishLongDate, type DayKey } from '../../core/date'
 import { fold } from '../../core/text'
 import type { CategoryId } from '../../domain/categories'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
-import { PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS } from './types'
+import { PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, resolvePeriodStart } from './types'
 import type { Installment, TxKind } from '../../domain/types'
 
 /**
@@ -218,7 +218,14 @@ function parse(text: string): AdapterOutput {
   return {
     rows,
     skipped,
-    periodStart: minDate,
+    // Garanti prints no period range, only the cut date, so the rows are all
+    // there is to go on — but they are clamped, because an instalment row here
+    // carries the same misleading original-purchase date it does at Akbank.
+    periodStart: resolvePeriodStart({
+      printed: null,
+      earliestRow: minDate,
+      periodEnd: (cutMatch ? parseHeaderDate(cutMatch[1]) : null) ?? maxDate,
+    }),
     periodEnd: cutMatch ? parseHeaderDate(cutMatch[1]) ?? maxDate : maxDate,
     dueDate: dueMatch ? parseHeaderDate(dueMatch[1]) : null,
     accountLabel: cardMatch ? `Garanti ${cardMatch[0].trim()}` : 'Garanti BBVA',

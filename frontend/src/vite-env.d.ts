@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** Injected at build time from package.json — see `define` in vite.config.ts. */
+declare const __APP_VERSION__: string
+
 /**
  * pdfjs-dist and tesseract.js are loaded through dynamic `import()` with paths
  * that have no bundled type declarations. They are typed loosely here so the

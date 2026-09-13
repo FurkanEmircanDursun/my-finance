@@ -8,17 +8,40 @@ export function resolveTheme(themeSetting: 'light' | 'dark' | 'system'): Resolve
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
-/** Matches the status bar to the app's own theme; a no-op on web. */
+/**
+ * Matches the status bar to the app's own theme; a no-op on web.
+ *
+ * The bar overlays the WebView rather than reserving a strip of its own, so the
+ * app's own background runs the full height of the screen the way every current
+ * banking app's does. That is only safe because the layout now pads itself with
+ * `env(safe-area-inset-top)` — see `--safe-top` in `styles/index.css`. Turning
+ * one on without the other puts the header under the clock.
+ */
 export async function syncStatusBar(theme: ResolvedTheme): Promise<void> {
   if (!isNative()) return
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
+    await StatusBar.setOverlaysWebView({ overlay: true })
     await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
-    await StatusBar.setBackgroundColor({ color: theme === 'dark' ? '#0b0e13' : '#ffffff' })
   } catch {
-    // Edge-to-edge devices (Android 15+) draw behind the status bar and reject
-    // setBackgroundColor outright; the icon-colour call above still lands.
+    // Some OEM shells refuse the overlay call; the icon-colour call above is
+    // the part that matters and lands independently.
   }
+}
+
+/**
+ * A screen that sits outside the router — the intro, so far — can claim the
+ * hardware back button while it is up. Returning true means "handled"; false
+ * lets the press fall through to normal history navigation.
+ *
+ * Kept as a single slot rather than a stack: only one such screen is ever
+ * mounted at a time, and a stack would invite the bug where a screen that
+ * forgot to unregister keeps swallowing every press after it is gone.
+ */
+let backInterceptor: (() => boolean) | null = null
+
+export function setBackInterceptor(handler: (() => boolean) | null): void {
+  backInterceptor = handler
 }
 
 /**
@@ -31,6 +54,7 @@ export async function initNativeShell(): Promise<() => void> {
 
   const { App: CapacitorApp } = await import('@capacitor/app')
   const listener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+    if (backInterceptor?.()) return
     if (canGoBack) window.history.back()
     else void CapacitorApp.exitApp()
   })

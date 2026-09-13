@@ -54,6 +54,21 @@
     /* One curve, one duration. Everything that moves uses these. */
     --ease: cubic-bezier(0.2, 0, 0, 1);
     --duration: 200ms;
+
+    /*
+     * Safe areas, named once.
+     *
+     * Android 15 forces edge-to-edge: the app draws behind the status bar and
+     * behind the gesture pill whether it asks to or not. These are 0 on a
+     * desktop browser, so the same rules serve both targets.
+     */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+
+    /* Height of the phone tab bar, so content can clear it without guessing. */
+    --tabbar-height: 64px;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -154,6 +169,14 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     font-feature-settings: 'cv05' 1, 'ss01' 1;
+
+    /*
+     * Inside a WebView the rubber-band overscroll at the top reads as a broken
+     * pull-to-refresh — the page detaches and springs back having done nothing.
+     * There is no remote data to refresh here, so contain it.
+     */
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* Every figure in this product is a number in a column; align them. */
@@ -204,6 +227,28 @@
     border-top: 1px solid var(--line);
   }
 
+  /*
+   * Hide amounts.
+   *
+   * Every figure in the app already carries `.num` for tabular alignment, so
+   * one rule covers the lot — the hero, the tiles, the tables, the charts'
+   * own labels — without a single component needing to know the mode exists.
+   * A finance app open on a train is the case this is for; the PIN lock
+   * guards the app, this guards the glance over your shoulder.
+   */
+  :root[data-private='on'] .num {
+    filter: blur(7px);
+    /* Blur alone still leaks the digit count through the width, and it stays
+       selectable. Neither is what "hidden" should mean. */
+    user-select: none;
+    pointer-events: none;
+  }
+
+  /* Anything a finger drags must not also pan the page underneath it. */
+  .no-pan {
+    touch-action: none;
+  }
+
   /* Recharts injects inline styles for its default tooltip; ours replaces it. */
   .recharts-default-tooltip {
     display: none !important;
@@ -241,6 +286,42 @@
 
   .sheet-in {
     animation: sheet-in var(--duration) var(--ease) both;
+  }
+
+  /*
+   * Tab changes move in the direction the finger did. A screen that arrives
+   * from the same side no matter which way you swiped breaks the illusion that
+   * the tabs are laid out side by side, which is the whole reason swiping
+   * between them is guessable in the first place.
+   */
+  .slide-from-right {
+    animation: slide-from-right var(--duration) var(--ease) both;
+  }
+
+  .slide-from-left {
+    animation: slide-from-left var(--duration) var(--ease) both;
+  }
+}
+
+@keyframes slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

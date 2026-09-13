@@ -29,7 +29,13 @@ export function buildSummary(
 
   lines.push(`MY FINANCE — ${periodLabel.toUpperCase()}`)
   if (meta.from && meta.to) {
-    lines.push(`${fullDayLabel(meta.from)} — ${fullDayLabel(meta.to)} · ${count(meta.coveredDays || meta.days)} günlük veri`)
+    // The months-equivalent is stated because it is the divisor behind every
+    // "aylık" figure below. Without it, a period total and a monthly rate sit
+    // three lines apart with nothing explaining why they differ.
+    lines.push(
+      `${fullDayLabel(meta.from)} — ${fullDayLabel(meta.to)} · ${count(meta.coveredDays || meta.days)} günlük veri` +
+        ` (${meta.monthsEquivalent} ay)`,
+    )
   }
   lines.push('')
 

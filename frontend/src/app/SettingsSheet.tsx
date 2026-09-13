@@ -167,6 +167,12 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               />
             </Field>
 
+            <Field label="Tanıtım" hint="Uygulamanın ne yaptığını anlatan giriş ekranları">
+              <Button onClick={() => dispatch({ type: 'setSettings', settings: { onboardingSeen: false } })}>
+                Tanıtımı tekrar göster
+              </Button>
+            </Field>
+
             <Field
               label="Dönem gruplaması"
               hint="Ekstre dönemi genelde ayın ortasında başlar. Uygulama bunu kendi seçer; burada değiştirebilirsin."
@@ -222,6 +228,10 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             )}
           </div>
         </Disclosure>
+
+        <p className="pt-2 text-center text-label text-faint">
+          My Finance {__APP_VERSION__} · veriler bu cihazda
+        </p>
       </div>
 
       <ConfirmDialog

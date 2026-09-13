@@ -4,6 +4,7 @@ import { garantiAdapter } from './garanti'
 import { csvAdapter } from './csv'
 import { detectAdapter } from './index'
 import { normalizeMerchant } from '../../core/text'
+import { resolvePeriodStart } from './types'
 
 const AKBANK = `
 AKBANK AXESS HESAP ÖZETİ
@@ -191,5 +192,93 @@ describe('csv adapter', () => {
 describe('detection', () => {
   it('returns null rather than guessing on unrelated text', () => {
     expect(detectAdapter('lorem ipsum dolor sit amet')).toBeNull()
+  })
+})
+
+/* ── Statement period ─────────────────────────────────────────────────────── */
+
+/**
+ * The bug these cover: an instalment row carries the date of the *original
+ * purchase*, so reading the period start off the rows stretched a 33-day cycle
+ * into 55 days. `monthsEquivalent` is derived from that span and is the divisor
+ * behind every "per month" figure, so the error halved reported monthly spend
+ * and inflated reported savings by the same factor.
+ */
+
+const AKBANK_WITH_PERIOD = `
+AKBANK AXESS HESAP ÖZETİ
+Ekstre  Dönemi 27/07/2026-28/08/2026
+Hesap  Kesim  Tarihi 28/08/2026
+Son Ödeme Tarihi: 07/09/2026
+05/07/2026 TRENDYOL.COM (1,065.00 TL) 3/2.taksit 355.00 355.00x1
+12/07/2026 TRENDYOL.COM (1,641.63 TL) 3/2.taksit 547.21 547.21x1
+02/08/2026 MIGROS ISTANBUL TUR 1,240.00
+27/08/2026 SPOTIFY 149.99
+`.trim()
+
+const AKBANK_NO_PERIOD = `
+AKBANK AXESS HESAP ÖZETİ
+Hesap  Kesim  Tarihi 28/08/2026
+Son Ödeme Tarihi: 07/09/2026
+05/03/2026 TRENDYOL.COM (12,000.00 TL) 12/6.taksit 1,000.00 1,000.00x1
+02/08/2026 MIGROS ISTANBUL TUR 1,240.00
+27/08/2026 SPOTIFY 149.99
+`.trim()
+
+describe('statement period', () => {
+  it('prefers the period Akbank prints over the earliest row', () => {
+    const output = akbankAdapter.parse(AKBANK_WITH_PERIOD)
+    expect(output.periodStart).toBe('2026-07-27')
+    expect(output.periodEnd).toBe('2026-08-28')
+  })
+
+  it('keeps the instalment row itself, only not its date as the period start', () => {
+    const output = akbankAdapter.parse(AKBANK_WITH_PERIOD)
+    expect(output.rows.some((r) => r.date === '2026-07-05')).toBe(true)
+  })
+
+  it('refuses a span no card cycle could produce when nothing is printed', () => {
+    const output = akbankAdapter.parse(AKBANK_NO_PERIOD)
+    // 05/03 is five months before the cut date: an instalment's purchase date,
+    // not the start of this cycle. Falls back to one cycle before the cut.
+    expect(output.periodStart).toBe('2026-07-29')
+    expect(output.periodEnd).toBe('2026-08-28')
+  })
+
+  it('trusts the rows when they do describe a plausible cycle', () => {
+    const output = akbankAdapter.parse(AKBANK)
+    expect(output.periodStart).toBe('2026-07-05')
+  })
+})
+
+describe('resolvePeriodStart', () => {
+  it('returns the printed start untouched', () => {
+    expect(
+      resolvePeriodStart({ printed: '2026-07-27', earliestRow: '2026-01-01', periodEnd: '2026-08-28' }),
+    ).toBe('2026-07-27')
+  })
+
+  it('accepts a row-derived start inside one cycle', () => {
+    expect(
+      resolvePeriodStart({ printed: null, earliestRow: '2026-08-01', periodEnd: '2026-08-28' }),
+    ).toBe('2026-08-01')
+  })
+
+  it('clamps a row-derived start older than any cycle', () => {
+    expect(
+      resolvePeriodStart({ printed: null, earliestRow: '2026-03-05', periodEnd: '2026-08-28' }),
+    ).toBe('2026-07-29')
+  })
+
+  it('falls back to one cycle when there are no rows at all', () => {
+    expect(resolvePeriodStart({ printed: null, earliestRow: null, periodEnd: '2026-08-28' })).toBe(
+      '2026-07-29',
+    )
+  })
+
+  it('has nothing to clamp against without a period end', () => {
+    expect(
+      resolvePeriodStart({ printed: null, earliestRow: '2026-03-05', periodEnd: null }),
+    ).toBe('2026-03-05')
   })
 })
