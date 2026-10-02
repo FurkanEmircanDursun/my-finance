@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyFilters, availableStatementMonths, coverageDaysByMonth } from './selectors'
 import { emptyFilters, type Statement } from '../domain/types'
-import type { TransactionWithStatement } from './state'
 import type { Transaction } from '../domain/types'
 
 function statement(overrides: Partial<Statement>): Statement {
@@ -21,7 +20,7 @@ function statement(overrides: Partial<Statement>): Statement {
   }
 }
 
-function tx(overrides: Partial<TransactionWithStatement>): TransactionWithStatement {
+function tx(overrides: Partial<Transaction>): Transaction {
   const base: Transaction = {
     id: 't1',
     date: '2026-08-05',
@@ -36,7 +35,7 @@ function tx(overrides: Partial<TransactionWithStatement>): TransactionWithStatem
     installment: null,
     source: 'statement',
   }
-  return { ...base, statementId: '', ...overrides } as TransactionWithStatement
+  return { ...base, statementId: '', ...overrides }
 }
 
 describe('availableStatementMonths', () => {

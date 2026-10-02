@@ -7,7 +7,7 @@ import { round, type Money } from '../core/money'
 import { concentration, linearTrend, median } from '../core/stats'
 import { displayMerchant } from '../core/text'
 import { CATEGORIES, category, type CategoryId, type SpendNature } from '../domain/categories'
-import type { Profile, Transaction } from '../domain/types'
+import { effectiveDate, type Profile, type Transaction } from '../domain/types'
 import { detectAnomalies, detectDuplicates, detectHabits } from './anomaly'
 import { buildBudgetProgress } from './budgets'
 import { buildCommitmentLadder, buildInstallmentPlans } from './commitments'
@@ -43,6 +43,11 @@ export interface AnalysisContext {
    * assumed income. Defaults to a whole month.
    */
   coverageDaysOf?: (month: MonthKey) => number | undefined
+  /**
+   * The month a row was billed in — its statement's month — used to place
+   * instalment plans. Defaults to the row's effective date's month.
+   */
+  billedMonthOf?: (tx: Transaction) => MonthKey
   /** Memoisation key — must change whenever the functions above would behave differently. */
   key?: string
 }
@@ -76,7 +81,7 @@ function accumulate(
   const acc: Accumulators = {
     totals: {
       spend: 0, refunds: 0, netSpend: 0, income: 0, payments: 0, net: 0,
-      incomeBasis: 0, savings: 0, incomeAssumed: false,
+      incomeBasis: 0, savings: 0, incomeAssumed: false, unallocatedRefunds: 0,
     },
     byDay: new Map(),
     byMonth: new Map(),
@@ -93,9 +98,11 @@ function accumulate(
   for (let i = 0; i < transactions.length; i++) {
     const tx = transactions[i]
     const month = monthOfTx(tx)
+    // The day it was charged, not the day an instalment's purchase was made.
+    const day = effectiveDate(tx)
 
-    if (!acc.minDate || tx.date < acc.minDate) acc.minDate = tx.date
-    if (!acc.maxDate || tx.date > acc.maxDate) acc.maxDate = tx.date
+    if (!acc.minDate || day < acc.minDate) acc.minDate = day
+    if (!acc.maxDate || day > acc.maxDate) acc.maxDate = day
 
     let monthBucket = acc.byMonth.get(month)
     if (!monthBucket) {
@@ -111,9 +118,9 @@ function accumulate(
         acc.spendCount++
         monthBucket.spend += tx.amount
 
-        acc.byDay.set(tx.date, (acc.byDay.get(tx.date) ?? 0) + tx.amount)
+        acc.byDay.set(day, (acc.byDay.get(day) ?? 0) + tx.amount)
 
-        const wd = acc.weekday[weekdayIndex(tx.date)]
+        const wd = acc.weekday[weekdayIndex(day)]
         wd.total += tx.amount
         wd.count++
 
@@ -133,10 +140,26 @@ function accumulate(
         monthCats.set(tx.category, (monthCats.get(tx.category) ?? 0) + tx.amount)
         break
       }
-      case 'refund':
+      case 'refund': {
         acc.totals.refunds += tx.amount
         monthBucket.refunds += tx.amount
+
+        // A refund comes off the category and bank it was spent in, so the
+        // breakdowns describe what the money actually cost. Left alone they
+        // summed to the gross while the headline said net, and a return made
+        // the two disagree on every screen that showed both.
+        let monthCats = acc.byMonthCategory.get(month)
+        if (!monthCats) {
+          monthCats = new Map()
+          acc.byMonthCategory.set(month, monthCats)
+        }
+        monthCats.set(tx.category, (monthCats.get(tx.category) ?? 0) - tx.amount)
+
+        const bank = acc.byBank.get(tx.bank)
+        if (bank) bank.total -= tx.amount
+        else acc.byBank.set(tx.bank, { total: -tx.amount, count: 0 })
         break
+      }
       case 'income':
         acc.totals.income += tx.amount
         monthBucket.income += tx.amount
@@ -162,33 +185,60 @@ function accumulate(
   return acc
 }
 
-function buildCategoryStats(acc: Accumulators, monthsCovered: number): CategoryStat[] {
-  const stats: CategoryStat[] = []
+interface CategoryBreakdown {
+  stats: CategoryStat[]
+  /**
+   * Refunds that exceed what was spent in their category within the data —
+   * typically a return in a later period than the purchase, or a card credit
+   * such as chip-para. They still reduce `netSpend`; this is how much of that
+   * reduction the category list cannot show.
+   */
+  unallocatedRefunds: Money
+}
+
+function buildCategoryStats(acc: Accumulators, monthsCovered: number): CategoryBreakdown {
+  const rows: Array<Omit<CategoryStat, 'share'>> = []
+  let unallocatedRefunds = 0
 
   for (const [id, txs] of acc.byCategory) {
     const spendTxs = txs.filter((t) => t.kind === 'expense')
-    if (!spendTxs.length) continue
+    const refunded = txs.reduce((sum, t) => (t.kind === 'refund' ? sum + t.amount : sum), 0)
+
+    if (!spendTxs.length) {
+      unallocatedRefunds += refunded
+      continue
+    }
 
     const def = category(id as CategoryId)
-    const total = spendTxs.reduce((s, t) => s + t.amount, 0)
+    const gross = spendTxs.reduce((s, t) => s + t.amount, 0)
+    const net = Math.max(0, gross - refunded)
+    unallocatedRefunds += Math.max(0, refunded - gross)
 
-    stats.push({
+    rows.push({
       id: def.id,
       label: def.label,
       color: def.color,
       nature: def.nature,
-      total,
-      share: acc.totals.spend ? total / acc.totals.spend : 0,
+      total: net,
+      gross,
+      refunded: Math.min(refunded, gross),
       count: spendTxs.length,
       median: median(spendTxs.map((t) => t.amount)),
-      monthlyAverage: Math.round(total / Math.max(monthsCovered, 1)),
+      monthlyAverage: Math.round(net / Math.max(monthsCovered, 1)),
     })
   }
 
-  return stats.sort((a, b) => b.total - a.total)
+  const base = rows.reduce((sum, r) => sum + r.total, 0)
+  const stats = rows
+    .map((r) => ({ ...r, share: base ? r.total / base : 0 }))
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total)
+
+  return { stats, unallocatedRefunds }
 }
 
-function buildNatureStats(categories: readonly CategoryStat[], spend: Money): NatureStat[] {
+function buildNatureStats(categories: readonly CategoryStat[]): NatureStat[] {
+  const spend = categories.reduce((sum, c) => sum + c.total, 0)
   const totals = new Map<SpendNature, Money>()
   for (const c of categories) totals.set(c.nature, (totals.get(c.nature) ?? 0) + c.total)
 
@@ -203,14 +253,18 @@ function buildNatureStats(categories: readonly CategoryStat[], spend: Money): Na
 }
 
 function buildMerchantStats(acc: Accumulators, limit = 40): MerchantStat[] {
-  const stats: MerchantStat[] = []
+  const rows: Array<Omit<MerchantStat, 'share'>> = []
 
   for (const [merchant, txs] of acc.byMerchant) {
     const spendTxs = txs.filter((t) => t.kind === 'expense')
     if (!spendTxs.length) continue
 
+    const refunded = txs.reduce((sum, t) => (t.kind === 'refund' ? sum + t.amount : sum), 0)
     const amounts = spendTxs.map((t) => t.amount)
-    const total = amounts.reduce((a, b) => a + b, 0)
+    const gross = amounts.reduce((a, b) => a + b, 0)
+    const total = Math.max(0, gross - refunded)
+    if (total === 0) continue // bought and fully returned: nothing was spent here
+
     let first = spendTxs[0].date
     let last = spendTxs[0].date
     for (const tx of spendTxs) {
@@ -218,7 +272,7 @@ function buildMerchantStats(acc: Accumulators, limit = 40): MerchantStat[] {
       if (tx.date > last) last = tx.date
     }
 
-    stats.push({
+    rows.push({
       merchant,
       label: displayMerchant(merchant),
       category: spendTxs[0].category,
@@ -227,11 +281,21 @@ function buildMerchantStats(acc: Accumulators, limit = 40): MerchantStat[] {
       median: median(amounts),
       firstSeen: first,
       lastSeen: last,
-      share: acc.totals.spend ? total / acc.totals.spend : 0,
     })
   }
 
-  return stats.sort((a, b) => b.total - a.total).slice(0, limit)
+  const base = rows.reduce((sum, r) => sum + r.total, 0)
+  return rows
+    .map((r) => ({ ...r, share: base ? r.total / base : 0 }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit)
+}
+
+/** A month's per-category totals with refunds applied, never below zero. */
+function netCategoryMap(map: Map<CategoryId, Money> | undefined): Map<CategoryId, Money> {
+  const out = new Map<CategoryId, Money>()
+  for (const [id, value] of map ?? []) if (value > 0) out.set(id, value)
+  return out
 }
 
 /** Gap-filled daily series with a centred 7-day mean. */
@@ -332,13 +396,11 @@ function buildWeekday(acc: Accumulators): WeekdayPoint[] {
 }
 
 function buildBanks(acc: Accumulators): BankStat[] {
-  return [...acc.byBank.entries()]
-    .map(([bank, b]) => ({
-      bank,
-      total: b.total,
-      count: b.count,
-      share: acc.totals.spend ? b.total / acc.totals.spend : 0,
-    }))
+  const rows = [...acc.byBank.entries()].map(([bank, b]) => ({ bank, total: Math.max(0, b.total), count: b.count }))
+  const base = rows.reduce((sum, r) => sum + r.total, 0)
+  return rows
+    .map((r) => ({ ...r, share: base ? r.total / base : 0 }))
+    .filter((r) => r.total > 0)
     .sort((a, b) => b.total - a.total)
 }
 
@@ -371,8 +433,8 @@ function buildTrend(
     const ids = new Set<CategoryId>([...currentMap.keys(), ...previousMap.keys()])
 
     for (const id of ids) {
-      const current = currentMap.get(id) ?? 0
-      const prev = previousMap.get(id) ?? 0
+      const current = Math.max(0, currentMap.get(id) ?? 0)
+      const prev = Math.max(0, previousMap.get(id) ?? 0)
       if (current === 0 && prev === 0) continue
       const def = category(id)
       movers.push({
@@ -432,7 +494,7 @@ export function analyze(
   context: AnalysisContext = {},
 ): Analysis {
   const calendarMonths = !context.monthOfTx
-  const acc = accumulate(transactions, context.monthOfTx ?? ((tx) => monthOf(tx.date)))
+  const acc = accumulate(transactions, context.monthOfTx ?? ((tx) => monthOf(effectiveDate(tx))))
 
   const monthly = buildMonthly(acc, profile.monthlyIncome, context.isPartialMonth, context.coverageDaysOf)
 
@@ -454,8 +516,9 @@ export function analyze(
   acc.totals.savings = acc.totals.incomeBasis - acc.totals.netSpend
   acc.totals.incomeAssumed = coveredMonths.some((m) => m.incomeAssumed)
 
-  const categories = buildCategoryStats(acc, monthsCovered)
-  const natures = buildNatureStats(categories, acc.totals.spend)
+  const { stats: categories, unallocatedRefunds } = buildCategoryStats(acc, monthsCovered)
+  acc.totals.unallocatedRefunds = unallocatedRefunds
+  const natures = buildNatureStats(categories)
   const merchants = buildMerchantStats(acc)
   const daily = buildDaily(acc)
   const weekday = buildWeekday(acc)
@@ -467,8 +530,17 @@ export function analyze(
   const recurringIncome = detectRecurring(acc.byMerchant, { asOf, kind: 'income' })
   const recurringMerchants = new Set(recurring.map((r) => r.merchant))
 
-  const asOfMonth = monthOf(asOf)
-  const installments = buildInstallmentPlans(transactions, asOfMonth)
+  // Plans advance one step per *statement*, so "where are we" is the newest month
+  // any statement was billed in — not the newest date printed on a row, which an
+  // instalment pushes months into the past.
+  const billedMonthOf = context.billedMonthOf ?? ((tx: Transaction) => monthOf(effectiveDate(tx)))
+  let asOfMonth = monthOf(asOf)
+  for (const tx of transactions) {
+    if (tx.source === 'manual') continue
+    const billed = billedMonthOf(tx)
+    if (billed > asOfMonth) asOfMonth = billed
+  }
+  const installments = buildInstallmentPlans(transactions, asOfMonth, billedMonthOf)
   const commitments = buildCommitmentLadder(installments, recurring, {
     fromMonth: addMonths(asOfMonth, 1),
     horizonMonths: COMMITMENT_HORIZON,
@@ -490,7 +562,8 @@ export function analyze(
   const habits = detectHabits(acc.byMerchant, monthsCovered)
 
   const otherTotal = categories.find((c) => c.id === 'other')?.total ?? 0
-  const classifiedShare = acc.totals.spend ? 1 - otherTotal / acc.totals.spend : 1
+  const categorised = categories.reduce((sum, c) => sum + c.total, 0)
+  const classifiedShare = categorised ? 1 - otherTotal / categorised : 1
 
   const discretionary = natures.find((n) => n.nature === 'want')?.share ?? 0
   const merchantConcentration = concentration(merchants.map((m) => m.total))
@@ -512,7 +585,7 @@ export function analyze(
       : null
   const budgets = {
     month: lastCoveredMonth,
-    items: buildBudgetProgress(profile.budgets, acc.byMonthCategory.get(lastCoveredMonth) ?? new Map(), {
+    items: buildBudgetProgress(profile.budgets, netCategoryMap(acc.byMonthCategory.get(lastCoveredMonth)), {
       month: lastCoveredMonth,
       elapsedDays: budgetElapsedDays,
     }),

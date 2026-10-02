@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildUpcomingPayments } from './upcoming'
 import { toMinor } from '../core/money'
 import type { RecurringPayment } from './types'
-import type { Statement } from '../domain/types'
+import { emptySummary, type Statement } from '../domain/types'
 
 function recurring(overrides: Partial<RecurringPayment> = {}): RecurringPayment {
   return {
@@ -59,11 +59,24 @@ describe('buildUpcomingPayments', () => {
     expect(out).toHaveLength(0)
   })
 
-  it('lists a statement due date with no amount attached', () => {
+  it('lists a statement due date with no amount when the cover printed none', () => {
+    // An import that predates the cover summary: the date is known, the debt is not.
     const out = buildUpcomingPayments([], [statement()], TODAY)
     expect(out).toEqual([
-      { date: '2026-09-07', label: 'Akbank Axess · Ağustos 2026', amount: null, kind: 'statement', daysUntil: 6 },
+      {
+        date: '2026-09-07', label: 'Akbank Axess · Ağustos 2026', amount: null, minimum: null,
+        kind: 'statement', daysUntil: 6,
+      },
     ])
+  })
+
+  it("puts the statement's printed debt and minimum payment on its due date", () => {
+    const out = buildUpcomingPayments(
+      [],
+      [statement({ summary: { ...emptySummary(), totalDebt: toMinor(15_309.58), minPayment: toMinor(6_123.84) } })],
+      TODAY,
+    )
+    expect(out[0]).toMatchObject({ amount: toMinor(15_309.58), minimum: toMinor(6_123.84), kind: 'statement' })
   })
 
   it('drops a statement with no due date on file', () => {

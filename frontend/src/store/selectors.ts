@@ -1,7 +1,6 @@
 import { daysInMonth, eachDay, eachMonth, monthOf, type DayKey, type MonthKey } from '../core/date'
 import { fold } from '../core/text'
-import type { Filters, Settings, Statement, Transaction } from '../domain/types'
-import type { TransactionWithStatement } from './state'
+import { effectiveDate, type Filters, type Settings, type Statement, type Transaction } from '../domain/types'
 
 export interface FilterContext {
   periodGrouping: Settings['periodGrouping']
@@ -39,11 +38,21 @@ export function periodMonthOf(
   statementMonths: Map<string, MonthKey>,
 ): MonthKey {
   if (periodGrouping === 'statement') {
-    const statementId = (tx as TransactionWithStatement).statementId
+    const statementId = tx.statementId
     const grouped = statementId ? statementMonths.get(statementId) : undefined
     if (grouped) return grouped
   }
-  return monthOf(tx.date)
+  return monthOf(effectiveDate(tx))
+}
+
+/**
+ * The month a row was *billed* in: its statement's named month when it has one,
+ * otherwise its own effective date. Instalment plans advance one step per
+ * statement, so this — not the date printed on the row — says where a plan stands.
+ */
+export function billedMonthOf(tx: Transaction, statementMonths: Map<string, MonthKey>): MonthKey {
+  const named = tx.statementId ? statementMonths.get(tx.statementId) : undefined
+  return named ?? monthOf(effectiveDate(tx))
 }
 
 /**
@@ -85,7 +94,7 @@ const EMPTY_MAP = new Map<string, MonthKey>()
 /** Calendar months present in the data, for the calendar-mode chip row. */
 export function availableMonths(transactions: readonly Transaction[]): MonthKey[] {
   const months = new Set<MonthKey>()
-  for (const tx of transactions) months.add(monthOf(tx.date))
+  for (const tx of transactions) months.add(monthOf(effectiveDate(tx)))
   return [...months].sort().reverse()
 }
 

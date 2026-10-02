@@ -1,8 +1,9 @@
 import { detectAdapter } from './banks'
 import { extractText, type ProgressFn } from './extract'
 import { createCategorizer } from './categorize'
+import { assignIds } from './identity'
+import { reconcile } from './reconcile'
 import { normalizeMerchant } from '../core/text'
-import { hash } from '../core/hash'
 import { monthLabel, monthOf } from '../core/date'
 import type { CategoryRule, ParseResult, Transaction } from '../domain/types'
 
@@ -20,26 +21,33 @@ export class ParseError extends Error {
   }
 }
 
-/**
- * Content-addressed transaction id.
- *
- * Uses date + amount + merchant (not the raw line): the same purchase read once
- * from the PDF text layer and once from OCR produces slightly different raw
- * text but must still deduplicate. The ordinal disambiguates two genuinely
- * identical charges on the same day.
- */
-function transactionId(date: string, amount: number, merchant: string, ordinal: number): string {
-  return hash(`${date}|${amount}|${merchant}|${ordinal}`)
+/** True when an instalment row's printed date predates the cycle that bills it. */
+function billedOn(
+  date: string,
+  installment: Transaction['installment'],
+  periodStart: string | null,
+  periodEnd: string | null,
+): boolean {
+  return Boolean(installment && periodStart && periodEnd && date < periodStart)
 }
 
-export async function parseFile(file: File, options: PipelineOptions): Promise<ParseResult> {
-  const { onProgress } = options
+export interface TextParseOptions {
+  rules: readonly CategoryRule[]
+  /** How the text was obtained: "pdf-text", "pdf-ebcdic", "ocr-service", "text"… */
+  engine: string
+  /** Used in the label when the statement names no period. */
+  fileName: string
+  onProgress?: ProgressFn
+}
 
-  const { text, engine } = await extractText(file, {
-    useLocalOcr: options.useLocalOcr,
-    ocrEndpoint: options.ocrEndpoint,
-    onProgress,
-  })
+/**
+ * Statement text → transactions, with no file system and no PDF library in
+ * sight. Everything that decides what a statement *means* happens here, which
+ * is what makes it possible to test it against real extracted text and to run
+ * it from the command line.
+ */
+export function parseStatementText(text: string, options: TextParseOptions): ParseResult {
+  const { onProgress } = options
 
   if (!text.trim()) {
     throw new ParseError('Dosya içeriği okunamadı.', 'PDF taranmış olabilir; Ayarlar\'dan yerel OCR servisini açmayı deneyin.')
@@ -79,44 +87,75 @@ export async function parseFile(file: File, options: PipelineOptions): Promise<P
   }
 
   const ruleMerchants = new Set(options.rules.map((r) => r.merchant))
-  const seenPerDay = new Map<string, number>()
+  const bank = detection.adapter.bank
+  const merchants = output.rows.map((row) => normalizeMerchant(row.description))
 
-  const transactions: Transaction[] = output.rows.map((row) => {
-    const merchant = normalizeMerchant(row.description)
-    const dayAmountKey = `${row.date}|${row.amount}|${merchant}`
-    const ordinal = seenPerDay.get(dayAmountKey) ?? 0
-    seenPerDay.set(dayAmountKey, ordinal + 1)
-
-    return {
-      id: transactionId(row.date, row.amount, merchant, ordinal),
-      date: row.date,
-      description: row.description,
-      merchant,
-      amount: row.amount,
-      kind: row.kind,
-      category: resolveCategory(row, merchant),
-      categoryLocked: ruleMerchants.has(merchant),
-      bank: detection.adapter.bank,
+  const ids = assignIds(
+    output.rows.map((row) => ({
+      bank,
       accountLabel: output.accountLabel,
+      date: row.date,
+      amount: row.amount,
+      description: row.description,
+      kind: row.kind,
       installment: row.installment,
-      source: detection.adapter.id === 'csv' ? 'csv' : 'statement',
-      raw: row.raw,
-    }
-  })
+    })),
+  )
 
-  const periodEnd = output.periodEnd ?? transactions[transactions.length - 1]?.date ?? null
+  const periodEnd = output.periodEnd ?? output.rows[output.rows.length - 1]?.date ?? null
+
+  const transactions: Transaction[] = output.rows.map((row, i) => ({
+    id: ids[i],
+    date: row.date,
+    description: row.description,
+    merchant: merchants[i],
+    amount: row.amount,
+    kind: row.kind,
+    category: resolveCategory(row, merchants[i]),
+    categoryLocked: ruleMerchants.has(merchants[i]),
+    bank,
+    accountLabel: output.accountLabel,
+    installment: row.installment,
+    source: detection.adapter.id === 'csv' ? 'csv' : 'statement',
+    // An instalment prints its original purchase date, which can sit months
+    // before the statement that bills it. It is charged on the cut date.
+    ...(billedOn(row.date, row.installment, output.periodStart, periodEnd) ? { billedOn: periodEnd! } : {}),
+    ...(row.foreign ? { foreign: row.foreign } : {}),
+    ...(row.reward ? { reward: row.reward } : {}),
+    raw: row.raw,
+  }))
+
   const label = periodEnd
     ? `${output.accountLabel} · ${monthLabel(monthOf(periodEnd))}`
-    : `${output.accountLabel} · ${file.name}`
+    : `${output.accountLabel} · ${options.fileName}`
 
   return {
-    bank: detection.adapter.bank,
-    engine,
+    bank,
+    engine: options.engine,
+    accountLabel: output.accountLabel,
     transactions,
     skipped: output.skipped,
     periodStart: output.periodStart,
     periodEnd,
     dueDate: output.dueDate,
     label,
+    summary: output.summary,
+    reconciliation: reconcile(output.rows, output.summary),
+    ignored: output.ignored,
   }
+}
+
+export async function parseFile(file: File, options: PipelineOptions): Promise<ParseResult> {
+  const { text, engine } = await extractText(file, {
+    useLocalOcr: options.useLocalOcr,
+    ocrEndpoint: options.ocrEndpoint,
+    onProgress: options.onProgress,
+  })
+
+  return parseStatementText(text, {
+    rules: options.rules,
+    engine,
+    fileName: file.name,
+    onProgress: options.onProgress,
+  })
 }

@@ -202,9 +202,16 @@ describe('engine', () => {
     expect(result.totals.payments).toBe(toMinor(1200))
   })
 
-  it('excludes card payments from spend so they cannot distort categories', () => {
+  it('keeps card payments out of the categories, and the categories add up to the headline', () => {
     const total = result.categories.reduce((s, c) => s + c.total, 0)
-    expect(total).toBe(result.totals.spend)
+    // ₺1.500 spent − ₺100 refunded; the ₺1.200 card payment is in neither.
+    expect(total).toBe(result.totals.netSpend)
+    expect(total - result.totals.unallocatedRefunds).toBe(result.totals.netSpend)
+  })
+
+  it('takes a refund off the category it was spent in', () => {
+    const shop = result.categories.find((c) => c.id === 'ecommerce')
+    expect(shop).toMatchObject({ gross: toMinor(500), refunded: toMinor(100), total: toMinor(400) })
   })
 
   it('gap-fills the daily series', () => {

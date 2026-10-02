@@ -43,7 +43,10 @@ describe('akbank adapter', () => {
   it('reads the statement amount, not the instalment principal', () => {
     const trendyol = output.rows.find((r) => r.description.includes('TRENDYOL'))
     expect(trendyol?.amount).toBe(35500)
-    expect(trendyol?.installment).toEqual({ current: 2, total: 3, principal: 106500 })
+    // `355.00x1` in the "Kalan Borç / Taksit" column: the bank says one is left.
+    expect(trendyol?.installment).toEqual({
+      current: 2, total: 3, principal: 106500, remaining: { count: 1, amount: 35500 },
+    })
   })
 
   it('keeps grouped thousands intact', () => {

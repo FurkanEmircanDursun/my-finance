@@ -52,17 +52,17 @@ export interface CategoryDef {
 export const CATEGORIES: CategoryDef[] = [
   {
     id: 'market', label: 'Market', nature: 'mixed', color: '#2f9e5e',
-    tokens: ['MIGROS', 'MIGROSONE', 'A101', 'BIM', 'SOK', 'CARREFOUR', 'CARREFOURSA', 'MACROCENTER', 'MARKET', 'MARKETI', 'BAKKAL', 'MANAV', 'KASAP', 'METRO', 'TARIM', 'GIDA', 'TEKEL'],
+    tokens: ['MIGROS', 'MIGROSONE', 'A101', 'BIM', 'SOK', 'CARREFOUR', 'CARREFOURSA', 'MACROCENTER', 'MARKET', 'MARKETI', 'BAKKAL', 'MANAV', 'KASAP', 'METRO', 'TARIM', 'GIDA', 'TEKEL', 'MINI'],
     phrases: ['MIGROS', 'CARREFOUR', 'SOK MARKET', 'HAPPY CENTER', 'FILE MARKET', 'ONUR MARKET', 'GETIR BUYUK', 'MINI MARKET'],
   },
   {
     id: 'dining', label: 'Yeme & İçme', nature: 'want', color: '#e06c2b',
-    tokens: ['RESTORAN', 'RESTAURANT', 'CAFE', 'KAFE', 'PIZZA', 'BURGER', 'DONER', 'KEBAP', 'LOKANTA', 'MUTFAGI', 'MUTFADI', 'DONDURMA', 'PASTANE', 'FIRIN', 'BISTRO', 'STARBUCKS', 'KAHVE', 'YEMEK', 'BUFE', 'TAVUK', 'WAFFLE', 'SIMIT'],
+    tokens: ['RESTORAN', 'RESTAURANT', 'CAFE', 'KAFE', 'PIZZA', 'BURGER', 'DONER', 'KEBAP', 'LOKANTA', 'MUTFAGI', 'MUTFADI', 'DONDURMA', 'PASTANE', 'PASTANESI', 'FIRIN', 'FIRINI', 'BISTRO', 'STARBUCKS', 'KAHVE', 'YEMEK', 'BUFE', 'TAVUK', 'WAFFLE', 'SIMIT', 'PIDE', 'LAHMACUN'],
     phrases: ['UBER EATS', 'YEMEKSEPETI', 'GETIR YEMEK', 'GETIRYEMEK', 'TRENDYOL GO', 'TRENDYOLGO', 'UBERTRENDYOLGO', 'KAHVE DUNYASI', 'KAHVECISI', 'COFFEE', 'KFC', 'MCDONALD', 'BURGER KING', 'DOMINO', 'YEMEKPAY', 'CAY BAHCES'],
   },
   {
     id: 'subscription', label: 'Abonelik & Dijital', nature: 'want', color: '#7c5cd6',
-    tokens: ['NETFLIX', 'SPOTIFY', 'EXXEN', 'GAIN', 'BLUTV', 'MUBI', 'DISNEY', 'ICLOUD', 'DROPBOX', 'NOTION', 'FIGMA', 'CANVA', 'GITHUB', 'OPENAI', 'ANTHROPIC', 'CLAUDE', 'MAKROMUSIC', 'YOUTUBEPREMIUM'],
+    tokens: ['NETFLIX', 'SPOTIFY', 'EXXEN', 'GAIN', 'BLUTV', 'MUBI', 'DISNEY', 'ICLOUD', 'DROPBOX', 'NOTION', 'FIGMA', 'CANVA', 'GITHUB', 'OPENAI', 'ANTHROPIC', 'CLAUDE', 'MAKROMUSIC', 'YOUTUBEPREMIUM', 'STORYTEL', 'TINDER'],
     phrases: ['YOUTUBE PREMIUM', 'YOUTUBEPREMIUM', 'YOUTUBE MEMBER', 'AMAZON PRIME', 'APPLE COM BILL', 'GOOGLE STORAGE', 'MICROSOFT', 'ADOBE', 'PLAYSTATION', 'XBOX', 'STEAM'],
   },
   {
@@ -142,7 +142,14 @@ export const CATEGORIES: CategoryDef[] = [
   {
     id: 'fees', label: 'Faiz & Ücret', nature: 'need', color: '#a2503c',
     tokens: ['FAIZ', 'FAIZI', 'KOMISYON', 'AIDAT', 'BSMV', 'KKDF', 'GECIKME'],
-    phrases: ['ISLEM UCRETI', 'UYELIK UCRETI', 'YILLIK UCRET', 'KART UCRETI', 'DONEM FAIZI', 'GECIKME FAIZI', 'NAKIT AVANS UCRETI'],
+    // "OTOM. FATURA İŞLEM FAİZİ" is the interest a bank charges for paying a bill
+    // on the card. It contains "FATURA", so without a longer phrase of its own
+    // it was filed under bills — hiding it from the one category that exists
+    // to show what the card costs.
+    phrases: [
+      'ISLEM UCRETI', 'UYELIK UCRETI', 'YILLIK UCRET', 'KART UCRETI', 'DONEM FAIZI', 'GECIKME FAIZI',
+      'NAKIT AVANS UCRETI', 'FATURA ISLEM FAIZI', 'ISLEM FAIZI', 'TOPLAM DONEM FAIZI',
+    ],
   },
   {
     id: 'rewards', label: 'Ödül & İade', nature: 'neutral', color: '#3fa07a',

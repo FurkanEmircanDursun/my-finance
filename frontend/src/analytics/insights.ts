@@ -82,9 +82,20 @@ export function buildInsights(
       id: 'commitment-load',
       severity: share > 0.4 ? 'critical' : share > 0.25 ? 'warning' : 'info',
       title: `${monthLabel(nextMonth.month)} için ${money(nextMonth.total)} bağlı`,
-      body: `${money(nextMonth.installments)} taksit + ${money(nextMonth.recurring)} düzenli ödeme. ${
-        reference > 0 ? `Referans gelirin ${percent(share * 100)}'i.` : ''
-      }`,
+      body: [
+        // Only the parts that exist: "+ ₺0 düzenli ödeme" is noise.
+        [
+          nextMonth.installments > 0 ? `${money(nextMonth.installments)} taksit` : null,
+          nextMonth.recurring > 0 ? `${money(nextMonth.recurring)} düzenli ödeme` : null,
+        ]
+          .filter(Boolean)
+          .join(' + ') + '.',
+        // A share of income is only worth saying when income is known; against a
+        // run-rate guess it would present an estimate as the person's own figure.
+        profile.monthlyIncome > 0 ? `Gelirinin ${percent(share * 100)}'i.` : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
       weight: 90 + share * 20,
       action: { view: 'commitments', label: 'Yükümlülükleri gör' },
     })
@@ -180,15 +191,46 @@ export function buildInsights(
     })
   }
 
+  // ── What the card itself costs ──────────────────────────────────────────────
+  //
+  // Interest, the membership fee and the interest on paying a bill by card are
+  // the only money the card takes for itself, and none of it shows up in a
+  // "where did it go" list as anything but a small bar. Said once, plainly, when
+  // it is large enough to matter.
+  const fees = categories.find((c) => c.id === 'fees')
+  if (fees && fees.total >= 10_000) {
+    const items = analysis.merchants.filter((m) => m.category === 'fees').slice(0, 3)
+    out.push({
+      id: 'card-cost',
+      severity: fees.total >= 50_000 ? 'warning' : 'info',
+      title: `Faiz ve ücretlere ${money(fees.total)} gitti`,
+      body: `${items.map((m) => `${m.label} ${money(m.total)}`).join(' · ')}. Ekstre borcunu tam ve zamanında ödemek dönem faizini ortadan kaldırır.`,
+      weight: 72,
+      action: { view: 'spending', label: 'Kategorileri gör' },
+    })
+  }
+
   // ── Possible double charges ─────────────────────────────────────────────────
-  if (duplicates.length) {
-    const total = duplicates.reduce((s, g) => s + g.amount * (g.transactions.length - 1), 0)
+  const likelyDuplicates = duplicates.filter((g) => g.likelihood === 'high')
+  if (likelyDuplicates.length) {
+    const total = likelyDuplicates.reduce((s, g) => s + g.amount * (g.transactions.length - 1), 0)
     out.push({
       id: 'duplicates',
-      severity: 'critical',
-      title: `${duplicates.length} olası mükerrer çekim`,
-      body: `Aynı işyeri, aynı tutar, birkaç gün arayla. Toplam fazla tahsilat riski ${money(total)}.`,
-      weight: 95,
+      severity: 'warning',
+      title: `${likelyDuplicates.length} olası mükerrer çekim`,
+      body: `Aynı işyeri, aynı tutar, aynı gün ya da ertesi gün. Doğruysa fazla tahsilat ${money(total)}.`,
+      weight: 88,
+      action: { view: 'insights', label: 'Tümünü incele' },
+    })
+  } else if (duplicates.length) {
+    // Same amount a day or two apart at a shop used often: a habit far more often
+    // than a double charge, so it is mentioned but never allowed to lead.
+    out.push({
+      id: 'duplicates',
+      severity: 'info',
+      title: `${duplicates.length} yakın aralıklı aynı tutar`,
+      body: `Sık gittiğin yerlerde aynı tutar birkaç gün arayla tekrarlanmış. Mükerrer olması düşük ihtimal.`,
+      weight: 30,
       action: { view: 'insights', label: 'Tümünü incele' },
     })
   }

@@ -3,7 +3,7 @@ import { monthOf, type MonthKey } from '../core/date'
 import { normalizeMerchant } from '../core/text'
 import type { Money } from '../core/money'
 import type { CategoryId } from './categories'
-import type { Transaction, TxKind } from './types'
+import { effectiveDate, type Transaction, type TxKind } from './types'
 
 /**
  * Monthly entries — the money a card statement never shows.
@@ -87,7 +87,7 @@ export function buildMonthLedgers(
   for (const month of months) byMonth.set(month, empty())
 
   for (const tx of transactions) {
-    const bucket = byMonth.get(monthOf(tx.date))
+    const bucket = byMonth.get(monthOf(effectiveDate(tx)))
     if (!bucket) continue
 
     const manual = tx.source === 'manual'

@@ -78,7 +78,10 @@ export function detectRecurring(
   const kind = options.kind ?? 'expense'
 
   for (const [merchant, all] of byMerchant) {
-    const txs = all.filter((t) => t.kind === kind)
+    // An instalment is a plan, tracked as one (see commitments.ts). Its monthly
+    // charges are equal and regular, so left in they read as a subscription and
+    // were counted twice in the ladder: once as the plan, once as "recurring".
+    const txs = all.filter((t) => t.kind === kind && !t.installment)
     if (txs.length < 2) continue
 
     const sorted = [...txs].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))

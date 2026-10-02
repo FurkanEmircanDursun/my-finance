@@ -35,6 +35,12 @@ const NOISE_TOKENS = new Set([
   'ZIVERBEY', 'AKARETLER', 'LEVENT', 'MASLAK', 'ATASEHIR', 'BAKIRKOY',
   // Country codes printed after the merchant
   'TUR', 'TR', 'TURKIYE', 'TURKEY', 'GBR', 'USA', 'DEU', 'NLD', 'IRL', 'LONDON',
+  // Foreign cities foreign-currency rows end with ("GITHUB, INC. SAN FRANCISCO USA")
+  'FRANCISCO', 'BELLEVUE', 'DUBLIN', 'AMSTERDAM', 'SEATTLE',
+  // A refund is a `kind`, not a different shop: "IADE - TRENDYOL" and
+  // "IYZICO/storytel.com-iade" belong to the merchant they reverse. Left in, the
+  // refund split every merchant in two and no purchase ever met its return.
+  'IADE',
   // Branch and address words
   'SUBE', 'SUBESI', 'MAGAZA', 'MAGAZASI', 'MAH', 'MAHALLESI', 'CAD', 'CADDESI',
   'SOK', 'SOKAK', 'AVM', 'PLAZA', 'MERKEZ', 'IST',
@@ -82,7 +88,15 @@ export function normalizeMerchant(description: string): string {
   // Punctuation to spaces, then token filtering.
   s = s.replace(/[^A-Z0-9]+/g, ' ').trim()
 
-  const tokens = s.split(' ').filter(Boolean)
+  // Utilities glue the subscriber or invoice number straight onto their name
+  // ("TTNET5551234567020260889", "ISKIFO998877665544332211"), and the number
+  // changes every month. Left on, each bill was a brand-new merchant, and the one
+  // kind of payment that is guaranteed to recur could never be recognised as
+  // recurring. Six digits is past any store or terminal code.
+  const tokens = s
+    .split(' ')
+    .map((token) => token.replace(/\d{6,}[A-Z0-9]*$/, ''))
+    .filter(Boolean)
   const kept: string[] = []
 
   for (const token of tokens) {
@@ -104,6 +118,16 @@ export function normalizeMerchant(description: string): string {
 
     kept.push(token)
     if (kept.length === 4) break // Merchant identity never needs more.
+  }
+
+  // A bank truncates long names, and what survives the noise filter can be a lone
+  // fragment — "1022 İSTANBUL ZİVERBEY MA" leaves "MA". That is not a name anyone
+  // can recognise, so the words around it are kept to make one.
+  // Only when the fragment is the *last* word — a truncated name — so a real
+  // two-letter brand that leads the line ("BP ISTANBUL") is left alone.
+  if (kept.length === 1 && kept[0].length < 3 && !/\d/.test(kept[0]) && tokens[tokens.length - 1] === kept[0]) {
+    const words = s.split(' ').filter((w) => w && !/^\d+$/.test(w))
+    if (words.length > 1) kept.splice(0, kept.length, ...words.slice(0, 3))
   }
 
   const result = (kept.length ? kept.join(' ') : s || fold(description).trim()) || 'BILINMEYEN'

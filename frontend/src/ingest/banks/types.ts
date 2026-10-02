@@ -1,7 +1,7 @@
 import { addDays, toEpochDay, type DayKey } from '../../core/date'
 import type { Money } from '../../core/money'
 import type { CategoryId } from '../../domain/categories'
-import type { Installment, TxKind } from '../../domain/types'
+import type { ForeignAmount, IgnoredRow, Installment, StatementSummary, TxKind } from '../../domain/types'
 
 /** What an adapter emits before ids, categories and merchants are attached. */
 export interface RawRow {
@@ -12,6 +12,10 @@ export interface RawRow {
   kind: TxKind
   installment: Installment | null
   raw: string
+  /** Original foreign-currency price, when the line discloses one. */
+  foreign?: ForeignAmount
+  /** Bonus / chip-para this purchase earned, in the programme's minor units. */
+  reward?: Money
   /** Adapter may pre-assign a category when the line itself is conclusive. */
   category?: CategoryId
   /**
@@ -26,10 +30,39 @@ export interface AdapterOutput {
   rows: RawRow[]
   /** Lines that looked like transactions but could not be read. */
   skipped: number
+  /** Loyalty and campaign lines read but deliberately not counted as money. */
+  ignored: IgnoredRow[]
   periodStart: DayKey | null
   periodEnd: DayKey | null
   dueDate: DayKey | null
   accountLabel: string
+  /** The cover figures the bank prints — used to verify the rows, never to replace them. */
+  summary: StatementSummary
+}
+
+const CURRENCY_SYMBOLS: Record<string, string> = { $: 'USD', '€': 'EUR', '£': 'GBP' }
+
+/**
+ * "orjinal tutar 3.99 $" → { amount: 399, currency: 'USD' }. Akbank prints the
+ * original price inside the description; the TL column stays the billed amount.
+ */
+const FOREIGN_NOTE_RE =
+  /\(?\s*orjinal\s+tutar\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*([$€£]|USD|EUR|GBP)?\s*\)?/i
+
+export function readForeignAmount(description: string): ForeignAmount | undefined {
+  const match = FOREIGN_NOTE_RE.exec(description)
+  if (!match) return undefined
+
+  const value = Number.parseFloat(match[1].replace(/,/g, ''))
+  if (!Number.isFinite(value) || value <= 0) return undefined
+
+  const symbol = (match[2] ?? '').toUpperCase()
+  return { amount: Math.round(value * 100), currency: CURRENCY_SYMBOLS[symbol] ?? (symbol || 'USD') }
+}
+
+/** Removes the "(orjinal tutar …)" note from a description once it has been read. */
+export function stripForeignNote(description: string): string {
+  return description.replace(FOREIGN_NOTE_RE, ' ').replace(/\s{2,}/g, ' ').trim()
 }
 
 export interface BankAdapter {
@@ -113,3 +146,11 @@ export const PAYMENT_PATTERNS =
  */
 export const REWARD_ONLY_PATTERNS =
   /(BONUS BEDAVA|CH[İI]P-?\s?PARA KAZAN|PUAN KAZAN|M[İI]L KAZAN|KAMPANYA [İI]ADES[İI]|KAMPANYA\S*\s*$)/i
+
+/**
+ * Garanti lists the bonus it awards as rows of their own ("MARKET GENC BONUS",
+ * "OTOMATİK FATURA BONUS"). A PDF says which column the number is in, which is
+ * authoritative; this wording is only the fallback for a text export that has
+ * no columns, so it is never applied when column information exists.
+ */
+export const LOYALTY_SUFFIX_PATTERN = /\bBONUS\s*$/i

@@ -28,7 +28,7 @@ import type { RecurringPayment } from '../analytics/types'
  */
 export function SpendingView() {
   const { state, analysis, overall } = useStore()
-  const { openBudgets, openTransactions } = useSheets()
+  const { openBudgets, openIncome, openTransactions } = useSheets()
   const [detail, setDetail] = useState(false)
 
   const { totals, categories, merchants, monthly, trend, habits, meta, budgets } = analysis
@@ -48,17 +48,32 @@ export function SpendingView() {
             <div className="num text-figure font-semibold text-ink">{money(totals.netSpend)}</div>
             <div className="mt-2 text-body text-muted">Net harcama</div>
           </div>
-          <div className="surface p-5">
-            <div
-              className={clsx(
-                'num text-figure font-semibold',
-                totals.savings >= 0 ? 'text-positive' : 'text-negative',
-              )}
-            >
-              {money(totals.savings, { sign: true })}
+          {/* "Kalan" is income minus spending. With no income on file it would read
+              as −₺42.920 — the spending again, with a minus sign and a red
+              colour — so until there is an income the tile asks for one. */}
+          {totals.incomeBasis > 0 ? (
+            <div className="surface p-5">
+              <div
+                className={clsx(
+                  'num text-figure font-semibold',
+                  totals.savings >= 0 ? 'text-positive' : 'text-negative',
+                )}
+              >
+                {money(totals.savings, { sign: true })}
+              </div>
+              <div className="mt-2 text-body text-muted">Kalan</div>
             </div>
-            <div className="mt-2 text-body text-muted">Kalan</div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={openIncome}
+              className="surface p-5 text-left transition-colors duration-200 hover:bg-hover"
+            >
+              <div className="num text-figure font-semibold text-faint">—</div>
+              <div className="mt-2 text-body text-muted">Kalan</div>
+              <div className="mt-1 text-label text-accent">Gelirini gir</div>
+            </button>
+          )}
         </div>
 
         <button
@@ -90,29 +105,33 @@ export function SpendingView() {
       </section>
 
       {/* ── Month by month ───────────────────────────────────────────────── */}
-      <Section
-        title="Ay ay"
-        description="Soluk sütunlar kısmi dönemler"
-        actions={<TrendPill value={trend.momPct} suffix="son iki tam ay" />}
-      >
-        <MonthlyFlowChart data={monthly} height={200} showIncome />
+      {/* One month is not a series: a single fat bar says nothing the headline
+          has not already said, so the chart waits for a second month. */}
+      {(monthly.length >= 2 || (limit > 0 && latest)) && (
+        <Section
+          title={monthly.length >= 2 ? 'Ay ay' : 'Aylık limit'}
+          description={monthly.length >= 2 ? 'Soluk sütunlar kısmi dönemler' : undefined}
+          actions={monthly.length >= 2 ? <TrendPill value={trend.momPct} suffix="son iki tam ay" /> : undefined}
+        >
+          {monthly.length >= 2 && <MonthlyFlowChart data={monthly} height={200} showIncome />}
 
-        {limit > 0 && latest && (
-          <div className="mt-5 space-y-2">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit</span>
-              <span className="num text-label text-muted">
-                {money(latest.spend)} / {money(limit)}
-              </span>
+          {limit > 0 && latest && (
+            <div className={monthly.length >= 2 ? 'mt-5 space-y-2' : 'space-y-2'}>
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit</span>
+                <span className="num text-label text-muted">
+                  {money(latest.spend)} / {money(limit)}
+                </span>
+              </div>
+              <Meter
+                value={latest.spend}
+                max={limit}
+                tone={latest.spend > limit ? 'negative' : latest.spend > limit * 0.85 ? 'warning' : 'positive'}
+              />
             </div>
-            <Meter
-              value={latest.spend}
-              max={limit}
-              tone={latest.spend > limit ? 'negative' : latest.spend > limit * 0.85 ? 'warning' : 'positive'}
-            />
-          </div>
-        )}
-      </Section>
+          )}
+        </Section>
+      )}
 
       {/* ── Categories ───────────────────────────────────────────────────── */}
       <Section
@@ -167,7 +186,7 @@ export function SpendingView() {
                       />
                     </div>
                     <span className="num w-24 shrink-0 text-right text-label text-faint">
-                      {budget ? `/ ${money(budget.limit)}` : `${percent(stat.share * 100)} · ${count(stat.count)}`}
+                      {budget ? `/ ${money(budget.limit)}` : `${percent(stat.share * 100)} · ${count(stat.count)} işlem`}
                     </span>
                   </div>
                 </button>

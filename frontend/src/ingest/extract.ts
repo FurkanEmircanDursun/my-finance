@@ -1,5 +1,6 @@
 import { detectAdapter } from './banks'
 import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
+import { findColumnLayout, tagRewardColumn } from './columns'
 
 /**
  * Turns a dropped file into plain text.
@@ -87,11 +88,10 @@ export interface TextGeom {
 }
 
 /**
- * Groups positioned text runs into lines. Exported so it can be exercised
- * against real statement PDFs in the test suite rather than re-implemented
- * there.
+ * Buckets positioned text runs into visual rows, each sorted left to right.
+ * Exported so the column detector reads rows exactly as the line builder does.
  */
-export function buildLines(items: TextGeom[]): string[] {
+export function groupRows(items: TextGeom[]): TextGeom[][] {
   if (!items.length) return []
 
   const heights = items.map((i) => i.h).sort((a, b) => a - b)
@@ -101,87 +101,161 @@ export function buildLines(items: TextGeom[]): string[] {
     Math.abs(a.y - b.y) <= rowTolerance ? a.x - b.x : b.y - a.y,
   )
 
-  const lines: string[] = []
+  const rows: TextGeom[][] = []
   let row: TextGeom[] = []
   let baseline: number | null = null
-
-  const flush = () => {
-    if (!row.length) return
-    let line = ''
-    let cursor: number | null = null
-
-    for (const item of row) {
-      const blank = !item.text.trim()
-
-      if (blank) {
-        // PDF generators emit whitespace items for kerning as well as for real
-        // word gaps. Akbank's statements are full of 0.24pt "spaces" at a 9.6pt
-        // font size; emitting those verbatim shatters every word and number
-        // ("0 5 /0 7 /2 0 2 6 T REN DY OL"). Only a gap wide enough to read as
-        // a space at this font size becomes one.
-        if (item.w >= item.h * 0.12 && line && !/\s$/.test(line)) line += ' '
-        cursor = item.x + item.w
-        continue
-      }
-
-      if (cursor !== null) {
-        const gap = item.x - cursor
-        // Columns separated by position alone, with no whitespace item between.
-        if (gap > item.h * 0.25 && line && !/\s$/.test(line)) line += ' '
-      }
-
-      line += item.text
-      cursor = item.x + item.w
-    }
-
-    const trimmed = line.replace(/[ 	]{2,}/g, '  ').trim()
-    if (trimmed) lines.push(trimmed)
-    row = []
-  }
 
   for (const item of sorted) {
     if (baseline === null || Math.abs(baseline - item.y) <= rowTolerance) {
       row.push(item)
       baseline ??= item.y
     } else {
-      flush()
+      rows.push(row)
       row = [item]
       baseline = item.y
     }
   }
-  flush()
+  if (row.length) rows.push(row)
 
+  return rows
+}
+
+/** Renders one visual row as text, deciding where the spaces are. */
+function rowToLine(row: TextGeom[]): string {
+  let line = ''
+  let cursor: number | null = null
+
+  for (const item of row) {
+    const blank = !item.text.trim()
+
+    if (blank) {
+      // PDF generators emit whitespace items for kerning as well as for real
+      // word gaps. Akbank's statements are full of 0.24pt "spaces" at a 9.6pt
+      // font size; emitting those verbatim shatters every word and number
+      // ("0 5 /0 7 /2 0 2 6 T REN DY OL"). Only a gap wide enough to read as
+      // a space at this font size becomes one.
+      if (item.w >= item.h * 0.12 && line && !/\s$/.test(line)) line += ' '
+      cursor = item.x + item.w
+      continue
+    }
+
+    if (cursor !== null) {
+      const gap = item.x - cursor
+      // Columns separated by position alone, with no whitespace item between.
+      if (gap > item.h * 0.25 && line && !/\s$/.test(line)) line += ' '
+    }
+
+    line += item.text
+    cursor = item.x + item.w
+  }
+
+  return line.replace(/[ 	]{2,}/g, '  ').trim()
+}
+
+/**
+ * Groups positioned text runs into lines. Exported so it can be exercised
+ * against real statement PDFs in the test suite rather than re-implemented
+ * there.
+ */
+export function buildLines(items: TextGeom[]): string[] {
+  const lines: string[] = []
+  for (const row of groupRows(items)) {
+    const line = rowToLine(row)
+    if (line) lines.push(line)
+  }
   return lines
 }
 
-async function extractPdfText(file: File, onProgress?: ProgressFn): Promise<string> {
+/**
+ * `buildLines` for a real page: reads the table's column header, and wraps
+ * every number in the loyalty column in `⟦…⟧` first (see `columns.ts`).
+ *
+ * `decode` is how to read the page's text — the identity, or the EBCDIC
+ * decoder for Akbank's mainframe PDFs. It is used only to *recognise* headers
+ * and numbers; the lines it returns keep the original, still-encoded text.
+ */
+export function buildPageLines(items: TextGeom[], decode: (text: string) => string = (t) => t): string[] {
+  const rows = groupRows(items.map((item) => ({ ...item })))
+  const layout = findColumnLayout(rows, decode)
+  if (layout) tagRewardColumn(rows, layout, decode)
+
+  const lines: string[] = []
+  for (const row of rows) {
+    const line = rowToLine(row)
+    if (line) lines.push(line)
+  }
+  return lines
+}
+
+/**
+ * pdf.js text items → positioned runs. Whitespace items are kept only when they
+ * have a width, because the width is how the line builder tells a real space from
+ * a kerning gap.
+ */
+export function toTextGeom(items: ReadonlyArray<any>): TextGeom[] {
+  return items
+    .filter((i) => typeof i.str === 'string' && i.str.length)
+    .map((i) => ({
+      text: i.str as string,
+      x: i.transform[4] as number,
+      y: i.transform[5] as number,
+      w: (i.width ?? 0) as number,
+      h: Math.abs(i.transform[3]) || 8,
+    }))
+    .filter((i) => i.text.trim() || i.w > 0)
+}
+
+/**
+ * A document's pages, as text. Pure — no pdf.js, no DOM — so the browser, the
+ * tests and the command-line verifier all turn the same geometry into the same
+ * lines.
+ *
+ * EBCDIC is decided per page: an Akbank page is mojibake throughout, and the
+ * column detector can only recognise "Tutar" and digits once decoded.
+ */
+export function pdfPagesToText(pages: readonly TextGeom[][]): string {
+  const out: string[] = []
+  for (const items of pages) {
+    const sample = items.map((i) => i.text).join(' ')
+    out.push(...buildPageLines(items, looksLikeEbcdic(sample) ? decodeEbcdic : undefined))
+  }
+  return out.join('\n')
+}
+
+async function extractPdfPages(file: File, onProgress?: ProgressFn): Promise<TextGeom[][]> {
   const pdfjs = await loadPdfjs()
   const data = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise
 
-  const out: string[] = []
-
+  const pages: TextGeom[][] = []
   for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
     onProgress?.(`PDF metin katmanı okunuyor · sayfa ${pageNo}/${doc.numPages}`)
     const page = await doc.getPage(pageNo)
     const content = await page.getTextContent()
-
-    const items: TextGeom[] = content.items
-      .filter((i: any) => typeof i.str === 'string' && i.str.length)
-      .map((i: any) => ({
-        text: i.str,
-        x: i.transform[4],
-        y: i.transform[5],
-        w: i.width ?? 0,
-        h: Math.abs(i.transform[3]) || 8,
-      }))
-      .filter((i: TextGeom) => i.text.trim() || i.w > 0)
-
-    out.push(...buildLines(items))
+    pages.push(toTextGeom(content.items))
   }
 
   await doc.destroy()
-  return out.join('\n')
+  return pages
+}
+
+/**
+ * Steps 2 and 3 of the ladder: the text layer as it stands, then — when no
+ * adapter recognises it — decoded as EBCDIC. Null means neither worked and the
+ * caller should reach for OCR.
+ */
+export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): ExtractResult | null {
+  if (isRecognised(layerText)) return { text: layerText, engine: 'pdf-text' }
+
+  // Akbank ships its statements as EBCDIC bytes with no ToUnicode map. The text
+  // is complete, just in the wrong code page — decode before reaching for OCR.
+  if (looksLikeEbcdic(layerText)) {
+    onProgress?.('Ana bilgisayar kodlaması çözülüyor…')
+    const decoded = decodeEbcdic(layerText)
+    if (isRecognised(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
+  }
+
+  return null
 }
 
 async function ocrViaService(file: File, endpoint: string, onProgress?: ProgressFn): Promise<string | null> {
@@ -254,16 +328,9 @@ export async function extractText(file: File, options: ExtractOptions): Promise<
     return { text: await readAsText(file), engine: 'text' }
   }
 
-  const layerText = await extractPdfText(file, onProgress)
-  if (isRecognised(layerText)) return { text: layerText, engine: 'pdf-text' }
-
-  // Akbank ships its statements as EBCDIC bytes with no ToUnicode map. The text
-  // is complete, just in the wrong code page — decode before reaching for OCR.
-  if (looksLikeEbcdic(layerText)) {
-    onProgress?.('Ana bilgisayar kodlaması çözülüyor…')
-    const decoded = decodeEbcdic(layerText)
-    if (isRecognised(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
-  }
+  const layerText = pdfPagesToText(await extractPdfPages(file, onProgress))
+  const recognised = recogniseLayerText(layerText, onProgress)
+  if (recognised) return recognised
 
   if (options.useLocalOcr) {
     const serviceText = await ocrViaService(file, options.ocrEndpoint, onProgress)

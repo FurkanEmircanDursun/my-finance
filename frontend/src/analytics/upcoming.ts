@@ -16,8 +16,14 @@ import type { RecurringPayment } from './types'
 export interface UpcomingPayment {
   date: DayKey
   label: string
-  /** Known for a detected recurring payment; null for a statement due-date, since the app does not track a statement's own balance. */
+  /**
+   * Known for a detected recurring payment, and for a statement whose cover
+   * printed its debt. Null when neither is known — an old import that predates
+   * the cover summary, which re-importing the file fills in.
+   */
   amount: Money | null
+  /** The minimum payment a statement allows, when its cover printed one. */
+  minimum: Money | null
   kind: 'recurring' | 'statement'
   daysUntil: number
 }
@@ -39,6 +45,7 @@ export function buildUpcomingPayments(
       date: item.nextExpected,
       label: item.label,
       amount: item.medianAmount,
+      minimum: null,
       kind: 'recurring',
       daysUntil: toEpochDay(item.nextExpected) - todayEpoch,
     })
@@ -49,7 +56,8 @@ export function buildUpcomingPayments(
     out.push({
       date: statement.dueDate,
       label: statement.label,
-      amount: null,
+      amount: statement.summary?.totalDebt ?? null,
+      minimum: statement.summary?.minPayment ?? null,
       kind: 'statement',
       daysUntil: toEpochDay(statement.dueDate) - todayEpoch,
     })

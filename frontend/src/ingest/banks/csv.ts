@@ -3,7 +3,7 @@ import { parseAnyDate, type DayKey } from '../../core/date'
 import { fold } from '../../core/text'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
 import { PAYMENT_PATTERNS } from './types'
-import type { TxKind } from '../../domain/types'
+import { emptySummary, type TxKind } from '../../domain/types'
 
 /**
  * Delimited export adapter — covers every bank that offers "CSV / Excel'e aktar"
@@ -141,10 +141,12 @@ function parse(text: string): AdapterOutput {
   return {
     rows,
     skipped,
+    ignored: [],
     periodStart: minDate,
     periodEnd: maxDate,
     dueDate: null,
     accountLabel: 'CSV içe aktarım',
+    summary: emptySummary(),
   }
 }
 

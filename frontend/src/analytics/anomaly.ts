@@ -29,8 +29,15 @@ export function detectAnomalies(
 ): Anomaly[] {
   const found = new Map<string, Anomaly>()
 
+  // An instalment charge repeats a decision made once, at purchase; it is not a
+  // fresh unusual spend, and the date it prints is not when it was charged.
+  //
+  // Interest and card fees are not purchases either: nobody chose to spend them,
+  // and "your membership fee is large for a fee" is not news. They have their own
+  // finding (see insights.ts, `card-cost`).
   for (const [categoryId, all] of byCategory) {
-    const txs = all.filter((t) => t.kind === 'expense')
+    if (categoryId === 'fees') continue
+    const txs = all.filter((t) => t.kind === 'expense' && !t.installment)
     if (txs.length < MIN_SAMPLE) continue
 
     const amounts = txs.map((t) => t.amount)
@@ -54,7 +61,7 @@ export function detectAnomalies(
   }
 
   for (const [merchant, all] of byMerchant) {
-    const txs = all.filter((t) => t.kind === 'expense')
+    const txs = all.filter((t) => t.kind === 'expense' && !t.installment && t.category !== 'fees')
     if (txs.length < 4) continue
 
     const amounts = txs.map((t) => t.amount)
@@ -95,7 +102,7 @@ export function detectDuplicates(
 
   for (const [merchant, all] of byMerchant) {
     if (ignoreMerchants.has(merchant)) continue
-    const txs = all.filter((t) => t.kind === 'expense')
+    const txs = all.filter((t) => t.kind === 'expense' && !t.installment)
     if (txs.length < 2) continue
 
     const byAmount = new Map<Money, Transaction[]>()
@@ -114,12 +121,19 @@ export function detectDuplicates(
       const flush = () => {
         if (run.length >= 2) {
           const span = toEpochDay(run[run.length - 1].date) - toEpochDay(run[0].date)
+          // The same amount twice in one day, or next day at a shop visited
+          // rarely, is what a double charge looks like. The same amount a day or
+          // two apart at a shop visited every other day is a habit — a standard
+          // delivery order, a usual basket — and calling it a double charge put
+          // a false "critical" at the top of a real month.
+          const likely = span === 0 || (span <= 1 && txs.length <= 4)
           groups.push({
             merchant,
             label: displayMerchant(merchant),
             amount,
             transactions: [...run],
             spanDays: span,
+            likelihood: likely ? 'high' : 'low',
           })
         }
       }
@@ -155,7 +169,7 @@ export function detectHabits(
   const habits: HabitStat[] = []
 
   for (const [merchant, all] of byMerchant) {
-    const txs = all.filter((t) => t.kind === 'expense')
+    const txs = all.filter((t) => t.kind === 'expense' && !t.installment)
     if (txs.length < minCount) continue
 
     const amounts = txs.map((t) => t.amount)

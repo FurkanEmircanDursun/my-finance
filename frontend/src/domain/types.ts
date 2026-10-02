@@ -18,10 +18,31 @@ export interface Installment {
   total: number
   /** Original purchase price when the statement discloses it. */
   principal?: Money
+  /**
+   * What the bank says is still to come, as printed in the "Kalan Borç / Taksit"
+   * column ("900.00x1" = one more instalment of 900,00). When the statement
+   * states it, it is the authority; counting `total − current` is the fallback.
+   */
+  remaining?: { count: number; amount: Money }
+}
+
+/**
+ * What a foreign-currency purchase originally cost, as the statement prints it
+ * ("orjinal tutar 3.99 $"). `Transaction.amount` stays the TL figure billed.
+ */
+export interface ForeignAmount {
+  /** Minor units of `currency` — 3.99 USD is 399. */
+  amount: Money
+  /** ISO 4217 code. */
+  currency: string
 }
 
 export interface Transaction {
-  /** Stable content hash — deduplicates re-imports of the same statement. */
+  /**
+   * Stable content hash — deduplicates re-imports of the same statement. Built
+   * by `ingest/identity.ts`; the instalment index and the bank are part of it,
+   * so successive instalments of one purchase are distinct rows.
+   */
   id: string
   date: DayKey
   /** Description as printed on the statement. */
@@ -38,7 +59,26 @@ export interface Transaction {
   accountLabel: string
   installment: Installment | null
   source: TxSource
+  /**
+   * An instalment row prints the date of the *original purchase*, which can be
+   * months before the statement that bills it. `billedOn` is the day it was
+   * actually charged (the statement's cut date) and is what time-based analysis
+   * — the daily rhythm, calendar months, "from … to …" — has to use; `date`
+   * stays as printed. Absent when the two are the same.
+   */
+  billedOn?: DayKey
+  /** The statement this row was imported from; absent on hand-entered rows. */
+  statementId?: string
+  /** Original foreign-currency price, when the statement discloses one. */
+  foreign?: ForeignAmount
+  /** Bonus / chip-para this purchase earned, in the programme's minor units. */
+  reward?: Money
   raw?: string
+}
+
+/** The day a row counts towards in any analysis over time. */
+export function effectiveDate(tx: Pick<Transaction, 'date' | 'billedOn'>): DayKey {
+  return tx.billedOn ?? tx.date
 }
 
 /** Signed amount in "cash-flow" terms: expenses negative, income positive. */
@@ -59,12 +99,80 @@ export function isSpendKind(kind: TxKind): boolean {
 
 // ─── Statements ───────────────────────────────────────────────────────────────
 
+/**
+ * A statement line that was read and deliberately *not* counted as money — a
+ * bonus earned, bonus spent, a campaign credit. Kept rather than dropped so the
+ * person can see exactly what was left out and why.
+ */
+export type IgnoredReason = 'reward-earned' | 'reward-spent' | 'campaign'
+
+export interface IgnoredRow {
+  date: DayKey
+  description: string
+  /** Magnitude of the loyalty figure, in the programme's own minor units. */
+  amount: Money
+  reason: IgnoredReason
+  raw: string
+}
+
+/**
+ * Figures the bank prints on the statement cover. They are never used to
+ * compute anything the person sees as their own spending — only to check that
+ * the parsed rows add up to what the bank says (see `Reconciliation`) and to
+ * keep the cover's facts (limit, next due date, interest rate) with the data.
+ */
+export interface StatementSummary {
+  /** "Dönem Borcu" — what the bank says is owed at the cut date. */
+  totalDebt: Money | null
+  /** The balance carried in from the previous statement. */
+  previousBalance: Money | null
+  minPayment: Money | null
+  creditLimit: Money | null
+  availableLimit: Money | null
+  cashAdvanceLimit: Money | null
+  /** Monthly contractual interest rate, in percent (3.75 means %3,75). */
+  interestMonthly: number | null
+  previousCutDate: DayKey | null
+  nextCutDate: DayKey | null
+  nextDueDate: DayKey | null
+  /** Bonus / chip-para programme balances. */
+  loyalty: {
+    programme: string
+    earned: Money | null
+    spent: Money | null
+    balance: Money | null
+  } | null
+}
+
+/**
+ * Does the parse agree with the bank's own arithmetic?
+ *
+ *   debt = previous balance − payments + charges
+ *   ⇒ charges the bank expects = printed debt − previous balance + payments
+ *
+ * `delta` is parsed − expected, in kuruş. Zero means every row was read, every
+ * sign was right and nothing was counted that the bank does not count.
+ */
+export interface Reconciliation {
+  status: 'match' | 'mismatch' | 'unverified'
+  printedDebt: Money | null
+  previousBalance: Money | null
+  /** Card-debt payments found in the rows. */
+  payments: Money
+  /** Σ expense − Σ refund over the parsed rows. */
+  parsedCharges: Money
+  expectedCharges: Money | null
+  delta: Money | null
+}
+
 export interface Statement {
   id: string
   /** Display name, e.g. "Garanti BBVA · Ağustos 2026". */
   label: string
   fileName: string
   bank: string
+  /** "Akbank Axess", "Garanti Bonus Platinum" — as printed. */
+  accountLabel?: string
   transactionCount: number
   /** Rows the parser saw but rejected — surfaced so coverage is auditable. */
   skippedCount: number
@@ -73,6 +181,26 @@ export interface Statement {
   dueDate: DayKey | null
   importedAt: number
   engine: string
+  summary?: StatementSummary
+  reconciliation?: Reconciliation
+  /** Loyalty and campaign lines that were read but not counted as money. */
+  ignored?: IgnoredRow[]
+}
+
+export function emptySummary(): StatementSummary {
+  return {
+    totalDebt: null,
+    previousBalance: null,
+    minPayment: null,
+    creditLimit: null,
+    availableLimit: null,
+    cashAdvanceLimit: null,
+    interestMonthly: null,
+    previousCutDate: null,
+    nextCutDate: null,
+    nextDueDate: null,
+    loyalty: null,
+  }
 }
 
 /**
@@ -196,12 +324,16 @@ export const emptyFilters: Filters = {
 export interface ParseResult {
   bank: string
   engine: string
+  accountLabel: string
   transactions: Transaction[]
   skipped: number
   periodStart: DayKey | null
   periodEnd: DayKey | null
   dueDate: DayKey | null
   label: string
+  summary: StatementSummary
+  reconciliation: Reconciliation
+  ignored: IgnoredRow[]
 }
 
 export interface ImportOutcome {

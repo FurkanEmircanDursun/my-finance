@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarClock, Receipt } from 'lucide-react'
+import { CalendarClock, ChevronRight, Receipt } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button, Empty, Meter, Section, Segmented } from '../ui/primitives'
 import { CashFlowChart, CommitmentChart, GoalTrajectoryChart } from '../ui/charts'
@@ -78,6 +78,16 @@ export function FutureView() {
           {(open.length > 0 || activeRecurring.length > 0) && '.'}
         </p>
 
+        {/* A pattern needs repetitions. With fewer than three months on file the
+            page cannot find subscriptions or bills, and an empty list would read
+            as "you have none" rather than "I have not seen enough yet". */}
+        {overall.meta.months.length < 3 && (
+          <p className="mt-3 max-w-xl text-label leading-relaxed text-faint">
+            Abonelik ve faturaları fark edebilmem için en az üç aylık ekstre gerekir; şimdilik{' '}
+            {count(overall.meta.months.length)} ay var. Taksitler ise ilk ekstreden itibaren görünür.
+          </p>
+        )}
+
         {income > 0 && next && next.total > 0 && (
           <div className="mt-6 space-y-2">
             <div className="flex items-baseline justify-between gap-3">
@@ -122,8 +132,10 @@ export function FutureView() {
                 </div>
                 <div className="mt-2 flex items-center gap-3">
                   <Meter value={plan.paidCount} max={plan.totalCount} className="flex-1" />
-                  <span className="num w-32 shrink-0 text-right text-label text-faint">
-                    {plan.paidCount}/{plan.totalCount} · {monthLabel(plan.endMonth, true)}
+                  {/* "2/3" alone reads as a fraction of something; the last month
+                      is the date people actually plan around. */}
+                  <span className="num w-40 shrink-0 text-right text-label text-faint">
+                    {plan.paidCount}/{plan.totalCount} taksit · son {monthLabel(plan.endMonth, true)}
                   </span>
                 </div>
               </li>
@@ -133,7 +145,26 @@ export function FutureView() {
       )}
 
       {/* ── Forecast ─────────────────────────────────────────────────────── */}
-      {hasForecast && <ForecastSection forecast={forecast} onOpenSettings={openSettings} />}
+      {/* Without a known inflow the line is only the outflow running down from
+          zero — a red chart that says "you will spend ₺41.000" and nothing else,
+          which is a statement about the average, not a forecast. It waits for an
+          income or a balance. */}
+      {hasForecast && (forecast.totalIn > 0 || forecast.hasOpeningBalance) ? (
+        <ForecastSection forecast={forecast} onOpenSettings={openSettings} />
+      ) : hasForecast ? (
+        <Section title="Nakit akışı">
+          <button
+            type="button"
+            onClick={openSettings}
+            className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius-lg)] bg-accent-soft px-4 py-3 text-left transition-colors duration-200 hover:brightness-95"
+          >
+            <span className="flex-1 text-body text-accent-text">
+              Önümüzdeki 30 gün için nakit akışını gösterebilmem için aylık gelirini ya da bugünkü nakdini gir.
+            </span>
+            <ChevronRight size={18} className="shrink-0 text-accent" />
+          </button>
+        </Section>
+      ) : null}
 
       {/* ── Goal ─────────────────────────────────────────────────────────── */}
       {goal && <GoalSection goal={goal} />}
@@ -160,10 +191,13 @@ function UpcomingSection({ payments }: { payments: UpcomingPayment[] }) {
               <span className="mt-0.5 block text-label text-faint">
                 {fullDayLabel(payment.date)} ·{' '}
                 {payment.daysUntil === 1 ? 'yarın' : `${count(payment.daysUntil)} gün kaldı`}
+                {payment.minimum !== null && ` · asgari ${money(payment.minimum)}`}
               </span>
             </span>
             {payment.amount !== null && (
-              <span className="num shrink-0 text-body font-semibold text-ink">{money(payment.amount)}</span>
+              <span className="num shrink-0 text-body font-semibold text-ink">
+                {money(payment.amount, { decimals: payment.kind === 'statement' })}
+              </span>
             )}
           </li>
         ))}

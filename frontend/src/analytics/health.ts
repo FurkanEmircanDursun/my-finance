@@ -109,7 +109,7 @@ export function computeHealth(input: HealthInput): HealthReport {
     ? Math.round(components.reduce((s, c) => s + c.score * c.weight, 0) / totalWeight)
     : 0
 
-  const normalised = components.map((c) => ({ ...c, weight: round(c.weight / totalWeight, 2) }))
+  const normalised = components.map((c) => ({ ...c, score: Math.round(c.score), weight: round(c.weight / totalWeight, 2) }))
   const bounded = clamp(score, 0, 100)
 
   return {

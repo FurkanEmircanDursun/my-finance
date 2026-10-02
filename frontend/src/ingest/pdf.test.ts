@@ -75,7 +75,9 @@ describe('EBCDIC statements', () => {
     const trendyol = adapter.parse(decoded).rows.find((r) => r.description.includes('TRENDYOL'))
 
     expect(trendyol?.amount).toBe(toMinor(355))
-    expect(trendyol?.installment).toEqual({ current: 2, total: 3, principal: toMinor(1065) })
+    expect(trendyol?.installment).toEqual({
+      current: 2, total: 3, principal: toMinor(1065), remaining: { count: 1, amount: toMinor(355) },
+    })
   })
 })
 

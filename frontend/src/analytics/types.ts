@@ -11,8 +11,15 @@ export interface CategoryStat {
   label: string
   color: string
   nature: SpendNature
+  /** Net of refunds booked in this category — what the category actually cost. */
   total: Money
+  /** Purchases before refunds. */
+  gross: Money
+  /** Refunds credited back to this category (never more than `gross`). */
+  refunded: Money
+  /** Share of all category totals, so the list always adds up to 100%. */
   share: number
+  /** Number of purchases. */
   count: number
   /** Median ticket — resistant to one large purchase. */
   median: Money
@@ -168,6 +175,8 @@ export interface DuplicateGroup {
   amount: Money
   transactions: Transaction[]
   spanDays: number
+  /** `high` is worth checking against the statement; `low` is probably a habit. */
+  likelihood: 'high' | 'low'
 }
 
 export interface HabitStat {
@@ -252,6 +261,12 @@ export interface Totals {
   savings: Money
   /** True when any covered month had to assume income rather than read it. */
   incomeAssumed: boolean
+  /**
+   * Refunds the category list cannot absorb — a return in a later period than its
+   * purchase, or a card credit like chip-para. `netSpend` already includes their
+   * effect; Σ category totals − unallocatedRefunds = netSpend.
+   */
+  unallocatedRefunds: Money
 }
 
 export interface AnalysisMeta {
