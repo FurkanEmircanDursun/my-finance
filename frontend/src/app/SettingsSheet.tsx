@@ -1,23 +1,16 @@
 import { useState, type ReactNode } from 'react'
-import {
-  ChevronDown, Cloud, Download, Lock, LockOpen, LogIn, LogOut, RefreshCw,
-  ShieldCheck, Target, Trash2, UserPlus,
-} from 'lucide-react'
+import { ChevronDown, Cloud, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
+import { Badge, Button, Field, Segmented, Skeleton, TextInput } from '../ui/primitives'
 import { ConfirmDialog, Modal } from '../ui/Modal'
 import { money, toMinor, toMajor, count } from '../core/money'
 import { todayKey, monthOf, monthLabel, monthDiff } from '../core/date'
 import { hashPin, randomSalt, verifyPin, PIN_LENGTH } from '../core/pin'
-import { categoryLabel } from '../domain/categories'
 import type { SavingsGoal } from '../domain/types'
-import { useStore, type SyncStatus } from '../store/AppStore'
-import { isFirebaseConfigured } from '../firebase/config'
-import {
-  authErrorMessage, deleteCurrentAccount, registerWithEmail, signInWithEmail,
-  signInWithGoogle, signOutSession, startAnonymousSession,
-} from '../firebase/auth'
-import { wipeCloudData } from '../firebase/sync'
+import { useStore } from '../store/AppStore'
+import { describeSync } from '../sync/present'
+import { useNow } from './useNow'
+import { useSheets } from './sheets'
 
 /**
  * Ayarlar, as a sheet with four blocks instead of a page with ten sections.
@@ -36,40 +29,11 @@ import { wipeCloudData } from '../firebase/sync'
  *   Kategori bütçeleri moved next to the categories they cap, in Harcamalar.
  */
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, dispatch, authUser } = useStore()
+  const { state, dispatch, authUser, cloudAvailable } = useStore()
+  const { openArchive, openAccount } = useSheets()
   const [resetOpen, setResetOpen] = useState(false)
 
   const { profile, settings, transactions, statements, rules } = state
-
-  const exportJson = () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      profile,
-      rules,
-      statements,
-      transactions,
-    }
-    download(
-      new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
-      `my-finance-yedek-${todayKey()}.json`,
-    )
-  }
-
-  const exportCsv = () => {
-    const header = ['Tarih', 'Açıklama', 'İşyeri', 'Kategori', 'Tutar', 'Banka', 'Taksit']
-    const rows = transactions.map((tx) => [
-      tx.date,
-      tx.description.replace(/"/g, '""'),
-      tx.merchant,
-      categoryLabel(tx.category),
-      (tx.amount / 100).toFixed(2).replace('.', ','),
-      tx.bank,
-      tx.installment ? `${tx.installment.current}/${tx.installment.total}` : '',
-    ])
-    const csv = [header, ...rows].map((r) => r.map((cell) => `"${cell}"`).join(';')).join('\r\n')
-    // BOM so Excel opens Turkish characters correctly.
-    download(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), `my-finance-islemler-${todayKey()}.csv`)
-  }
 
   const setProfileNumber = (key: 'monthlyIncome' | 'spendingLimit' | 'currentBalance', raw: string) =>
     dispatch({
@@ -117,10 +81,15 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           <AppLock />
         </Block>
 
-        {/* ── Yedekleme ───────────────────────────────────────────────────── */}
-        {isFirebaseConfigured() && (
-          <Block title="Bulut yedekleme">
-            <Account />
+        {/* ── Hesap ───────────────────────────────────────────────────────── */}
+        {cloudAvailable && (
+          <Block title="Hesap ve senkron">
+            <AccountRow
+              onOpen={() => {
+                onClose()
+                openAccount()
+              }}
+            />
           </Block>
         )}
 
@@ -129,21 +98,26 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
           title="Veri"
           note={
             authUser
-              ? "Bu cihazda saklanır, hesabına bağlı olarak Firebase'de yedeklenir."
-              : 'Her şey bu cihazda saklanır, hiçbir sunucuya gönderilmez.'
+              ? 'Bu cihazda saklanır ve hesabınla bulutta eşitlenir.'
+              : cloudAvailable
+                ? 'Her şey bu cihazda saklanır; bulut senkronu kapalı.'
+                : 'Her şey bu cihazda saklanır, hiçbir sunucuya gönderilmez.'
           }
         >
           <p className="text-body text-muted">
             {count(transactions.length)} işlem · {count(statements.length)} ekstre
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={exportJson}>
-              <Download size={16} />
-              JSON yedek
-            </Button>
-            <Button onClick={exportCsv}>
-              <Download size={16} />
-              CSV
+            {/* Export, restore and the per-statement checks live in one place;
+                this sheet only needs to point at it. */}
+            <Button
+              onClick={() => {
+                onClose()
+                openArchive()
+              }}
+            >
+              <History size={16} />
+              Geçmiş, dışa aktar, geri yükle
             </Button>
             <Button variant="danger" onClick={() => setResetOpen(true)}>
               <Trash2 size={16} />
@@ -230,7 +204,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         </Disclosure>
 
         <p className="pt-2 text-center text-label text-faint">
-          My Finance {__APP_VERSION__} · veriler bu cihazda
+          My Finance {__APP_VERSION__} · {authUser ? 'bulutla eşitleniyor' : 'veriler bu cihazda'}
         </p>
       </div>
 
@@ -249,15 +223,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
       />
     </Modal>
   )
-}
-
-function download(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
 }
 
 /* ── Building blocks ─────────────────────────────────────────────────────── */
@@ -572,7 +537,7 @@ function AppLock() {
       </div>
 
       <p className="text-label text-faint">
-        PIN yalnızca bu cihazda tuzlanmış özet olarak saklanır; bulut yedeklemesi açıkken bile gerçek PIN
+        PIN yalnızca bu cihazda tuzlanmış özet olarak saklanır; bulut senkronu açıkken bile PIN ve özeti
         hiçbir yere gönderilmez.
       </p>
     </div>
@@ -581,155 +546,43 @@ function AppLock() {
 
 /* ── Cloud account ───────────────────────────────────────────────────────── */
 
-function Account() {
-  const { authUser, syncStatus, syncNow, refreshAuthUser } = useStore()
-  const [mode, setMode] = useState<'signup' | 'signin'>('signup')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+/**
+ * One line that says where the account stands and one button that opens the
+ * place to change it. The forms live in the account sheet, not here: Ayarlar is
+ * for things set once, and signing in is a flow, not a setting.
+ */
+function AccountRow({ onOpen }: { onOpen: () => void }) {
+  const { authReady, authUser, sync } = useStore()
+  const now = useNow()
 
-  const run = async (action: () => Promise<void>) => {
-    setBusy(true)
-    setError(null)
-    try {
-      await action()
-      setPassword('')
-      refreshAuthUser()
-    } catch (err) {
-      setError(authErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  if (!authReady) return <Skeleton className="h-11 w-full" />
 
-  const deleteAccount = async () => {
-    if (!authUser) return
-    setBusy(true)
-    setError(null)
-    try {
-      await wipeCloudData(authUser.uid)
-      await deleteCurrentAccount()
-      setDeleteOpen(false)
-    } catch (err) {
-      setError(authErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (authUser && !authUser.isAnonymous) {
+  if (!authUser) {
     return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="positive">{authUser.email ?? authUser.displayName ?? 'Giriş yapıldı'}</Badge>
-          <SyncBadge status={syncStatus} />
-        </div>
-
-        {error && <p className="text-body text-negative">{error}</p>}
-
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={syncNow} disabled={syncStatus === 'syncing'}>
-            <RefreshCw size={14} />
-            Şimdi senkronize et
-          </Button>
-          <Button size="sm" onClick={() => run(signOutSession)} disabled={busy}>
-            <LogOut size={14} />
-            Çıkış
-          </Button>
-          <Button size="sm" variant="danger" onClick={() => setDeleteOpen(true)}>
-            Hesabı sil
-          </Button>
-        </div>
-
-        <ConfirmDialog
-          open={deleteOpen}
-          title="Hesabı ve bulut verilerini sil"
-          message="Firebase'deki tüm işlem, ekstre, kural ve profil verilerin kalıcı olarak silinir; hesap kapatılır. Bu cihazdaki yerel veriler etkilenmez."
-          confirmLabel="Kalıcı olarak sil"
-          destructive
-          onCancel={() => setDeleteOpen(false)}
-          onConfirm={deleteAccount}
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="min-w-0 flex-1 text-body text-muted">Kapalı. Veriler yalnızca bu cihazda.</p>
+        <Button onClick={onOpen}>
+          <Cloud size={16} />
+          Giriş yap
+        </Button>
       </div>
     )
   }
 
+  const view = describeSync(sync, now)
   return (
-    <div className="space-y-4">
-      {authUser?.isAnonymous && (
-        <div className="flex items-center gap-2">
-          <Badge tone="warning">Anonim oturum</Badge>
-          <SyncBadge status={syncStatus} />
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="E-posta">
-          <TextInput
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ornek@eposta.com"
-          />
-        </Field>
-        <Field label="Şifre" hint="En az 6 karakter">
-          <TextInput
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </Field>
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-body font-semibold text-ink">
+          {authUser.isAnonymous ? 'Hesapsız oturum' : (authUser.displayName ?? authUser.email ?? 'Hesabım')}
+        </p>
+        <p className="text-label text-muted">
+          {view.title}
+          {view.tone === 'positive' && ' · '}
+          {view.tone === 'positive' && view.detail.replace(/\.$/, '')}
+        </p>
       </div>
-
-      {error && <p className="text-body text-negative">{error}</p>}
-
-      <div className="flex flex-wrap gap-2">
-        {mode === 'signup' ? (
-          <Button
-            variant="primary"
-            disabled={busy || !email || password.length < 6}
-            onClick={() => run(() => registerWithEmail(email, password))}
-          >
-            <UserPlus size={16} />
-            Kayıt ol
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            disabled={busy || !email || !password}
-            onClick={() => run(() => signInWithEmail(email, password))}
-          >
-            <LogIn size={16} />
-            Giriş yap
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}>
-          {mode === 'signup' ? 'Zaten hesabım var' : 'Hesap oluştur'}
-        </Button>
-        <Button size="sm" onClick={() => run(signInWithGoogle)} disabled={busy}>
-          Google
-        </Button>
-        {!authUser && (
-          <Button size="sm" variant="ghost" onClick={() => run(startAnonymousSession)} disabled={busy}>
-            <Cloud size={14} />
-            Hesapsız yedekle
-          </Button>
-        )}
-      </div>
-
-      <p className="text-label text-faint">
-        Hiçbir şey yapmazsan veriler yalnızca bu cihazda kalır — varsayılan budur.
-      </p>
+      <Button onClick={onOpen}>Yönet</Button>
     </div>
   )
-}
-
-function SyncBadge({ status }: { status: SyncStatus }) {
-  if (status === 'syncing') return <Badge tone="accent">Senkronize ediliyor…</Badge>
-  if (status === 'synced') return <Badge tone="positive">Senkronize</Badge>
-  if (status === 'error') return <Badge tone="negative">Hata</Badge>
-  return <Badge tone="neutral">Bekliyor</Badge>
 }

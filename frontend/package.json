@@ -1,7 +1,7 @@
 {
   "name": "my-finance-frontend",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "backend": "python ../backend/main.py"
+    "backend": "python ../backend/main.py",
+    "verify": "vite-node scripts/verify-statement.ts --"
   },
   "dependencies": {
     "@capacitor-firebase/authentication": "^8.5.1",

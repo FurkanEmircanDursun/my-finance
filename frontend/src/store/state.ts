@@ -4,8 +4,12 @@ import type {
   CategoryRule, Filters, ImportOutcome, Profile, Settings, Statement, Transaction,
 } from '../domain/types'
 import { emptyFilters } from '../domain/types'
+import { applyBackup, type RestoreMode } from './backup'
+import { defaultProfile, defaultSettings } from './defaults'
+import { STATE_VERSION, type Persisted } from './migrate'
+import { applyChange, type RemoteChange, type Snapshot } from '../sync/model'
 
-export const STATE_VERSION = 2
+export { defaultProfile, defaultSettings, STATE_VERSION }
 
 export interface AppState {
   version: number
@@ -17,25 +21,12 @@ export interface AppState {
   filters: Filters
   /** Import feedback from the last batch, shown once then dismissed. */
   lastImport: ImportOutcome[]
+  /**
+   * Things the person should be told once about the data they opened the app
+   * with — what a schema migration could not recover, say. Never persisted.
+   */
+  notices: string[]
   hydrated: boolean
-}
-
-export const defaultProfile: Profile = {
-  monthlyIncome: 0,
-  spendingLimit: 0,
-  currentBalance: 0,
-  budgets: [],
-  goal: null,
-}
-
-export const defaultSettings: Settings = {
-  theme: 'system',
-  useLocalOcr: false,
-  ocrEndpoint: 'http://127.0.0.1:8005/api/ocr',
-  periodGrouping: null,
-  lockPinHash: null,
-  lockPinSalt: null,
-  onboardingSeen: false,
 }
 
 export const initialState: AppState = {
@@ -47,8 +38,24 @@ export const initialState: AppState = {
   settings: defaultSettings,
   filters: emptyFilters,
   lastImport: [],
+  notices: [],
   hydrated: false,
 }
+
+/** What cloud sync looks at: the financial data and the preferences that travel with a person. */
+export function toSnapshot(
+  state: Pick<AppState, 'transactions' | 'statements' | 'rules' | 'profile' | 'settings'>,
+): Snapshot {
+  return {
+    transactions: state.transactions,
+    statements: state.statements,
+    rules: state.rules,
+    profile: state.profile,
+    prefs: { theme: state.settings.theme, periodGrouping: state.settings.periodGrouping },
+  }
+}
+
+const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)
 
 export type Action =
   | { type: 'hydrate'; payload: Partial<AppState> }
@@ -63,16 +70,11 @@ export type Action =
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'removeRule'; ruleId: string }
   | { type: 'clearImportLog' }
+  | { type: 'dismissNotices' }
+  | { type: 'remote'; change: RemoteChange }
+  | { type: 'clearData' }
+  | { type: 'restore'; backup: Persisted; mode: RestoreMode }
   | { type: 'reset' }
-
-/**
- * Statement provenance is tracked with a field on the transaction rather than a
- * parallel array, so removing one statement is a single filter and can never
- * leave orphaned rows behind.
- */
-export interface TransactionWithStatement extends Transaction {
-  statementId: string
-}
 
 function applyRuleToAll(
   transactions: Transaction[],
@@ -95,10 +97,15 @@ export function reducer(state: AppState, action: Action): AppState {
       const merged = [...state.transactions, ...added].sort((a, b) =>
         a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
       )
+      // A statement that arrives with an id already held replaces that record:
+      // that is how a re-import refreshes the summary and reconciliation of a
+      // statement imported by an older build.
+      const byId = new Map(state.statements.map((st) => [st.id, st]))
+      for (const st of action.statements) byId.set(st.id, st)
       return {
         ...state,
         transactions: merged,
-        statements: [...state.statements, ...action.statements],
+        statements: [...byId.values()],
         lastImport: action.outcomes,
       }
     }
@@ -165,7 +172,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...state,
         statements: state.statements.filter((s) => s.id !== action.statementId),
         transactions: state.transactions.filter(
-          (t) => (t as TransactionWithStatement).statementId !== action.statementId,
+          (t) => t.statementId !== action.statementId,
         ),
       }
     }
@@ -208,6 +215,62 @@ export function reducer(state: AppState, action: Action): AppState {
 
     case 'clearImportLog':
       return { ...state, lastImport: [] }
+
+    case 'remote': {
+      // What another device changed. `applyChange` hands back the very same array
+      // when nothing in it was touched, so an unrelated update re-renders nothing.
+      const next = applyChange(toSnapshot(state), action.change)
+      const { prefs, profile } = action.change
+      const settings = prefs
+        ? { ...state.settings, theme: prefs.theme, periodGrouping: prefs.periodGrouping }
+        : state.settings
+
+      return {
+        ...state,
+        transactions:
+          next.transactions === state.transactions ? state.transactions : [...next.transactions].sort(newestFirst),
+        statements: next.statements,
+        rules: next.rules,
+        profile: profile ? { ...defaultProfile, ...profile } : state.profile,
+        settings,
+        // The period filter names months of the old grouping.
+        filters:
+          settings.periodGrouping !== state.settings.periodGrouping
+            ? { ...state.filters, month: 'all' }
+            : state.filters,
+      }
+    }
+
+    case 'clearData':
+      // This device's financial data, ahead of loading an account's. Settings stay:
+      // the lock, the intro flag and the OCR address belong to the device.
+      return {
+        ...state,
+        transactions: [],
+        statements: [],
+        rules: [],
+        profile: defaultProfile,
+        filters: emptyFilters,
+        lastImport: [],
+      }
+
+    case 'dismissNotices':
+      return state.notices.length ? { ...state, notices: [] } : state
+
+    case 'restore': {
+      const result = applyBackup(state, action.backup, action.mode)
+      return {
+        ...state,
+        transactions: result.transactions,
+        statements: result.statements,
+        rules: result.rules,
+        profile: result.profile,
+        settings: result.settings,
+        // The period filter named months of the old data; after a replace it may
+        // name nothing at all.
+        filters: action.mode === 'replace' ? { ...state.filters, month: 'all' } : state.filters,
+      }
+    }
 
     case 'reset':
       return { ...initialState, settings: state.settings, hydrated: true }

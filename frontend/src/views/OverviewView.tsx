@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { ArrowRight, ChevronRight, Copy } from 'lucide-react'
+import { AlertTriangle, ArrowRight, ChevronRight, Copy } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button, Empty, Meter, Section } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { DailySpendChart } from '../ui/charts'
 import { HealthPanel, InsightRow, TrendPill } from '../ui/finance'
-import { money, count, percent } from '../core/money'
+import { money, money2, count, percent } from '../core/money'
 import { dayLabel, monthLabel } from '../core/date'
 import { withOverallForwardInsights } from '../analytics/insights'
 import { buildSummary } from '../analytics/summary'
+import { describeSync } from '../sync/present'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
 import type { ViewId } from '../app/navigation'
@@ -23,14 +24,18 @@ import type { ViewId } from '../app/navigation'
  * being thorough, it is refusing to decide what matters.
  */
 export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
-  const { state, analysis, overall } = useStore()
-  const { openIncome, openSettings, openTransactions } = useSheets()
+  const { state, analysis, overall, cloudAvailable, authReady, authUser, sync } = useStore()
+  const { openAccount, openArchive, openIncome, openSettings, openTransactions } = useSheets()
   const [healthOpen, setHealthOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
 
   const { totals, trend, meta, categories, health, daily, commitments } = analysis
   const { goal } = overall
-  const insights = withOverallForwardInsights(analysis.insights, overall.insights)
+  // The "Gelecek ay şimdiden bağlı" tile already states what the commitment
+  // insight states, until it becomes a warning — then it is news, and stays.
+  const insights = withOverallForwardInsights(analysis.insights, overall.insights).filter(
+    (insight) => !(insight.id === 'commitment-load' && insight.severity === 'info'),
+  )
   const profile = state.profile
 
   const periodLabel =
@@ -40,16 +45,32 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
     return <Empty title="Bu dönemde işlem yok" description="Üstteki dönem seçiminden başka bir ay seç." />
   }
 
+  // A statement whose rows do not add up to the bank's own total undermines every
+  // figure below it, so it is said once, here, rather than left in an archive.
+  const misread = state.statements.filter((st) => st.reconciliation?.status === 'mismatch')
+  const misreadDelta = misread.reduce((sum, st) => sum + Math.abs(st.reconciliation?.delta ?? 0), 0)
+
   const topCategory = categories[0]
   const nextMonth = commitments[0]
   const limit = profile.spendingLimit
   const projected = trend.projectedMonthEnd
 
+  // A finished period next to its own "monthly average" says the same number
+  // twice. What a finished period needs is a yardstick: how it sits against the
+  // months around it. Only offered when there is more than one month to average.
+  const norm =
+    projected === null && state.filters.month !== 'all' && overall.meta.monthsEquivalent >= 1.5
+      ? Math.round(overall.totals.netSpend / overall.meta.monthsEquivalent)
+      : null
+  const againstNorm = norm ? ((totals.netSpend - norm) / norm) * 100 : null
+
   return (
     <div className="space-y-10">
       {/* ── The answer ───────────────────────────────────────────────────── */}
       <section>
-        <p className="text-label uppercase tracking-wide text-faint">{periodLabel}</p>
+        <p className="text-label uppercase tracking-wide text-faint">
+          {state.filters.month === 'all' ? 'Tüm dönemlerde harcama' : `${periodLabel} harcaması`}
+        </p>
 
         <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
           <span className="num text-hero font-semibold text-ink">{money(totals.netSpend)}</span>
@@ -82,10 +103,19 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
       {/* ── Two figures. Not four. ───────────────────────────────────────── */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Tile
-          value={money(projected ?? Math.round(totals.netSpend / Math.max(meta.monthsEquivalent, 1)))}
-          label={projected !== null ? 'Ay sonunda' : 'Aylık ortalama'}
+          value={money(norm ?? projected ?? Math.round(totals.netSpend / Math.max(meta.monthsEquivalent, 1)))}
+          label={norm !== null ? 'Aylık ortalaman' : projected !== null ? 'Ay sonunda' : 'Aylık ortalama'}
           foot={
-            limit > 0 && projected !== null ? (
+            norm !== null && againstNorm !== null ? (
+              Math.abs(againstNorm) < 3 ? (
+                'Bu dönem ortalama düzeyinde'
+              ) : (
+                <span className={againstNorm > 0 ? 'text-negative' : 'text-positive'}>
+                  Bu dönem ortalamanın %{Math.round(Math.abs(againstNorm))}{' '}
+                  {againstNorm > 0 ? 'üzerinde' : 'altında'}
+                </span>
+              )
+            ) : limit > 0 && projected !== null ? (
               <div className="space-y-2">
                 <Meter
                   value={projected}
@@ -125,6 +155,21 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
           onClick={() => onNavigate('future')}
         />
       </div>
+
+      {misread.length > 0 && (
+        <button
+          type="button"
+          onClick={openArchive}
+          className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius-lg)] bg-negative-soft px-4 py-3 text-left transition-colors duration-200 hover:brightness-95"
+        >
+          <AlertTriangle size={16} className="shrink-0 text-negative" />
+          <span className="flex-1 text-body text-negative">
+            {misread.length === 1 ? 'Bir ekstre' : `${misread.length} ekstre`} bankanın toplamıyla tutmuyor:{' '}
+            <span className="num font-semibold">{money2(misreadDelta)}</span> fark. Ayrıntıya bak.
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-negative" />
+        </button>
+      )}
 
       {/* ── What is missing ──────────────────────────────────────────────── */}
       {/* Asked here, once, at the moment it would change an answer on screen —
@@ -242,6 +287,23 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         )}
 
         <FootRow label="Dönem özeti" value="Kopyala" onClick={() => setSummaryOpen(true)} />
+
+        <FootRow
+          label="Geçmiş ve veri"
+          value={`${count(state.statements.length)} ekstre`}
+          onClick={openArchive}
+        />
+
+        {/* Always one row away, never a banner: the cloud is an option, and an
+            option that nags is a decision made for the person. */}
+        {cloudAvailable && authReady && (
+          <FootRow
+            label="Bulut senkronu"
+            value={authUser ? describeSync(sync, Date.now()).title : 'Kapalı'}
+            tone={authUser && sync.status === 'synced' ? 'positive' : undefined}
+            onClick={openAccount}
+          />
+        )}
       </div>
 
       <Modal

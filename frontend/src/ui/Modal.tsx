@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { IconButton } from './primitives'
 import { hapticImpact, hapticWarn } from '../platform/haptics'
+
+const FOCUSABLE =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/** Open sheets, oldest first. Only the last one answers Escape and Tab. */
+const openStack: symbol[] = []
 
 /** Past this much of a drag, or this fast, the sheet is being thrown away. */
 const DISMISS_DISTANCE = 110
@@ -45,6 +51,16 @@ export function Modal({
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreRef = useRef<HTMLElement | null>(null)
+  const titleId = useId()
+  const descriptionId = useId()
+
+  // The newest `onClose`, without being a dependency of the effect below.
+  // Callers pass an inline arrow, which is a new function on every render; as a
+  // dependency it re-ran the effect whenever anything above the sheet
+  // re-rendered — a sync status ticking over, say — and each run moved focus to
+  // the first control, out of whatever field was being typed in.
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
 
   useEffect(() => {
     if (!open) return
@@ -53,22 +69,58 @@ export function Modal({
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
+    // Escape closes the topmost sheet only: a confirmation opened over a sheet
+    // is answered first, not closed together with everything under it.
+    const token = Symbol()
+    openStack.push(token)
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (openStack[openStack.length - 1] !== token) return
+
+      if (event.key === 'Escape') {
+        closeRef.current()
+        return
+      }
+
+      // Tab stays inside the sheet: the page behind it is inert, and focus
+      // wandering onto it is how a keyboard user loses the dialog.
+      if (event.key === 'Tab' && panelRef.current) {
+        const items = [...panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+          (el) => el.offsetParent !== null,
+        )
+        if (items.length === 0) return
+        const first = items[0]
+        const last = items[items.length - 1]
+        const active = document.activeElement
+        if (event.shiftKey && (active === first || !panelRef.current.contains(active))) {
+          event.preventDefault()
+          last.focus()
+        } else if (!event.shiftKey && (active === last || !panelRef.current.contains(active))) {
+          event.preventDefault()
+          first.focus()
+        }
+      }
     }
     document.addEventListener('keydown', onKeyDown)
 
-    const focusable = panelRef.current?.querySelector<HTMLElement>(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    )
-    focusable?.focus()
+    // A field with `autoFocus` has already taken focus; moving it to the close
+    // button would undo that. Otherwise the first thing to *do* gets it — not
+    // the close button, which is always first in the markup.
+    const panel = panelRef.current
+    if (panel && !panel.contains(document.activeElement)) {
+      const target = panel.querySelector<HTMLElement>(
+        FOCUSABLE.split(',').map((s) => `${s.trim()}:not([data-modal-close])`).join(','),
+      )
+      ;(target ?? panel).focus()
+    }
 
     return () => {
       document.removeEventListener('keydown', onKeyDown)
+      const at = openStack.indexOf(token)
+      if (at !== -1) openStack.splice(at, 1)
       document.body.style.overflow = previousOverflow
       restoreRef.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   /*
    * The entrance animation runs once and is then taken off the element for
@@ -125,9 +177,11 @@ export function Modal({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className={clsx(
-          'flex w-full flex-col overflow-hidden bg-raised shadow-overlay',
+          'flex w-full flex-col overflow-hidden bg-raised shadow-overlay focus:outline-none',
           'max-h-[88vh] rounded-t-[20px] sm:max-h-[85vh] sm:rounded-[var(--radius-lg)]',
           // The entrance animation and a finger-following transform cannot both
           // own the transform, so it is only ever attached before the sheet has
@@ -158,10 +212,10 @@ export function Modal({
 
           <header className="flex items-start justify-between gap-3 px-5 pb-4 pt-4">
             <div className="min-w-0">
-              <h2 className="text-title font-semibold text-ink">{title}</h2>
-              {description && <p className="mt-1 text-body text-muted">{description}</p>}
+              <h2 id={titleId} className="text-title font-semibold text-ink">{title}</h2>
+              {description && <p id={descriptionId} className="mt-1 text-body text-muted">{description}</p>}
             </div>
-            <IconButton label="Kapat" onClick={onClose} className="-mr-2 -mt-2 shrink-0">
+            <IconButton label="Kapat" onClick={onClose} data-modal-close className="-mr-2 -mt-2 shrink-0">
               <X size={18} />
             </IconButton>
           </header>
@@ -300,7 +354,7 @@ export function ConfirmDialog({
               onConfirm()
             }}
             className={clsx(
-              'h-11 rounded-[var(--radius)] px-4 text-body font-semibold text-white',
+              'h-11 rounded-[var(--radius)] px-4 text-body font-semibold text-inverse',
               destructive ? 'bg-negative hover:brightness-110' : 'bg-accent hover:bg-accent-hover',
             )}
           >

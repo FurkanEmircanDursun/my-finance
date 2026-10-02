@@ -2,6 +2,7 @@ import {
   createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode,
 } from 'react'
 import { ImportSheet } from './ImportSheet'
+import { SyncGate } from './SyncDecision'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
 
@@ -15,14 +16,16 @@ import { categoryLabel, type CategoryId } from '../domain/categories'
  * insight all lead to the same place without any of them knowing about it.
  *
  * Every sheet except the importer is lazily loaded and only mounted once it has
- * been opened. Ayarlar is the one that matters: it is the only module that
- * touches Firebase, and importing it eagerly would put ~178 kB gzipped of cloud
- * sync in front of the first paint for everyone, including the majority who
- * never sign in.
+ * been opened. Hesap ve senkron is the one that matters: it is the module that
+ * pulls in Firebase's auth code, and importing it eagerly would put a large
+ * chunk of cloud code in front of the first paint for everyone, including the
+ * majority who never sign in.
  */
 
 const SettingsSheet = lazy(() => import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })))
+const AccountSheet = lazy(() => import('./AccountSheet').then((m) => ({ default: m.AccountSheet })))
 const IncomeSheet = lazy(() => import('./IncomeSheet').then((m) => ({ default: m.IncomeSheet })))
+const ArchiveSheet = lazy(() => import('./ArchiveSheet').then((m) => ({ default: m.ArchiveSheet })))
 const BudgetSheet = lazy(() => import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })))
 const TransactionsSheet = lazy(() =>
   import('../views/TransactionsSheet').then((m) => ({ default: m.TransactionsSheet })),
@@ -39,8 +42,10 @@ export interface TransactionQuery {
 interface SheetApi {
   openImport: () => void
   openSettings: () => void
+  openAccount: () => void
   openIncome: () => void
   openBudgets: () => void
+  openArchive: () => void
   openTransactions: (query?: TransactionQuery) => void
 }
 
@@ -56,19 +61,23 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const { state, visible } = useStore()
   const [importOpen, setImportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
 
   const openImport = useCallback(() => setImportOpen(true), [])
   const openSettings = useCallback(() => setSettingsOpen(true), [])
+  const openAccount = useCallback(() => setAccountOpen(true), [])
   const openIncome = useCallback(() => setIncomeOpen(true), [])
   const openBudgets = useCallback(() => setBudgetsOpen(true), [])
+  const openArchive = useCallback(() => setArchiveOpen(true), [])
   const openTransactions = useCallback((query?: TransactionQuery) => setTxQuery(query ?? {}), [])
 
   const api = useMemo<SheetApi>(
-    () => ({ openImport, openSettings, openIncome, openBudgets, openTransactions }),
-    [openImport, openSettings, openIncome, openBudgets, openTransactions],
+    () => ({ openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openTransactions }),
+    [openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openTransactions],
   )
 
   const source = txQuery?.overall ? state.transactions : visible
@@ -89,10 +98,26 @@ export function SheetProvider({ children }: { children: ReactNode }) {
 
       <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} />
 
+      {/* Not lazy and not behind a sheet: it must be able to appear on its own,
+          wherever the person is, the moment sync needs an answer. It carries no
+          Firebase code — that stays in the account sheet's chunk. */}
+      <SyncGate />
+
       <Suspense fallback={null}>
         {settingsOpen && <SettingsSheet open onClose={() => setSettingsOpen(false)} />}
+        {accountOpen && <AccountSheet open onClose={() => setAccountOpen(false)} />}
         {incomeOpen && <IncomeSheet open onClose={() => setIncomeOpen(false)} />}
         {budgetsOpen && <BudgetSheet open onClose={() => setBudgetsOpen(false)} />}
+        {archiveOpen && (
+          <ArchiveSheet
+            open
+            onClose={() => setArchiveOpen(false)}
+            onShowPeriod={() => {
+              setArchiveOpen(false)
+              window.location.hash = '/overview'
+            }}
+          />
+        )}
         {txQuery !== null && (
           <TransactionsSheet open onClose={() => setTxQuery(null)} title={title} transactions={rows} />
         )}

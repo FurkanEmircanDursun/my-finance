@@ -35,7 +35,14 @@ export default defineConfig({
           if (id.includes('pdfjs-dist')) return 'pdf'
           if (id.includes('tesseract')) return 'ocr'
           if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts'
-          if (id.includes('firebase') || id.includes('@firebase')) return 'firebase'
+          // Auth and Firestore are separate chunks: asking "who is signed in?"
+          // at start-up needs only the first, and the database client (the
+          // larger half) is fetched when a session actually starts syncing.
+          if (id.includes('firebase') || id.includes('@firebase')) {
+            if (id.includes('firestore')) return 'firebase-store'
+            if (id.includes('auth')) return 'firebase-auth'
+            return 'firebase-core'
+          }
           if (id.includes('react')) return 'react'
         },
       },

@@ -1,6 +1,6 @@
 # Ürün Gereksinim Dokümanı — My Finance
 
-> **Versiyon:** 2.0 · **Tarih:** Eylül 2026 · **Durum:** Geliştirmede
+> **Versiyon:** 2.2 · **Tarih:** Ekim 2026 · **Durum:** Geliştirmede
 
 ---
 
@@ -12,7 +12,7 @@ Kredi kartı ekstresi onlarca ham satırdır. Kullanıcı bu satırlardan üç s
 2. Önümüzdeki ay ben hiçbir şey yapmasam bile ne kadar ödeyeceğim?
 3. Bu ayda alışılmadık bir şey oldu mu?
 
-Mevcut uygulamalar ya veriyi buluta gönderir ya da yalnızca geçmişi tablolar; ikisi de bu soruları yanıtlamaz.
+Mevcut uygulamalar ya veriyi buluta mecbur bırakır ya da yalnızca geçmişi tablolar; ikisi de bu soruları yanıtlamaz.
 
 ## 2. Çözüm
 
@@ -45,18 +45,31 @@ Ekstre tarayıcıya bırakılır, cihazdan çıkmadan ayrıştırılır ve beş 
 | 18 | Öncelik sıralı bulgu motoru | P1 |
 | 19 | Toplu kategori atama, manuel işlem, CSV/JSON dışa aktarım | P1 |
 | 20 | Açık/koyu tema, mobil uyum | P2 |
-| 21 | Beş bölümlük sadeleştirilmiş gezinme; özet ekranı tek bakışta okunabilir | P0 |
+| 21 | Üç sekmelik sadeleştirilmiş gezinme; özet ekranı tek bakışta okunabilir | P0 |
+| 22 | Sütun-farkında PDF okuma: bonus/chip-para sütunundaki rakam harcama sayılmaz | P0 |
+| 23 | Ekstre mutabakatı: ayrıştırılan tutar, bankanın kendi aritmetiğiyle (dönem borcu = önceki bakiye − ödemeler + harcamalar) kuruşu kuruşuna karşılaştırılır; fark Özet'te söylenir | P0 |
+| 24 | Taksit planı doğruluğu: ekstre ayına göre yerleşim, bankanın "kalan taksit" sayısı, her ayın taksiti ayrı satır | P0 |
+| 25 | Geçmiş ve veri ekranı: dönem → ekstre → mutabakat → sayılmayan satırlar; dönem/ekstre bazında silme | P1 |
+| 26 | Tam JSON dışa aktarma (ham satır, taksit, döviz, bonus, ekstre özeti, mutabakat, kurallar, profil, dönem özetleri) ve yedekten geri yükleme (birleştir / değiştir); eski yedekler okunur | P0 |
+| 27 | Şema göçü: sürüm yükseltmesi veriyi silmez, taşır; bulut senkronu da göç ettirir | P0 |
+| 28 | `npm run verify`: gerçek ekstreyi aynı kodla okuyup bankanın toplamıyla karşılaştıran komut | P2 |
+| 29 | İsteğe bağlı hesap: Google ya da tek formla e-posta (giriş dener, yoksa oluşturmayı/şifre sıfırlamayı sunar); hesapsız kullanım tam işlevli kalır | P0 |
+| 30 | Firestore senkronu: belge başına son yazan kazanır, silme mezar taşıyla taşınır, çevrimdışı düzenleme kaybolmaz; PIN ve ekstre dosyaları asla gitmez | P0 |
+| 31 | Senkron durumu üst çubukta tek simge; cihazda başka hesabın verisi varsa sessiz birleştirme yerine açık seçim | P1 |
+| 32 | Hesap ve bulut verisi silme (kimlik yeniden doğrulanır); çıkış yerel veriyi korur | P1 |
+| 33 | Erişilebilirlik: metin kontrastı WCAG AA, odak yönetimi, grafik eksen etiketleri | P1 |
 
 ### 3.2 Kapsam dışı
 
 - Open Banking / gerçek zamanlı hesap bağlantısı
-- Sunucu tarafı hesap, senkronizasyon veya paylaşım
+- Paylaşım, birden çok kullanıcı, aile/ortak hesap (senkron yalnızca tek kişinin kendi cihazları içindir)
+- Ekstre dosyalarının bulutta saklanması (yalnızca ayrıştırılmış kayıtlar eşitlenir)
 - Yatırım tavsiyesi veya portföy takibi
 - Makine öğrenimi tabanlı sınıflandırma (kural tabanlı yaklaşım denetlenebilir ve çevrimdışıdır)
 
 ## 4. Kullanıcı
 
-25–45 yaş, Türkiye'de kredi kartı kullanan, verisini buluta vermek istemeyen, finansal farkındalık arayan kişi.
+25–45 yaş, Türkiye'de kredi kartı kullanan, verisini buluta vermek zorunda kalmak istemeyen ama telefonu ile bilgisayarında aynı tabloyu görmek isteyebilen, finansal farkındalık arayan kişi. Bulut varsayılan değil, bilinçli bir seçimdir.
 
 **Akış:** ekstreyi indir → sürükle → genel bakışta bulguları oku → yanlış kategorileri düzelt (kural olarak öğrenilir) → yükümlülükler ve düzenli ödemeleri incele.
 
@@ -64,7 +77,8 @@ Ekstre tarayıcıya bırakılır, cihazdan çıkmadan ayrıştırılır ve beş 
 
 | Ölçüt | Hedef | Nasıl doğrulanır |
 |---|---|---|
-| Ayrıştırma doğruluğu | Ayrıştırılan net tutar = ekstrenin "Dönem Borcu" rakamı | Gerçek Akbank ve Garanti ekstreleriyle doğrulandı: ₺18.628,32 ve ₺34.037,58, okunamayan satır 0 |
+| Ayrıştırma doğruluğu | Ayrıştırılan net tutar = ekstrenin kendi aritmetiğinin gerektirdiği tutar (fark ₺0,00) | Her içe aktarmada otomatik: ekstre kartında "Ekstreyle kuruşu kuruşuna tutuyor" ya da farkın kendisi. Gerçek Akbank ve Garanti ekstreleriyle, birden çok ayda doğrulandı; okunamayan satır 0 |
+| Geçmişin bütünlüğü | Aynı ekstreyi yeniden yüklemek ve yedekten geri yüklemek satırı çoğaltmaz, hiçbirini düşürmez | `history.test.ts`, `migrate.test.ts` (üç aylık taksit senaryosu, v2 → v3 kimlik denkliği) |
 | Sınıflandırma kapsamı | "Diğer" payı < %15 | Genel bakışta ve bulgularda raporlanır |
 | Düzenli ödeme kesinliği | Yanlış pozitif ≈ 0 | Üç kapılı tespit; testlerle sabitlendi |
 | İçe aktarmadan panoya | 500 satırlık TXT için < 2 sn | Tek geçişli motor, memoize analiz |

@@ -107,7 +107,7 @@ const BUTTON_BASE =
   'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-semibold whitespace-nowrap transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40'
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-white hover:bg-accent-hover border border-transparent',
+  primary: 'bg-accent text-inverse hover:bg-accent-hover border border-transparent',
   secondary: 'bg-raised text-ink border border-line hover:bg-hover',
   ghost: 'bg-transparent text-muted hover:text-ink hover:bg-hover border border-transparent',
   // Destructive work is never the accent colour: the loudest button on a screen

@@ -2,7 +2,7 @@ import {
   lazy, Suspense, useCallback, useEffect, useRef, useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { Eye, EyeOff, Plus, Settings2 } from 'lucide-react'
+import { Eye, EyeOff, Info, Plus, Settings2, X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useStore } from '../store/AppStore'
 import { useTheme } from './useTheme'
@@ -15,6 +15,7 @@ import { Onboarding } from './Onboarding'
 import { PeriodButton } from './PeriodPicker'
 import { FirstRun } from './ImportSheet'
 import { SheetProvider, useSheets } from './sheets'
+import { SyncIndicator } from './SyncIndicator'
 import { NAV, resolveView, type ViewId } from './navigation'
 import { Skeleton } from '../ui/primitives'
 import { statementSpansMonths } from '../domain/types'
@@ -218,6 +219,8 @@ function Shell() {
             </button>
           )}
 
+          <SyncIndicator />
+
           {/* On a phone both of these live in the tab bar, within thumb reach;
               a pointer device has no such constraint and expects them here. */}
           <button
@@ -232,7 +235,7 @@ function Shell() {
           <button
             type="button"
             onClick={openImport}
-            className="ml-1 hidden h-11 items-center gap-2 rounded-[var(--radius)] bg-accent px-4 text-body font-semibold text-white transition-colors duration-200 hover:bg-accent-hover sm:inline-flex"
+            className="ml-1 hidden h-11 items-center gap-2 rounded-[var(--radius)] bg-accent px-4 text-body font-semibold text-inverse transition-colors duration-200 hover:bg-accent-hover sm:inline-flex"
           >
             <Plus size={16} />
             Ekstre
@@ -251,6 +254,30 @@ function Shell() {
           </nav>
         )}
       </header>
+
+      {state.notices.length > 0 && (
+        <div className="mx-auto w-full max-w-app px-4 pt-4">
+          <div className="flex gap-3 rounded-[var(--radius-lg)] bg-accent-soft px-4 py-3" role="status">
+            <Info size={16} className="mt-0.5 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <p className="text-body font-semibold text-accent-text">Veri yapısı güncellendi</p>
+              {state.notices.map((note) => (
+                <p key={note} className="text-label leading-relaxed text-accent-text">
+                  {note}
+                </p>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => dispatch({ type: 'dismissNotices' })}
+              aria-label="Kapat"
+              className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded text-accent-text hover:brightness-90"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <main
         className="mx-auto w-full max-w-app flex-1 px-4 pt-6 sm:pb-12"
@@ -397,7 +424,7 @@ function BottomNav({
             }}
             aria-label="Ekstre ekle"
             className={clsx(
-              'inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-white',
+              'inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-inverse',
               'shadow-[var(--shadow-overlay)] transition-transform duration-200 active:scale-95',
             )}
           >

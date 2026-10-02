@@ -128,7 +128,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <button
             type="button"
             onClick={() => (last ? onDone() : go(index + 1))}
-            className="inline-flex h-12 items-center gap-2 rounded-[var(--radius)] bg-accent px-5 text-body font-semibold text-white transition-colors duration-200 hover:bg-accent-hover"
+            className="inline-flex h-12 items-center gap-2 rounded-[var(--radius)] bg-accent px-5 text-body font-semibold text-inverse transition-colors duration-200 hover:bg-accent-hover"
           >
             {last ? 'Başla' : 'Devam'}
             {last ? <Check size={16} /> : <ArrowRight size={16} />}

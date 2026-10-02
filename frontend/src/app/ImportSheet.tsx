@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { AlertCircle, FileText, Loader2, Lock, Upload, X } from 'lucide-react'
-import { Button, Empty } from '../ui/primitives'
+import { Button } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
+import { ReconciliationBadge } from '../ui/statements'
+import { useSheets } from './sheets'
+import { useStore } from '../store/AppStore'
 import { useImport } from '../hooks/useImport'
 import { count } from '../core/money'
 import type { ImportOutcome } from '../domain/types'
@@ -149,6 +152,9 @@ function Picker({
  * statements does it understand, and where do I get the file.
  */
 export function FirstRun() {
+  const { openArchive, openAccount } = useSheets()
+  const { cloudAvailable, authUser, authReady } = useStore()
+
   return (
     <div className="mx-auto w-full max-w-md space-y-6 py-6">
       <div>
@@ -166,6 +172,27 @@ export function FirstRun() {
           Akbank Axess · Garanti BBVA Bonus · genel CSV. Bankanın internet şubesinden "ekstre indir"
           dediğinde gelen PDF doğrudan çalışır.
         </p>
+      </div>
+
+      {/* Two ways back to data that already exists somewhere else: a signed-in
+          account (another device, an earlier install) and a backup file. */}
+      <div className="flex flex-col items-start gap-1">
+        {cloudAvailable && authReady && !authUser && (
+          <button
+            type="button"
+            onClick={openAccount}
+            className="min-h-[44px] text-left text-body text-accent underline-offset-4 hover:underline"
+          >
+            Başka bir cihazda hesabın var mı? Giriş yap
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={openArchive}
+          className="min-h-[44px] text-left text-body text-accent underline-offset-4 hover:underline"
+        >
+          Daha önce aldığın bir yedek var mı? Geri yükle
+        </button>
       </div>
     </div>
   )
@@ -186,24 +213,46 @@ export function ImportSheet({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <Modal open={open} onClose={onClose} title="Ekstre ekle">
       {result ? (
-        <div className="space-y-4">
-          <Empty
-            compact
-            title={added > 0 ? `${count(added)} işlem eklendi` : 'Yeni işlem yok'}
-            description={
-              added === 0 && failed.length === 0 ? 'Bu ekstre zaten yüklüydü.' : undefined
-            }
-            action={
-              <Button variant="primary" onClick={onClose}>
-                Bitti
-              </Button>
-            }
-          />
+        <div className="space-y-5">
+          <div>
+            <p className="text-title font-semibold text-ink">
+              {added > 0 ? `${count(added)} işlem eklendi` : 'Yeni işlem yok'}
+            </p>
+            {added === 0 && failed.length === 0 && (
+              <p className="mt-1 text-body text-muted">Bu ekstre zaten yüklüydü.</p>
+            )}
+          </div>
+
+          {/* The check that matters most, shown at the moment it can still be
+              acted on: did the parse agree with the bank's own total? */}
+          <ul className="space-y-3">
+            {result
+              .filter((outcome) => outcome.ok)
+              .map((outcome) => (
+                <li key={outcome.fileName} className="rounded-[var(--radius-lg)] bg-sunken p-4">
+                  <p className="truncate text-body font-semibold text-ink">
+                    {outcome.statement?.label ?? outcome.fileName}
+                  </p>
+                  <p className="mt-0.5 text-label text-faint">
+                    {count(outcome.added)} yeni
+                    {outcome.duplicates > 0 && ` · ${count(outcome.duplicates)} zaten vardı`}
+                  </p>
+                  <div className="mt-2">
+                    <ReconciliationBadge reconciliation={outcome.statement?.reconciliation} />
+                  </div>
+                </li>
+              ))}
+          </ul>
+
           {failed.map((outcome) => (
             <p key={outcome.fileName} className="text-body text-negative">
               {outcome.fileName}: {outcome.error}
             </p>
           ))}
+
+          <Button variant="primary" className="w-full" onClick={onClose}>
+            Bitti
+          </Button>
         </div>
       ) : (
         <Picker primaryLabel="Ekle ve analiz et" onFinished={setResult} />

@@ -16,8 +16,16 @@ import type { GoalPoint } from '../analytics/goal'
  * the category definitions or from the CSS variables, never from a literal.
  */
 
+/*
+ * The tick colour is set here, as a prop, not in the stylesheet. Recharts writes
+ * `fill="transparent"` onto each tick label (it reads the axis `stroke`), and a
+ * presentation attribute outranks anything in a CSS `@layer` — so the rule in
+ * index.css that was meant to colour them never applied, and every chart in the
+ * app drew without a single axis label.
+ */
 const AXIS = {
   stroke: 'transparent',
+  tick: { fill: 'var(--text-faint)', fontSize: 12 },
   tickLine: false,
   axisLine: false,
 } as const
