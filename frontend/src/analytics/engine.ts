@@ -101,8 +101,13 @@ function accumulate(
     // The day it was charged, not the day an instalment's purchase was made.
     const day = effectiveDate(tx)
 
-    if (!acc.minDate || day < acc.minDate) acc.minDate = day
-    if (!acc.maxDate || day > acc.maxDate) acc.maxDate = day
+    // A card payment settles the previous statement; it says nothing about the
+    // span being analysed. Counting it stretched "28 Ağu — 28 Eyl" and the daily
+    // chart a day before the statement began, on the date last month was paid.
+    if (tx.kind !== 'payment') {
+      if (!acc.minDate || day < acc.minDate) acc.minDate = day
+      if (!acc.maxDate || day > acc.maxDate) acc.maxDate = day
+    }
 
     let monthBucket = acc.byMonth.get(month)
     if (!monthBucket) {
@@ -178,6 +183,14 @@ function accumulate(
     const merchBucket = acc.byMerchant.get(tx.merchant)
     if (merchBucket) merchBucket.push(tx)
     else acc.byMerchant.set(tx.merchant, [tx])
+  }
+
+  if (acc.minDate === null && transactions.length > 0) {
+    for (const tx of transactions) {
+      const day = effectiveDate(tx)
+      if (!acc.minDate || day < acc.minDate) acc.minDate = day
+      if (!acc.maxDate || day > acc.maxDate) acc.maxDate = day
+    }
   }
 
   acc.totals.netSpend = acc.totals.spend - acc.totals.refunds

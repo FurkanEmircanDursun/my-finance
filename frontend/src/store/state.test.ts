@@ -52,12 +52,12 @@ describe('setSettings clears the period filter on mode switch', () => {
 
   it('other filter fields survive a period-mode switch', () => {
     const withQuery = reducer(
-      { ...initialState, filters: { ...emptyFilters, query: 'migros', banks: ['Akbank'] } },
+      { ...initialState, filters: { ...emptyFilters, query: 'migros', cards: ['Akbank Axess'] } },
       { type: 'setSettings', settings: { periodGrouping: 'statement' } },
     )
 
     expect(withQuery.filters.query).toBe('migros')
-    expect(withQuery.filters.banks).toEqual(['Akbank'])
+    expect(withQuery.filters.cards).toEqual(['Akbank Axess'])
   })
 })
 

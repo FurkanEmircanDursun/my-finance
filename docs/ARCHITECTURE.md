@@ -27,6 +27,8 @@ Dosya
   │        ├─ transport.ts    taşıyıcı arayüzü (Firestore, bellek içi, geliştirme)
   │        └─ present.ts      durumu insan diline çeviren saf işlev
   │
+  ├─ analytics/ledger.ts ──── ekstre defteri: önceki bakiye − ödemeler + harcamalar = borç; satır bölümleri
+  ├─ analytics/rewards.ts ─── bonus / chip-para: kazanılan, harcanan, kalan, kaynak satırları
   ├─ analytics/engine.ts ──── tek geçişli toplayıcılar → türetilmiş raporlar
   │        ├─ recurring.ts     periyot tespiti
   │        ├─ commitments.ts   taksit planları, 12 aylık merdiven
@@ -283,7 +285,7 @@ Bulut senkronu şema sürümünü `users/{uid}/meta/schema` belgesine yazar; çe
 
 Yerel IndexedDB her zaman gerçeğin kaynağıdır ve uygulama hesapsız tam çalışır. Giriş yapılırsa `sync/` aynı veriyi Firestore ile eşitler. Tasarım bilinçli olarak sade: *belge başına son yazan kazanır*, silme de bir belgedir.
 
-**Veri yerleşimi.** `users/{uid}/transactions|statements|rules/{belgeId}` ve `users/{uid}/meta/{profile|prefs|schema}`. Her belge `{ _u, _d, data }` taşır: `_u` sürüm damgası (ms), `_d` mezar taşı. Kurallar işyeri başına tek belgedir (`r_<hash(işyeri)>`), hangi cihaz öğretirse öğretsin. `prefs` yalnızca tema ve dönem gruplamasıdır; **PIN, özet ve tuz hiçbir zaman gönderilmez**, ekstre dosyaları da (yalnızca ayrıştırılmış kayıtlar).
+**Veri yerleşimi.** `users/{uid}/transactions|statements|rules/{belgeId}` ve `users/{uid}/meta/{profile|prefs|schema}`. Her belge `{ _u, _d, data }` taşır: `_u` sürüm damgası (ms), `_d` mezar taşı. Kurallar işyeri başına tek belgedir (`r_<hash(işyeri)>`), hangi cihaz öğretirse öğretsin. `prefs` yalnızca tema ve dönem gruplamasıdır (gruplama artık her zaman ekstre dönemidir; alan eski veriyle uyum için duruyor); **PIN, özet ve tuz hiçbir zaman gönderilmez**, ekstre dosyaları da (yalnızca ayrıştırılmış kayıtlar).
 
 **Neden eski tasarım atıldı.** Önceki sürüm her kaydetmede "yerelde olmayan her bulut belgesini sil" yapıyordu: yeni kurulmuş ya da eski kalmış bir cihaz ilk kaydedişinde herkesin verisini silerdi. Yenisi şunları yapar:
 
@@ -304,7 +306,19 @@ Yerel IndexedDB her zaman gerçeğin kaynağıdır ve uygulama hesapsız tam ça
 
 **Nasıl test edildi.** Motor bir `SyncTransport` arayüzünün arkasındadır; `memoryTransport` çok cihazlı bir bulutu bellekte taklit eder (`engine.test.ts`, 31 senaryo: iki cihazın aynı anda düzenlemesi, uzak silme, çevrimdışı düzenleme, önbellekten anlık görüntü, hesap uyuşmazlığı, eski belge göçü, hata ve yeniden deneme …). Mutasyon denemesiyle her kritik koşul bozuldu ve bir testin kırıldığı görüldü. **Test edilemeyenler:** gerçek Firestore (bu makinede Firestore emülatörü Java döngü bağlantısı yüzünden çalışmıyor; `firestoreTransport.ts` ince bir sarmalayıcıdır ve el ile doğrulanmalıdır) ve gerçek Google girişi. E-posta akışı yerel Auth emülatörüyle tarayıcıda denendi (kayıt, yanlış şifre, sıfırlama, çıkış/giriş, hesap uyuşmazlığı penceresi).
 
-### 5.3 Yedek ve dışa aktarma
+### 5.3 Rakamlar nasıl tutar
+
+Ekranın tek kuralı: **bir listenin satırları, üstündeki rakama kuruşu kuruşuna toplanır; o rakam da bankanın kendi toplamına.** Bunun için üç yapı var.
+
+- **Ekstre seçimi.** `Filters.cards` (kart adı) ve ay birlikte tek bir ekstreyi adlandırır; `statementsInScope` (`store/selectors.ts`) o ekstreleri verir. Dönem her zaman ekstre dönemidir (kesim tarihinin ayı); takvim ayı bir ekstreyi ikiye böler ve bankanın hiçbir basılı toplamıyla örtüşmez, bu yüzden seçenek kaldırıldı.
+- **Defter (`analytics/ledger.ts`).** `buildLedger` bir ekstrenin satırlarını bölümlere ayırır (alışveriş, taksit, faiz ve ücret, iade/indirim, kart borcu ödemesi) ve aynı `reconcile` işleviyle ekstrenin kapağındaki rakamları, uygulamanın **bugün** tuttuğu satırlarla karşılaştırır. Satır silinirse ekstre "tutmuyor" der; içe aktarmadaki eski sonucu göstermez. Harcama dönem borcuna yalnızca önceki borç tamamen ödenmişse eşittir; değilse defter, farkın ödenmeden devreden bakiye olduğunu söyler.
+- **Kategori listesi.** Bir kategoriye sığmayan iade (ör. Akbank'ın "Chip-Para ile Ödeme" kredisi, aynı kategoride alışverişi olmayan iade) eskiden listeden düşüyordu; kategoriler toplamı ana rakamdan farklı çıkıyordu (₺43.042 ↔ ₺42.920). Artık `unallocatedRefunds` ayrı bir satır olarak gösterilir ve liste `Σ kategoriler − iadeler = net harcama` kimliğini sağlar (`analytics/tieout.test.ts`).
+
+**Bonus ve puan (`analytics/rewards.ts`).** Kazanılan = bankanın basılı "Bu dönem kazanılan" toplamı; ayrı ödül satırları (otomatik fatura bonusu, kampanyalar) çıkarılınca kalan "Alışverişlerden" olur — iadelerdeki bonus geri alımı bir alışveriş satırında görünmediği için satırları toplamak bankanın rakamını geçiyordu (₺12,60 ↔ ₺12,53). Harcanan, basılı toplam ile satırların büyüğüdür; açıklanamayan kısım "Diğer" olur. Akbank'ın chip-para ödemesi bir alacak satırı olarak gelir (borcu düşürür), bu yüzden harcanan buradan okunur.
+
+**Gerçek ekstrelerle bağımsız denetim.** Ayrıştırıcıdan bağımsız, saf bir ikinci okuyucu (tarih + satır sonundaki tutar; banka, tür, kategori bilmez) dört gerçek ekstrenin (iki ay, iki kart) metnini okudu ve karşılaştırdı: her tutarlı satır ayrıştırıcıdaki bir satırla eşleşti ve tersi; Akbank'ın sayfa "Toplam" ve "Genel Toplam" satırları ile "Kalan Borç / Taksit" toplamları, Garanti'nin kapak defteri ve "Toplam" satırı kuruşu kuruşuna tuttu; her ekstre bankanın dönem borcuyla tuttu. Bu denetim kişisel dosyalara dayandığı için depoda tutulmaz.
+
+### 5.4 Yedek ve dışa aktarma
 
 `store/backup.ts`. Tek dosya, iki katman: `data` gerçeğin kaynağıdır (her işlem, her ekstre özeti/mutabakatı/sayılmayanlarıyla, kurallar, profil) ve geri yüklemenin tek okuduğu yerdir; `derived` uygulamanın hesapladığı dönem özetleri ve tüm geçmişin bulgularıdır, yalnızca insan ve başka araçlar içindir, geri okunmaz — böylece `data` ile çelişemez. Dosya kendi şema sürümünü, birimlerini (kuruş) ve `kind` anlamlarını taşır. Uygulama kilidi PIN özeti ve tuzu **hiçbir zaman** dosyaya girmez.
 
@@ -356,7 +370,7 @@ Yapılandırma ortam değişkenleriyle: `MYFINANCE_OCR_DPI`, `MYFINANCE_OCR_MAX_
 
 ## 8. Testler
 
-`npm test` — vitest, 336 test.
+`npm test` — vitest, 373 test.
 
 Kapsam: para ayrıştırma ve biçimleme, tarih aritmetiği (saat dilimi kayması dahil), işyeri normalizasyonu, EBCDIC çözme ve tespiti, PDF satır/kelime birleştirme, her iki banka adaptörü artı CSV, gerçek ekstrelerde görülen yerleşim tuhaflıkları (şablon "bosluk" hücreleri, banka bölüm başlıkları, tarih içeren düz metin paragrafları), format tespiti, düzenli ödeme tespitinin kabul ve ret durumları, taksit penceresi, motorun `kind` ayrımı ve boş veri davranışı.
 

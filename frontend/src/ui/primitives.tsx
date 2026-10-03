@@ -308,6 +308,36 @@ export function Segmented<T extends string>({
   )
 }
 
+/**
+ * A choice among a few, shown as a pill. Selected is the filled one; the state is
+ * also in `aria-pressed`, so it is not carried by colour alone.
+ */
+export function Chip({
+  selected,
+  onClick,
+  children,
+}: {
+  selected: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={clsx(
+        'inline-flex min-h-11 items-center rounded-full border px-4 text-body font-semibold transition-colors duration-200',
+        selected
+          ? 'border-accent bg-accent-soft text-accent-text'
+          : 'border-line bg-raised text-ink hover:bg-hover',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
 export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input

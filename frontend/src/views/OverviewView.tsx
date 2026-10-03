@@ -1,15 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, ArrowRight, ChevronRight, Copy } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button, Empty, Meter, Section } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { DailySpendChart } from '../ui/charts'
 import { HealthPanel, InsightRow, TrendPill } from '../ui/finance'
+import { LedgerSummary } from '../ui/ledger'
+import { BreakdownFooter } from '../ui/breakdown'
+import { RewardsSection } from '../ui/rewards'
 import { money, money2, count, percent } from '../core/money'
 import { dayLabel, monthLabel } from '../core/date'
 import { withOverallForwardInsights } from '../analytics/insights'
 import { buildSummary } from '../analytics/summary'
 import { describeSync } from '../sync/present'
+import { buildLedgers } from '../analytics/ledger'
+import { buildRewards } from '../analytics/rewards'
+import { buildStatementMonthIndex, statementsInScope } from '../store/selectors'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
 import type { ViewId } from '../app/navigation'
@@ -25,7 +31,7 @@ import type { ViewId } from '../app/navigation'
  */
 export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
   const { state, analysis, overall, cloudAvailable, authReady, authUser, sync } = useStore()
-  const { openAccount, openArchive, openIncome, openSettings, openTransactions } = useSheets()
+  const { openAccount, openArchive, openIncome, openRewards, openSettings, openStatement, openTransactions } = useSheets()
   const [healthOpen, setHealthOpen] = useState(false)
   const [summaryOpen, setSummaryOpen] = useState(false)
 
@@ -38,8 +44,31 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
   )
   const profile = state.profile
 
+  // The statements this screen is about, laid out as the bank lays them out. The
+  // hero figure and the category list below must agree with these to the kuruş.
+  const scope = useMemo(
+    () => statementsInScope(state.statements, state.filters),
+    [state.statements, state.filters],
+  )
+  const { ledgers, totals: ledgerTotals } = useMemo(
+    () => buildLedgers(scope, state.transactions),
+    [scope, state.transactions],
+  )
+  const rewards = useMemo(
+    () => buildRewards({ statements: scope, transactions: state.transactions }),
+    [scope, state.transactions],
+  )
+
+  const peers = useMemo(
+    () => statementsInScope(state.statements, { month: 'all', cards: state.filters.cards }),
+    [state.statements, state.filters.cards],
+  )
+  const peerMonths = useMemo(() => new Set(buildStatementMonthIndex(peers).values()).size, [peers])
+  const peerCharges = useMemo(() => buildLedgers(peers, state.transactions).totals.charges, [peers, state.transactions])
+
   const periodLabel =
     state.filters.month === 'all' ? 'Tüm dönemler' : monthLabel(state.filters.month)
+  const cardLabel = state.filters.cards.length === 1 ? state.filters.cards[0] : null
 
   if (!meta.transactionCount) {
     return <Empty title="Bu dönemde işlem yok" description="Üstteki dönem seçiminden başka bir ay seç." />
@@ -58,9 +87,12 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
   // A finished period next to its own "monthly average" says the same number
   // twice. What a finished period needs is a yardstick: how it sits against the
   // months around it. Only offered when there is more than one month to average.
+  // The yardstick is the same card's own statements (or all cards' together when
+  // none is chosen): one card set against both cards' average would always read
+  // "far below". A statement is a month, so the average is per statement month.
   const norm =
-    projected === null && state.filters.month !== 'all' && overall.meta.monthsEquivalent >= 1.5
-      ? Math.round(overall.totals.netSpend / overall.meta.monthsEquivalent)
+    projected === null && state.filters.month !== 'all' && peerMonths >= 2
+      ? Math.round(peerCharges / peerMonths)
       : null
   const againstNorm = norm ? ((totals.netSpend - norm) / norm) * 100 : null
 
@@ -69,11 +101,11 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
       {/* ── The answer ───────────────────────────────────────────────────── */}
       <section>
         <p className="text-label uppercase tracking-wide text-faint">
-          {state.filters.month === 'all' ? 'Tüm dönemlerde harcama' : `${periodLabel} harcaması`}
+          {[state.filters.month === 'all' ? 'Tüm dönemler' : periodLabel, cardLabel].filter(Boolean).join(' · ')} harcaması
         </p>
 
         <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
-          <span className="num text-hero font-semibold text-ink">{money(totals.netSpend)}</span>
+          <span className="num text-hero font-semibold text-ink">{money2(totals.netSpend)}</span>
           {/* A month-over-month pill with nothing to compare against is noise;
               it only appears once there are two comparable periods. */}
           {trend.momPct !== null && (
@@ -100,11 +132,26 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         </p>
       </section>
 
+      {/* ── Where the figure comes from ─────────────────────────────────── */}
+      {/* The question the headline invites is "why is this not my statement's
+          debt?". The statement's own sum answers it on the spot, with the
+          bank's figures, rather than leaving it to be worked out. */}
+      {ledgers.length > 0 && (
+        <Section title="Ekstre hesabı" description="Dönem borcu = önceki bakiye − ödemeler + dönem harcamaları">
+          <LedgerSummary
+            ledgers={ledgers}
+            totals={ledgerTotals}
+            manual={totals.netSpend - ledgerTotals.charges}
+            onOpen={openStatement}
+          />
+        </Section>
+      )}
+
       {/* ── Two figures. Not four. ───────────────────────────────────────── */}
       <div className="grid gap-3 sm:grid-cols-2">
         <Tile
           value={money(norm ?? projected ?? Math.round(totals.netSpend / Math.max(meta.monthsEquivalent, 1)))}
-          label={norm !== null ? 'Aylık ortalaman' : projected !== null ? 'Ay sonunda' : 'Aylık ortalama'}
+          label={norm !== null ? (cardLabel ? 'Bu kartın aylık ortalaması' : 'Aylık ortalaman') : projected !== null ? 'Ay sonunda' : 'Aylık ortalama'}
           foot={
             norm !== null && againstNorm !== null ? (
               Math.abs(againstNorm) < 3 ? (
@@ -225,7 +272,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
                     />
                     <span className="truncate text-body text-ink">{stat.label}</span>
                   </span>
-                  <span className="num shrink-0 text-body font-semibold text-ink">{money(stat.total)}</span>
+                  <span className="num shrink-0 text-body font-semibold text-ink">{money2(stat.total)}</span>
                 </div>
                 <div className="mt-2 flex items-center gap-3">
                   <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken">
@@ -245,7 +292,25 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
             </li>
           ))}
         </ul>
+        {/* What the five rows leave out, and the total they add up to. */}
+        <BreakdownFooter
+          categories={categories}
+          shown={5}
+          refundsOutside={totals.unallocatedRefunds}
+          netSpend={totals.netSpend}
+          onOpenRefunds={() => openTransactions({ kinds: ['refund'], title: 'İade ve indirimler' })}
+        />
       </Section>
+
+      {/* ── Bonus and points ─────────────────────────────────────────────── */}
+      {/* Not spending, so never inside the figures above — but money the card gave
+          back, which is worth knowing about: it is how a ₺3.000 "otomatik fatura
+          bonusu" shows up here instead of vanishing into an archive. */}
+      {rewards.programmes.length > 0 && (
+        <Section title="Bonus ve puan" description="Borca etkisi yok; harcamaya katılmaz">
+          <RewardsSection report={rewards} onOpen={openRewards} />
+        </Section>
+      )}
 
       {/* ── Rhythm ───────────────────────────────────────────────────────── */}
       <Section title="Günlük akış" description="Kesikli çizgi 7 günlük ortalama">

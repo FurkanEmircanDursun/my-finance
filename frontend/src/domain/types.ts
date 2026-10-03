@@ -305,7 +305,12 @@ export interface Filters {
    */
   month: MonthKey | 'all'
   categories: CategoryId[]
-  banks: string[]
+  /**
+   * Cards, by `cardOf` — "Akbank Axess", "Garanti Bonus Platinum". A card and a
+   * month name exactly one statement, which is the unit the bank's own totals
+   * are printed for, so this is what lets every figure be checked against paper.
+   */
+  cards: string[]
   query: string
   /** Include payments/income rows in the transaction table. */
   includeNonSpend: boolean
@@ -314,9 +319,14 @@ export interface Filters {
 export const emptyFilters: Filters = {
   month: 'all',
   categories: [],
-  banks: [],
+  cards: [],
   query: '',
   includeNonSpend: true,
+}
+
+/** The card a row belongs to: the printed card name, or the bank when none was printed. */
+export function cardOf(row: { accountLabel?: string; bank: string }): string {
+  return row.accountLabel?.trim() || row.bank
 }
 
 // ─── Ingestion results ────────────────────────────────────────────────────────

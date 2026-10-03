@@ -4,7 +4,8 @@ import { clsx } from 'clsx'
 import { Badge, Button, Empty, Meter, Section } from '../ui/primitives'
 import { MonthlyFlowChart } from '../ui/charts'
 import { TrendPill } from '../ui/finance'
-import { money, count, percent, signedPercent } from '../core/money'
+import { money, money2, count, percent, signedPercent } from '../core/money'
+import { BreakdownFooter } from '../ui/breakdown'
 import { monthLabel } from '../core/date'
 import { categoryLabel } from '../domain/categories'
 import { useStore } from '../store/AppStore'
@@ -45,7 +46,7 @@ export function SpendingView() {
       <section>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="surface p-5">
-            <div className="num text-figure font-semibold text-ink">{money(totals.netSpend)}</div>
+            <div className="num text-figure font-semibold text-ink">{money2(totals.netSpend)}</div>
             <div className="mt-2 text-body text-muted">Net harcama</div>
           </div>
           {/* "Kalan" is income minus spending. With no income on file it would read
@@ -90,16 +91,17 @@ export function SpendingView() {
           <dl className="rise-in mt-1 space-y-1">
             <DetailRow
               label="Gelir"
-              value={money(totals.incomeBasis)}
+              value={money2(totals.incomeBasis)}
               note={
                 totals.incomeAssumed ? 'ayarlardaki aylık gelirden'
                 : totals.income > 0 ? 'ekstredeki gelir satırları'
                 : 'girilmedi'
               }
             />
-            <DetailRow label="Brüt harcama" value={money(totals.spend)} note={`${count(meta.spendCount)} işlem`} />
-            <DetailRow label="İadeler" value={money(totals.refunds)} />
-            <DetailRow label="Kart borcu ödemesi" value={money(totals.payments)} note="harcama değil" />
+            <DetailRow label="Brüt harcama" value={money2(totals.spend)} note={`${count(meta.spendCount)} işlem`} />
+            <DetailRow label="− İadeler ve indirimler" value={money2(totals.refunds)} />
+            <DetailRow label="= Net harcama" value={money2(totals.netSpend)} />
+            <DetailRow label="Kart borcu ödemesi" value={money2(totals.payments)} note="harcama değil" />
           </dl>
         )}
       </section>
@@ -166,7 +168,7 @@ export function SpendingView() {
                         </Badge>
                       )}
                     </span>
-                    <span className="num shrink-0 text-body font-semibold text-ink">{money(stat.total)}</span>
+                    <span className="num shrink-0 text-body font-semibold text-ink">{money2(stat.total)}</span>
                   </div>
 
                   <div className="mt-2 flex items-center gap-3">
@@ -194,6 +196,13 @@ export function SpendingView() {
             )
           })}
         </ul>
+        <BreakdownFooter
+          categories={categories}
+          shown={categories.length}
+          refundsOutside={totals.unallocatedRefunds}
+          netSpend={totals.netSpend}
+          onOpenRefunds={() => openTransactions({ kinds: ['refund'], title: 'İade ve indirimler' })}
+        />
       </Section>
 
       {/* ── Subscriptions ────────────────────────────────────────────────── */}
@@ -220,7 +229,7 @@ export function SpendingView() {
                     {categoryLabel(merchant.category)} · {count(merchant.count)} işlem
                   </span>
                 </span>
-                <span className="num shrink-0 text-body font-semibold text-ink">{money(merchant.total)}</span>
+                <span className="num shrink-0 text-body font-semibold text-ink">{money2(merchant.total)}</span>
               </button>
             </li>
           ))}

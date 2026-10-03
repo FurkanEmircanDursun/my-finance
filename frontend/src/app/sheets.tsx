@@ -5,6 +5,7 @@ import { ImportSheet } from './ImportSheet'
 import { SyncGate } from './SyncDecision'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
+import type { TxKind } from '../domain/types'
 
 /**
  * Everything that is not one of the three tabs is a sheet, and every sheet in
@@ -24,6 +25,8 @@ import { categoryLabel, type CategoryId } from '../domain/categories'
 
 const SettingsSheet = lazy(() => import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })))
 const AccountSheet = lazy(() => import('./AccountSheet').then((m) => ({ default: m.AccountSheet })))
+const StatementSheet = lazy(() => import('./StatementSheet').then((m) => ({ default: m.StatementSheet })))
+const RewardsSheet = lazy(() => import('./RewardsSheet').then((m) => ({ default: m.RewardsSheet })))
 const IncomeSheet = lazy(() => import('./IncomeSheet').then((m) => ({ default: m.IncomeSheet })))
 const ArchiveSheet = lazy(() => import('./ArchiveSheet').then((m) => ({ default: m.ArchiveSheet })))
 const BudgetSheet = lazy(() => import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })))
@@ -37,6 +40,8 @@ export interface TransactionQuery {
   title?: string
   /** Read the whole account rather than the selected period. */
   overall?: boolean
+  /** Only rows of these kinds, e.g. the refunds and discounts that came off the total. */
+  kinds?: TxKind[]
 }
 
 interface SheetApi {
@@ -46,6 +51,9 @@ interface SheetApi {
   openIncome: () => void
   openBudgets: () => void
   openArchive: () => void
+  /** One statement, line by line, added up the way the bank adds it. */
+  openStatement: (statementId: string) => void
+  openRewards: () => void
   openTransactions: (query?: TransactionQuery) => void
 }
 
@@ -65,6 +73,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
+  const [statementId, setStatementId] = useState<string | null>(null)
+  const [rewardsOpen, setRewardsOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
 
   const openImport = useCallback(() => setImportOpen(true), [])
@@ -73,11 +83,16 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const openIncome = useCallback(() => setIncomeOpen(true), [])
   const openBudgets = useCallback(() => setBudgetsOpen(true), [])
   const openArchive = useCallback(() => setArchiveOpen(true), [])
+  const openStatement = useCallback((id: string) => setStatementId(id), [])
+  const openRewards = useCallback(() => setRewardsOpen(true), [])
   const openTransactions = useCallback((query?: TransactionQuery) => setTxQuery(query ?? {}), [])
 
   const api = useMemo<SheetApi>(
-    () => ({ openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openTransactions }),
-    [openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openTransactions],
+    () => ({
+      openImport, openSettings, openAccount, openIncome, openBudgets, openArchive,
+      openStatement, openRewards, openTransactions,
+    }),
+    [openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openStatement, openRewards, openTransactions],
   )
 
   const source = txQuery?.overall ? state.transactions : visible
@@ -86,7 +101,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     return source.filter(
       (tx) =>
         (!txQuery.category || tx.category === txQuery.category) &&
-        (!txQuery.merchant || tx.merchant === txQuery.merchant),
+        (!txQuery.merchant || tx.merchant === txQuery.merchant) &&
+        (!txQuery.kinds || txQuery.kinds.includes(tx.kind)),
     )
   }, [source, txQuery])
 
@@ -118,6 +134,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
             }}
           />
         )}
+        {statementId !== null && <StatementSheet open onClose={() => setStatementId(null)} statementId={statementId} />}
+        {rewardsOpen && <RewardsSheet open onClose={() => setRewardsOpen(false)} />}
         {txQuery !== null && (
           <TransactionsSheet open onClose={() => setTxQuery(null)} title={title} transactions={rows} />
         )}

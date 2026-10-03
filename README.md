@@ -25,9 +25,15 @@ Servisi Ayarlar bölümünden etkinleştirin. Kapalıyken taranmış PDF'ler tar
 
 | Sekme | İçerik |
 |---|---|
-| **Özet** | Dönemi tek cümlede özetler, iki sayı verir (ay sonu ya da aylık ortalama, gelecek ay bağlı tutar), en önemli üç bulguyu, kategori çubuklarını ve günlük akışı gösterir |
+| **Özet** | Seçili ekstrenin harcamasını kuruşuna kadar verir, hemen altında **ekstre hesabını** (önceki bakiye − ödemeler + dönem harcamaları = bankanın yazdığı dönem borcu) gösterir; sonra iki sayı (aylık ortalama, gelecek ay bağlı tutar), en önemli üç bulgu, toplamı tutan kategori listesi, **bonus ve puan** ve günlük akış |
 | **Harcamalar** | Net harcama ve kalan (gelir girilmişse), aylık seri ve limit (iki ay varsa), kategoriler ve limitleri, düzenli ödemeler, işyerleri, "küçük ama sık" alışkanlıklar, geçen aya göre hareket edenler |
 | **Gelecek** | 12 aylık bağlı tutar merdiveni, yaklaşan ödemeler (ekstre borcu ve asgari ödemesiyle), açık taksit planları, nakit akışı tahmini, tasarruf hedefi |
+
+**Ekstre seçimi.** Sol üstteki düğme bir **dönem** ve bir **kart** seçtirir; ekranın tamamı o ekstreye göre değişir (bir kart + bir ay = bir ekstre). Ekstre dönemi, bankanın kestiği dönemdir; takvim ayı seçeneği yoktur, çünkü bankanın basılı toplamlarıyla hiçbir şey tutmaz. Ekstre hesabındaki satıra dokununca o ekstrenin **her satırı** açılır: alışveriş, taksit, faiz ve ücret, iade/indirim ve ödemeler ayrı ayrı toplanır, toplamları dönem harcamasını verir.
+
+**Rakamlar neden tutar.** Her liste, üstündeki rakama toplanır: kategoriler (ve "Diğer N kategori", "İade ve indirimler" satırları) ana rakama, ekstreler bankanın dönem borcuna. Harcama dönem borcuna yalnızca önceki borç tamamen ödenmişse eşittir; değilse ekstre hesabı farkın ne olduğunu (ödenmeden devreden bakiye) bir cümleyle söyler.
+
+**Bonus ve puan.** Garanti Bonus ve Akbank Chip-para: kazanılan (otomatik fatura bonusu, kampanyalar, alışverişten), harcanan ve kalan; borca etkisi yoktur, harcamaya katılmaz. Bankanın basılı toplamı esastır; satırlar toplamı açıklar.
 
 Kategori, işyeri ya da abonelik satırına dokunmak **İşlemler** sayfasını açar: arama, bir işlemin kategorisini düzeltme (işyeri için kural olarak öğrenilir), elle kayıt ekleme.
 
@@ -54,7 +60,7 @@ Ayrıca **Bulgular** (tüm sıra dışı işlemler, mükerrer çekimler, açıkl
 Üst çubuktaki bulut simgesi (ya da Ayarlar → Hesap ve senkron). Kapalıyken her şey yalnızca bu cihazda kalır.
 
 - **Giriş.** *Google ile devam et* ya da tek bir e-posta + şifre formu. Form önce giriş yapmayı dener; eşleşme yoksa *Yeni hesap oluştur* ve *Şifremi sıfırla* seçeneklerini sunar. Firebase bir adresin kayıtlı olup olmadığını söylemediği için "kayıt ol / giriş yap" ayrımı kullanıcıya sorulmaz. Giriş sırasında sayfa kapanmaz: form olduğu yerde durum satırına dönüşür.
-- **Eşitleme.** İşlemler, ekstreler, kategori kuralları, profil (gelir, limit, hedef, bütçeler), tema ve dönem gruplaması. Her değişiklik kısa bir beklemeden sonra kendiliğinden gider; internet yokken cihazda bekler, bağlanınca gider. Üst çubuktaki simge durumu söyler (güncel / eşitleniyor / çevrimdışı / gönderilemedi).
+- **Eşitleme.** İşlemler, ekstreler, kategori kuralları, profil (gelir, limit, hedef, bütçeler) ve tema. Her değişiklik kısa bir beklemeden sonra kendiliğinden gider; internet yokken cihazda bekler, bağlanınca gider. Üst çubuktaki simge durumu söyler (güncel / eşitleniyor / çevrimdışı / gönderilemedi).
 - **Hiçbir şey sessizce silinmez.** Bir cihazda yapılan silme diğerlerine "silindi" işaretiyle ulaşır; çakışmada son düzenleme kazanır. Bir cihazda başka bir hesabın verisi varsa uygulama sorar: *birleştir* ya da *yalnızca bu hesabınkini kullan* (ikincisi iki dokunuş ister, yedeği indirme bağlantısı aynı ekrandadır).
 - **PIN asla buluta gitmez.** Uygulama kilidinin özeti ve tuzu yalnızca cihazdadır.
 - **Çıkış** verileri cihazda bırakır. *Bulut verilerimi sil* buluttaki kopyayı siler ve çıkış yapar; *Hesabımı sil* hesabı da kapatır (önce kimlik yeniden doğrulanır).
@@ -92,7 +98,7 @@ Yeni bir banka eklemek: `src/ingest/banks/` altına bir adaptör dosyası yazıp
 npm run dev         # geliştirme sunucusu
 npm run build       # tip kontrolü + üretim derlemesi
 npm run typecheck   # yalnızca tip kontrolü
-npm test            # birim testleri (vitest) — 336 test
+npm test            # birim testleri (vitest) — 373 test
 npm run verify -- <ekstre.pdf>   # gerçek bir ekstreyi okuyup bankanın toplamıyla karşılaştırır
 ```
 

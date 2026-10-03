@@ -58,6 +58,10 @@ Ekstre tarayıcıya bırakılır, cihazdan çıkmadan ayrıştırılır ve beş 
 | 31 | Senkron durumu üst çubukta tek simge; cihazda başka hesabın verisi varsa sessiz birleştirme yerine açık seçim | P1 |
 | 32 | Hesap ve bulut verisi silme (kimlik yeniden doğrulanır); çıkış yerel veriyi korur | P1 |
 | 33 | Erişilebilirlik: metin kontrastı WCAG AA, odak yönetimi, grafik eksen etiketleri | P1 |
+| 34 | Ekstre seçimi: dönem + kart = bir ekstre; ekranın tamamı o ekstreye göre değişir | P0 |
+| 35 | Ekstre hesabı Özet'te: önceki bakiye − ödemeler + harcamalar = bankanın dönem borcu; harcamanın borca neden eşit/eşit olmadığı bir cümleyle söylenir | P0 |
+| 36 | Her listenin satırları üstündeki rakama kuruşu kuruşuna toplanır (kategoriler, iade ve indirimler, "Diğer" dahil); ekstre detayında her satır bölümlere ayrılıp toplanır | P0 |
+| 37 | Bonus ve puan: kazanılan (otomatik fatura bonusu, kampanya, alışveriş), harcanan, kalan; Garanti Bonus ve Akbank Chip-para; harcamaya katılmaz | P1 |
 
 ### 3.2 Kapsam dışı
 

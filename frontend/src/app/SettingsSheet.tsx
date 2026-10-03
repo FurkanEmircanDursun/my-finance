@@ -147,20 +147,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
               </Button>
             </Field>
 
-            <Field
-              label="Dönem gruplaması"
-              hint="Ekstre dönemi genelde ayın ortasında başlar. Uygulama bunu kendi seçer; burada değiştirebilirsin."
-            >
-              <Segmented
-                value={settings.periodGrouping ?? 'calendar'}
-                onChange={(periodGrouping) => dispatch({ type: 'setSettings', settings: { periodGrouping } })}
-                options={[
-                  { value: 'calendar', label: 'Takvim ayı' },
-                  { value: 'statement', label: 'Ekstre dönemi' },
-                ]}
-              />
-            </Field>
-
             <div>
               <label className="flex cursor-pointer items-start gap-3 text-body text-muted">
                 <input

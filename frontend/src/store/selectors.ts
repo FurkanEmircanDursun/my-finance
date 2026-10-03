@@ -1,6 +1,6 @@
 import { daysInMonth, eachDay, eachMonth, monthOf, type DayKey, type MonthKey } from '../core/date'
 import { fold } from '../core/text'
-import { effectiveDate, type Filters, type Settings, type Statement, type Transaction } from '../domain/types'
+import { cardOf, effectiveDate, type Filters, type Settings, type Statement, type Transaction } from '../domain/types'
 
 export interface FilterContext {
   periodGrouping: Settings['periodGrouping']
@@ -21,6 +21,31 @@ export function buildStatementMonthIndex(statements: readonly Statement[]): Map<
     if (anchor) index.set(statement.id, monthOf(anchor))
   }
   return index
+}
+
+/**
+ * The statements the current month and card selection names — the ones whose
+ * printed totals the figures on screen have to agree with.
+ *
+ * A statement belongs to the month its cut date falls in (see
+ * `buildStatementMonthIndex`), which is also what a month chip means once the
+ * app groups by statement, so the two always describe the same rows.
+ */
+export function statementsInScope(
+  statements: readonly Statement[],
+  filters: Pick<Filters, 'month' | 'cards'>,
+): Statement[] {
+  const months = buildStatementMonthIndex(statements)
+  return statements
+    .filter(
+      (statement) =>
+        (filters.month === 'all' || months.get(statement.id) === filters.month) &&
+        (filters.cards.length === 0 || filters.cards.includes(cardOf(statement))),
+    )
+    .sort((a, b) => {
+      const byEnd = (b.periodEnd ?? '').localeCompare(a.periodEnd ?? '')
+      return byEnd !== 0 ? byEnd : cardOf(a).localeCompare(cardOf(b), 'tr')
+    })
 }
 
 /**
@@ -64,11 +89,11 @@ export function applyFilters(
   filters: Filters,
   context: FilterContext,
 ): Transaction[] {
-  const { month, categories, banks, query, includeNonSpend } = filters
+  const { month, categories, cards, query, includeNonSpend } = filters
   const { periodGrouping, statements } = context
 
   const categorySet = categories.length ? new Set(categories) : null
-  const bankSet = banks.length ? new Set(banks) : null
+  const cardSet = cards.length ? new Set(cards) : null
   const foldedQuery = query.trim() ? fold(query.trim()) : ''
   const statementMonths = month !== 'all' && periodGrouping === 'statement' ? buildStatementMonthIndex(statements) : null
 
@@ -80,7 +105,7 @@ export function applyFilters(
     if (!includeNonSpend && tx.kind !== 'expense' && tx.kind !== 'refund') continue
     if (month !== 'all' && periodMonthOf(tx, periodGrouping, statementMonths ?? EMPTY_MAP) !== month) continue
     if (categorySet && !categorySet.has(tx.category)) continue
-    if (bankSet && !bankSet.has(tx.bank)) continue
+    if (cardSet && !cardSet.has(cardOf(tx))) continue
     if (foldedQuery && !fold(tx.description).includes(foldedQuery) && !tx.merchant.includes(foldedQuery)) continue
 
     out.push(tx)
@@ -161,17 +186,18 @@ export function coverageDaysByMonth(
   return out
 }
 
-export function availableBanks(transactions: readonly Transaction[]): string[] {
-  const banks = new Set<string>()
-  for (const tx of transactions) banks.add(tx.bank)
-  return [...banks].sort()
+/** The cards that have a statement, in the order a person would list them. */
+export function availableCards(statements: readonly Statement[]): string[] {
+  const cards = new Set<string>()
+  for (const statement of statements) cards.add(cardOf(statement))
+  return [...cards].sort((a, b) => a.localeCompare(b, 'tr'))
 }
 
 export function hasActiveFilters(filters: Filters): boolean {
   return (
     filters.month !== 'all' ||
     filters.categories.length > 0 ||
-    filters.banks.length > 0 ||
+    filters.cards.length > 0 ||
     filters.query.trim() !== ''
   )
 }

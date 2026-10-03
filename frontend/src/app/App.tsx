@@ -12,13 +12,12 @@ import { hideSplashScreen, initNativeShell, onAppBackground } from '../platform/
 import { hapticTap } from '../platform/haptics'
 import { LockScreen } from './LockScreen'
 import { Onboarding } from './Onboarding'
-import { PeriodButton } from './PeriodPicker'
+import { ScopeButton } from './ScopeButton'
 import { FirstRun } from './ImportSheet'
 import { SheetProvider, useSheets } from './sheets'
 import { SyncIndicator } from './SyncIndicator'
 import { NAV, resolveView, type ViewId } from './navigation'
 import { Skeleton } from '../ui/primitives'
-import { statementSpansMonths } from '../domain/types'
 
 /**
  * The dashboard views pull in the charting library; the first run does not.
@@ -142,21 +141,19 @@ function Shell() {
   }, [])
 
   /*
-   * A card statement runs roughly "27th to 26th", so it usually straddles two
-   * calendar months. The old build stopped the person on a modal to ask which
-   * grouping they wanted before they had seen a single number.
+   * Periods are statement periods.
    *
-   * An app that can work the answer out does not ask the question: a statement
-   * that spans months is grouped by its own period, which is the reading that
-   * keeps one statement's charges together. The choice is still in Ayarlar →
-   * Gelişmiş for anyone who disagrees, and the overview says which one is in
-   * force rather than leaving it silent.
+   * A card statement runs roughly "27th to 26th" and the bank prints its totals
+   * for exactly that span, so a month on screen means a statement's month: that
+   * is what lets every figure be held against the paper. Calendar months split a
+   * statement in two and match nothing the bank prints, so once there is a
+   * statement there is no other way to group time (and no setting to pick one).
    */
   useEffect(() => {
-    if (state.settings.periodGrouping !== null) return
-    if (!state.statements.some(statementSpansMonths)) return
+    if (state.settings.periodGrouping === 'statement') return
+    if (state.statements.length === 0) return
     dispatch({ type: 'setSettings', settings: { periodGrouping: 'statement' } })
-  }, [state.settings.periodGrouping, state.statements, dispatch])
+  }, [state.settings.periodGrouping, state.statements.length, dispatch])
 
   const setView = useCallback(
     (next: string) => {
@@ -196,7 +193,7 @@ function Shell() {
         style={{ paddingTop: 'var(--safe-top)' }}
       >
         <div className="mx-auto flex h-14 w-full max-w-app items-center gap-1 px-4">
-          {hasData ? <PeriodButton /> : <span className="text-title font-semibold text-ink">My Finance</span>}
+          {hasData ? <ScopeButton /> : <span className="text-title font-semibold text-ink">My Finance</span>}
 
           <div className="flex-1" />
 

@@ -96,8 +96,17 @@ export function ReconciliationTable({ reconciliation }: { reconciliation: Reconc
   )
 }
 
-/** Cover facts the bank prints, shown only where it printed them. */
-export function SummaryFacts({ summary }: { summary: StatementSummary }) {
+/**
+ * Cover facts the bank prints, shown only where it printed them. `showLoyalty`
+ * is off where the bonus has a section of its own.
+ */
+export function SummaryFacts({
+  summary,
+  showLoyalty = true,
+}: {
+  summary: StatementSummary
+  showLoyalty?: boolean
+}) {
   const facts: Array<[string, string | null]> = [
     ['Asgari ödeme', summary.minPayment !== null ? money2(summary.minPayment) : null],
     ['Kart limiti', summary.creditLimit !== null ? money2(summary.creditLimit) : null],
@@ -106,7 +115,9 @@ export function SummaryFacts({ summary }: { summary: StatementSummary }) {
   ]
   const shown = facts.filter((f): f is [string, string] => f[1] !== null)
 
-  if (!shown.length && !summary.loyalty) return null
+  const loyalty = showLoyalty ? summary.loyalty : null
+
+  if (!shown.length && !loyalty) return null
 
   return (
     <dl className="space-y-1">
@@ -116,14 +127,14 @@ export function SummaryFacts({ summary }: { summary: StatementSummary }) {
           <dd className="num text-label text-ink">{value}</dd>
         </div>
       ))}
-      {summary.loyalty && (
+      {loyalty && (
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-label text-muted">{summary.loyalty.programme}</dt>
+          <dt className="text-label text-muted">{loyalty.programme}</dt>
           <dd className="num text-label text-ink">
             {[
-              summary.loyalty.earned !== null ? `+${money2(summary.loyalty.earned)}` : null,
-              summary.loyalty.spent !== null ? `−${money2(summary.loyalty.spent)}` : null,
-              summary.loyalty.balance !== null ? `kalan ${money2(summary.loyalty.balance)}` : null,
+              loyalty.earned !== null ? `+${money2(loyalty.earned)}` : null,
+              loyalty.spent !== null ? `−${money2(loyalty.spent)}` : null,
+              loyalty.balance !== null ? `kalan ${money2(loyalty.balance)}` : null,
             ]
               .filter(Boolean)
               .join(' · ')}
