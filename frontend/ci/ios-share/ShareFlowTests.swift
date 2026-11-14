@@ -42,8 +42,10 @@ final class ShareFlowTests: XCTestCase {
                 // The captured real OS sheet uses the containing app's short name.
                 // This is only a candidate: unique extension UI and successful
                 // native delivery remain mandatory assertions after selection.
-                let observedCell = application.cells.matching(NSPredicate(format: "label == %@", "Mizan")).firstMatch
-                if observedCell.exists { owner = application; activity = observedCell; break }
+                let visibleTitle = application.tables["tableView"].staticTexts.matching(NSPredicate(format: "identifier == %@ AND label == %@", "activityTitleLabel", "Mizan")).allElementsBoundByIndex.first(where: { $0.isHittable })
+                if let visibleTitle { owner = application; activity = visibleTitle; break }
+                let visibleCell = application.cells.matching(NSPredicate(format: "label == %@", "Mizan")).allElementsBoundByIndex.first(where: { $0.isHittable })
+                if let visibleCell { owner = application; activity = visibleCell; break }
             }
         }
         evidence("Real system PDF Share Sheet", app: owner)
