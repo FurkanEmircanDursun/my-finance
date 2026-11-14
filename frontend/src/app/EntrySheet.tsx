@@ -1,14 +1,15 @@
 import { useRef, useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Check, ChevronDown, Coffee, Home, ShoppingBasket, Receipt, Car, MoreHorizontal } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Coffee, Home, ShoppingBasket, Receipt, Car, MoreHorizontal } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button, Field, Segmented, TextInput } from '../ui/primitives'
 import { CATEGORIES, categoryLabel, type CategoryId } from '../domain/categories'
-import { createEntry, entryAmount, type EntryMethod } from '../domain/entry'
-import { todayKey, dayLabel } from '../core/date'
+import { createEntry, entryAmount, entryDateForPeriod, type EntryMethod } from '../domain/entry'
+import { monthLabel } from '../core/date'
 import { useStore } from '../store/AppStore'
 import { useFeedback } from '../ui/Feedback'
 import { hapticImpact, hapticTap } from '../platform/haptics'
 import { trackProductEvent } from '../platform/analytics'
+import '../ui/transaction-item.css'
 
 const quickCategories = [
   { id: 'market', label: 'Market', icon: ShoppingBasket },
@@ -20,13 +21,13 @@ const quickCategories = [
 ] as const
 
 export function EntrySheet({ onClose, initialKind = 'expense' }: { onClose: () => void; initialKind?: 'expense' | 'income' }) {
-  const { dispatch } = useStore()
+  const { state, dispatch } = useStore()
   const feedback = useFeedback()
   const submitted = useRef(false)
   const [kind, setKind] = useState<'expense' | 'income'>(initialKind)
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
-  const [date, setDate] = useState(todayKey())
+  const [date, setDate] = useState(() => entryDateForPeriod(state.filters.month))
   const [category, setCategory] = useState<CategoryId>('other')
   const [method, setMethod] = useState<EntryMethod>(initialKind === 'income' ? 'Banka / EFT' : 'Nakit')
   const [error, setError] = useState('')
@@ -64,7 +65,14 @@ export function EntrySheet({ onClose, initialKind = 'expense' }: { onClose: () =
         <details><summary>Diğer kategoriler <ChevronDown size={15} /></summary><Field label="Tüm kategoriler"><select className="finance-select" value={category} onChange={event => setCategory(event.target.value as CategoryId)}>{CATEGORIES.filter(item => item.id !== 'rewards').map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field></details>
       </fieldset>}
       <Field label="Açıklama (isteğe bağlı)"><TextInput maxLength={160} value={description} onChange={event => setDescription(event.target.value)} placeholder={kind === 'income' ? 'Örn. Maaş' : 'Örn. Öğle yemeği'} /></Field>
-      <details className="entry-details"><summary><span><CalendarDays size={17} />{date === todayKey() ? 'Bugün' : dayLabel(date)} · {method}</span><ChevronDown size={16} /></summary><div className="grid grid-cols-2 gap-3"><Field label="Tarih"><TextInput required type="date" value={date} onChange={event => setDate(event.target.value)} /></Field><Field label="Ödeme yöntemi"><select className="finance-select" value={method} onChange={event => setMethod(event.target.value as EntryMethod)}><option>Nakit</option><option>Banka / EFT</option><option>Diğer</option></select></Field></div></details>
+      <div className="entry-date-row">
+        <Field label="İşlem tarihi" hint={date ? `${monthLabel(date.slice(0, 7))} dönemine kaydedilir.` : 'Kayıt için bir tarih seç.'}>
+          <TextInput required type="date" value={date} onChange={event => setDate(event.target.value)} />
+        </Field>
+        <Field label="Ödeme yöntemi">
+          <select className="finance-select" value={method} onChange={event => setMethod(event.target.value as EntryMethod)}><option>Nakit</option><option>Banka / EFT</option><option>Diğer</option></select>
+        </Field>
+      </div>
       {error && <p role="alert" className="text-body text-negative">{error}</p>}
       <Button type="submit" variant="primary" disabled={parsed === null || !date} className="entry-submit"><Check size={18} />{kind === 'income' ? 'Geliri' : 'Gideri'} kaydet</Button>
       <p className="entry-footnote">Ekstredeki harcamayı tekrar ekleme. Kart borcu ödemesi yeni gider sayılmaz.</p>

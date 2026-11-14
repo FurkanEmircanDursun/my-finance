@@ -11,6 +11,7 @@ import {
 import { count, money, money2 } from '../core/money'
 import { dayLabel, fullDayLabel, monthLabel, todayKey, type MonthKey } from '../core/date'
 import { copyText, readTextFile, saveTextFile, type SaveOutcome } from '../platform/files'
+import { measureOperation } from '../platform/diagnostics'
 import {
   applyBackup, backupFileName, buildBackup, buildCsv, parseBackup, summarizePeriod,
   type ParsedBackup, type PeriodSummary, type RestoreMode,
@@ -112,10 +113,12 @@ export function ArchiveSheet({
   }
 
   const exportJson = async (period: MonthKey | 'all') => {
-    const backup = buildBackup({ state, overall, appVersion: __APP_VERSION__, period })
-    const text = JSON.stringify(backup, null, 2)
-    const name = backupFileName(period, todayKey())
-    report(await saveTextFile(name, text, 'application/json'), name, text)
+    await measureOperation('backup_export', async () => {
+      const backup = buildBackup({ state, overall, appVersion: __APP_VERSION__, period })
+      const text = JSON.stringify(backup, null, 2)
+      const name = backupFileName(period, todayKey())
+      report(await saveTextFile(name, text, 'application/json'), name, text)
+    })
   }
 
   const exportCsv = async (period: MonthKey | 'all') => {
@@ -449,10 +452,13 @@ function Restore() {
     if (!pending) return
     const result = applyBackup(state, pending.data, mode)
     dispatch({ type: 'restore', backup: pending.data, mode })
+    const assetsInfo = pending.preview.assets > 0 || (state.profile.assets?.length ?? 0) > 0
+      ? ` Portföyünde ${count(result.profile.assets?.length ?? 0)} varlık kaydı var.`
+      : ''
     setDone(
-      mode === 'merge'
+      (mode === 'merge'
         ? `${count(result.added.transactions)} yeni işlem, ${count(result.added.statements)} ekstre eklendi; mevcut verin olduğu gibi kaldı.`
-        : `Veri yedekle değiştirildi: ${count(result.added.transactions)} işlem, ${count(result.added.statements)} ekstre.`,
+        : `Veri yedekle değiştirildi: ${count(result.added.transactions)} işlem, ${count(result.added.statements)} ekstre.`) + assetsInfo,
     )
     setPending(null)
     setConfirm(false)
@@ -484,7 +490,7 @@ function Restore() {
         <div className="space-y-4 rounded-[var(--radius-lg)] bg-sunken p-4">
           <div>
             <p className="text-body font-semibold text-ink">
-              {count(preview.transactions)} işlem · {count(preview.statements)} ekstre · {count(preview.rules)} kural
+              {count(preview.transactions)} işlem · {count(preview.statements)} ekstre · {count(preview.rules)} kural · {count(preview.assets)} varlık
             </p>
             <p className="mt-0.5 text-label text-faint">
               {preview.from && preview.to ? `${fullDayLabel(preview.from)} – ${fullDayLabel(preview.to)}` : 'Tarih yok'}

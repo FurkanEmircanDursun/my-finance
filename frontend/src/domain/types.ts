@@ -1,3 +1,5 @@
+import type { AssetHolding } from './assets'
+import type { AssetValuationSnapshot } from './assetsHistory'
 import type { Money } from '../core/money'
 import { monthOf, type DayKey, type MonthKey } from '../core/date'
 import type { CategoryId } from './categories'
@@ -262,6 +264,10 @@ export interface CreditCard {
 }
 
 export interface Profile {
+  /** Optional so older backups and clients remain readable. */
+  assets?: AssetHolding[]
+  /** Genuine observed totals; older profiles do not contain a valuation history. */
+  assetValuations?: AssetValuationSnapshot[]
   /** Optional for compatibility with older backups and synced profiles. */
   cards?: CreditCard[]
   /** Removed configurations retained so re-adding a card preserves import identity. */

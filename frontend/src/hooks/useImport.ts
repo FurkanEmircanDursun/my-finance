@@ -1,10 +1,14 @@
 import { trackProductEvent } from '../platform/analytics'
-import { useCallback, useState } from 'react'
+import { measureOperation } from '../platform/diagnostics'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { parseFile, ParseError } from '../ingest/pipeline'
+import { StatementValidationError } from '../ingest/validation'
+import { UserFacingError } from '../core/errors'
 import { uid } from '../core/hash'
 import { useStore } from '../store/AppStore'
-import type { ImportOutcome, Statement, Transaction } from '../domain/types'
-import { assignResultCard, cardMatchesBank } from '../domain/cards'
+import type { CreditCard, ImportOutcome, Statement, Transaction } from '../domain/types'
+import { assignResultCard } from '../domain/cards'
+import { legacyCardKey, resolveImportCard } from '../domain/cardLifecycle'
 
 export interface ImportProgress {
   running: boolean
@@ -19,10 +23,13 @@ const IDLE: ImportProgress = { running: false, fileName: '', message: '', done: 
 export function useImport() {
   const { state, dispatch } = useStore()
   const [progress, setProgress] = useState<ImportProgress>(IDLE)
+  const lifetime = useRef(0)
+  useEffect(() => () => { lifetime.current++ }, [])
 
   const run = useCallback(
-    async (files: File[], cardId?: string) => {
+    async (files: File[], cardId?: string, newCard = false) => {
       if (!files.length) return
+      const session = lifetime.current
 
       setProgress({ running: true, fileName: files[0].name, message: 'Hazırlanıyor…', done: 0, total: files.length })
 
@@ -30,27 +37,24 @@ export function useImport() {
       const collected: Transaction[] = []
       const statements: Statement[] = []
       const outcomes: ImportOutcome[] = []
+      const reservations = new Map<string, CreditCard>()
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         setProgress({ running: true, fileName: file.name, message: 'Okunuyor…', done: i, total: files.length })
 
         try {
-          const parsed = await parseFile(file, {
+          const parsed = await measureOperation('statement_parse', () => parseFile(file, {
             rules: state.rules,
             useLocalOcr: state.settings.useLocalOcr,
             ocrEndpoint: state.settings.ocrEndpoint,
-            onProgress: (message) =>
-              setProgress((p) => ({ ...p, message, fileName: file.name })),
-          })
-          const card = cardId ? state.profile.cards?.find((item) => item.id === cardId) : undefined
-          if (cardId && !card) throw new Error('Seçilen kart bulunamadı. Kartını yeniden seç.')
-          if (!card && state.profile.cards?.some((item) => cardMatchesBank(item, parsed.bank))) {
-            throw new Error('Bu banka için kayıtlı kartın var. Ekstrenin ait olduğu kartı seçip tekrar dene.')
-          }
-          if (!card && state.statements.some((statement) => statement.cardId && statement.bank === parsed.bank && statement.periodEnd === parsed.periodEnd)) {
-            throw new Error('Bu döneme ait ekstre bir karta bağlı. Mükerrer kayıt oluşturmamak için ilgili kartı seç veya önce Kartlarım bölümünden yeniden ekle.')
-          }
+            onProgress: (message) => {
+              if (session === lifetime.current) setProgress((p) => ({ ...p, message, fileName: file.name }))
+            },
+          }))
+          if (session !== lifetime.current) return
+          const card = resolveImportCard(parsed, { selectedId: cardId, newCard,
+            cards: state.profile.cards ?? [], statements: [...state.statements, ...statements], reservations })
           const result = card ? assignResultCard(parsed, card) : parsed
 
           // The same cycle imported again (to recover rows an older build dropped,
@@ -61,9 +65,10 @@ export function useImport() {
               : [...state.statements, ...statements].find(
                   (st) =>
                     st.bank === result.bank &&
-                    (card
-                      ? st.cardId === card.id || (!st.cardId && (st.accountLabel ?? '') === parsed.accountLabel)
-                      : !st.cardId && (st.accountLabel ?? '') === result.accountLabel) &&
+                    (!newCard && card
+                      ? st.cardId === card.id || (!st.cardId && (st.accountLabel ?? '') === parsed.accountLabel
+                        && (!cardId || card.id === legacyCardKey(st.bank, st.accountLabel ?? st.bank)))
+                      : card ? st.cardId === card.id : !st.cardId && (st.accountLabel ?? '') === result.accountLabel) &&
                     st.periodEnd === result.periodEnd,
                 )
 
@@ -107,28 +112,29 @@ export function useImport() {
             ignored: result.ignored,
           }
 
-          // A brand-new statement that added nothing is a pure repeat and leaves no
-          // record; one that already exists is refreshed either way, so its cover
-          // summary and reconciliation catch up with what this build can read.
+          // The parser accepts zero-row documents only with explicit, balanced
+          // no-activity evidence. Their cover still proves this cycle was uploaded.
           if (existing) {
             const at = statements.findIndex((st) => st.id === existing.id)
             if (at >= 0) statements[at] = statement
             else statements.push(statement)
-          } else if (added > 0) {
+          } else if (added > 0 || result.transactions.length === 0) {
             statements.push(statement)
           }
           outcomes.push({ fileName: file.name, ok: true, added, duplicates, statement })
         } catch (error) {
+          if (session !== lifetime.current) return
           const message =
-            error instanceof ParseError
+            error instanceof ParseError || error instanceof StatementValidationError
               ? [error.message, error.hint].filter(Boolean).join(' ')
-              : error instanceof Error
+              : error instanceof UserFacingError
                 ? error.message
-                : 'Bilinmeyen hata'
+                : 'Dosya eklenemedi. Bankandan özgün ekstre PDF’sini indirip yeniden dene.'
           outcomes.push({ fileName: file.name, ok: false, added: 0, duplicates: 0, error: message })
         }
       }
 
+      if (session !== lifetime.current) return
       if (collected.length || outcomes.length) {
         dispatch({ type: 'import', transactions: collected, statements, outcomes })
       }

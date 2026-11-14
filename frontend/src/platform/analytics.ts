@@ -3,13 +3,20 @@ import { cloudAvailable } from '../firebase/available'
 
 const CONSENT_KEY = 'finance.analytics-consent.v1'
 export const ANALYTICS_UPDATED = 'finance:analytics-updated'
-const EVENTS = ['entry_saved', 'statement_imported', 'card_added', 'onboarding_completed', 'sign_in_completed'] as const
-const SCREENS = ['overview', 'spending', 'plan', 'cards', 'settings'] as const
+const EVENTS = ['entry_saved', 'statement_imported', 'card_added', 'onboarding_completed', 'sign_in_completed', 'asset_saved', 'asset_deleted', 'transaction_deleted', 'update_opened'] as const
+const SCREENS = ['overview', 'analysis', 'spending', 'plan', 'cards', 'settings', 'assets'] as const
 export type ProductEvent = typeof EVENTS[number]
 export type ProductScreen = typeof SCREENS[number]
 let queue: Promise<void> = Promise.resolve()
 let lastError: string | undefined
 let webAnalytics: import('firebase/analytics').Analytics | undefined
+// Explicit metadata prevents browser paths, search strings and external
+// referrers being attached to our allowlisted custom events by gtag defaults.
+export const WEB_MEASUREMENT_CONTEXT = {
+  page_location: 'https://my-finance-webapp-fd.web.app/telemetry',
+  page_referrer: '',
+  page_title: 'Mizan',
+} as const
 
 /** Consent belongs to this device, not to the synced financial profile. */
 export function analyticsConsent(): boolean {
@@ -36,7 +43,7 @@ async function applyConsent(enabled: boolean): Promise<void> {
     if (!webAnalytics && enabled) {
       const { getFirebaseApp } = await import('../firebase/config')
       webAnalytics = api.initializeAnalytics(getFirebaseApp(), {
-        config: { send_page_view: false, allow_ad_personalization_signals: false },
+        config: { ...WEB_MEASUREMENT_CONTEXT, send_page_view: false, allow_ad_personalization_signals: false, allow_google_signals: false },
       })
     }
     api.setConsent({ analytics_storage: enabled ? 'granted' : 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' })
@@ -77,7 +84,7 @@ export function trackProductEvent(name: ProductEvent): void {
       await FirebaseAnalytics.logEvent({ name })
     } else if (webAnalytics) {
       const { logEvent } = await import('firebase/analytics')
-      logEvent(webAnalytics, name)
+      logEvent(webAnalytics, name, { ...WEB_MEASUREMENT_CONTEXT })
     }
   }).catch(() => {})
 }
@@ -91,7 +98,7 @@ export function trackScreen(name: ProductScreen): void {
       await FirebaseAnalytics.setCurrentScreen({ screenName: name, screenClassOverride: 'FinanceApp' })
     } else if (webAnalytics) {
       const { logEvent } = await import('firebase/analytics')
-      logEvent(webAnalytics, 'screen_view', { firebase_screen: name, firebase_screen_class: 'FinanceApp' })
+      logEvent(webAnalytics, 'screen_view', { firebase_screen: name, firebase_screen_class: 'FinanceApp', ...WEB_MEASUREMENT_CONTEXT })
     }
   }).catch(() => {})
 }

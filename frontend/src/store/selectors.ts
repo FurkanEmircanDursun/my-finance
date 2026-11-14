@@ -138,6 +138,12 @@ export function availableStatementMonths(statements: readonly Statement[]): Mont
   return [...months].sort().reverse()
 }
 
+/** Only years with actual calendar activity or a dated statement are selectable. */
+export function availablePeriodYears(transactions: readonly Transaction[], statements: readonly Statement[]): number[] {
+  const months = [...availableMonths(transactions), ...availableStatementMonths(statements)]
+  return [...new Set(months.map(month => Number(month.slice(0, 4))))].sort((a, b) => b - a)
+}
+
 /**
  * How many days of each month the imported statements actually cover.
  *

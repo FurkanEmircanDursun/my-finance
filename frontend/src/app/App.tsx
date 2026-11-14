@@ -3,11 +3,12 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Info, Plus, Settings2, X } from "lucide-react";
+import { Info, Plus, X } from "lucide-react";
 import { clsx } from "clsx";
 import { useStore } from "../store/AppStore";
 import { useTheme } from "./useTheme";
@@ -27,8 +28,10 @@ import { FeedbackProvider } from '../ui/Feedback'
 import { useCloudServices } from './useCloudServices'
 import { SyncGate } from './SyncDecision'
 import { ANALYTICS_UPDATED, trackScreen } from '../platform/analytics'
-import { NAV, resolveView, type ViewId } from "./navigation";
+import { NAV, resolveView, parseRoute, navigateTo, goBack, type ViewId, type AppRoute } from "./navigation";
 import { ExploreProvider, useExplore } from './ExploreContext'
+import { UpdateGate } from './UpdateGate'
+import { initializeDiagnostics, recordDiagnostic } from '../platform/diagnostics'
 import { Skeleton } from "../ui/primitives";
 import { useReminderSync } from './useReminderSync'
 import { consumePendingReminder, REMINDER_OPEN } from '../platform/reminders'
@@ -48,17 +51,21 @@ const FutureView = lazy(() =>
   import("../views/FutureView").then((m) => ({ default: m.FutureView })),
 );
 
-function readHash(): ViewId {
-  return resolveView(window.location.hash.replace(/^#\/?/, ""));
-}
+const CardsView = lazy(() => import('../views/CardsView').then(m => ({ default: m.CardsView })))
+const CardDetailView = lazy(() => import('../views/CardDetailView').then(m => ({ default: m.CardDetailView })))
+const AssetsView = lazy(() => import('../views/AssetsView').then(m => ({ default: m.AssetsView })))
+const AnalysisView = lazy(() => import('../views/AnalysisView').then(m => ({ default: m.AnalysisView })))
+const SettingsPage = lazy(() => import('./SettingsSheet').then(m => ({ default: m.SettingsPage })))
+function readHash(): AppRoute { return parseRoute(window.location.hash) }
 
 export default function App() {
-  const { state } = useStore();
+  const { state, sessionBusy, sessionError, dataEpoch } = useStore();
 
   useTheme(state.settings.theme);
   useNativeTheme(state.settings.theme);
   useReminderSync();
   useCloudServices();
+  useEffect(() => initializeDiagnostics(), []);
 
   // Back-button wiring for the Android shell; resolves to a no-op on web.
   useEffect(() => {
@@ -75,18 +82,19 @@ export default function App() {
     if (state.hydrated) void hideSplashScreen();
   }, [state.hydrated]);
 
-  if (!state.hydrated) return <BootSkeleton />;
+  if (!state.hydrated || sessionBusy) return <div aria-live="polite"><div className="px-6 pt-8 text-body text-muted"><p role={sessionError ? 'alert' : 'status'}>{sessionError || (sessionBusy ? 'Oturum işlemi tamamlanıyor…' : 'Kayıtların yükleniyor…')}</p>{sessionError && <button type="button" className="quiet-button mt-4" onClick={() => window.location.reload()}>Yeniden yükle</button>}</div><BootSkeleton /></div>;
 
   return (
-    <Locked>
+    <UpdateGate><Locked>
       <Introduced>
-        <ExploreProvider>
+        <ExploreProvider key={dataEpoch}>
         <FeedbackProvider><SheetProvider>
+          {sessionError && <p role="alert" className="mx-5 mt-4 rounded-lg bg-warning-soft p-4 text-body text-warning">{sessionError}</p>}
           <Shell />
         </SheetProvider></FeedbackProvider>
         </ExploreProvider>
       </Introduced>
-    </Locked>
+    </Locked></UpdateGate>
   );
 }
 
@@ -115,7 +123,7 @@ function Introduced({ children }: { children: React.ReactNode }) {
 /* ── Lock ────────────────────────────────────────────────────────────────── */
 
 function Locked({ children }: { children: React.ReactNode }) {
-  const { state, dispatch } = useStore();
+  const { state, clearLocalData, sessionError } = useStore();
   const pinSet = Boolean(
     state.settings.lockPinHash && state.settings.lockPinSalt,
   );
@@ -139,15 +147,9 @@ function Locked({ children }: { children: React.ReactNode }) {
       hash={state.settings.lockPinHash!}
       salt={state.settings.lockPinSalt!}
       onUnlock={() => setUnlocked(true)}
-      onForgotPin={() => {
-        // Clear the lock before wiping, not after: 'reset' preserves whatever
-        // settings exist at the moment it runs, and a forgotten PIN must not
-        // survive its own recovery.
-        dispatch({
-          type: "setSettings",
-          settings: { lockPinHash: null, lockPinSalt: null },
-        });
-        dispatch({ type: "reset" });
+      resetError={sessionError}
+      onForgotPin={async () => {
+        await clearLocalData({ clearLock: true });
         setUnlocked(true);
       }}
     />
@@ -159,12 +161,14 @@ function Locked({ children }: { children: React.ReactNode }) {
 function Shell() {
   const { stopExplore } = useExplore()
   const { state, dispatch } = useStore();
-  const { openImport, openSettings, openEntry, openCards } = useSheets();
-  const [view, setViewState] = useState<ViewId>(readHash);
+  const { openImport, openEntry, openCards, openCardDetail } = useSheets();
+  const [route, setRoute] = useState<AppRoute>(readHash);
+  const view = route.view;
+  const renderStartedAt = useMemo(() => Date.now(), [view, route.cardId]);
   const [direction, setDirection] = useState<"left" | "right">("right");
   const [privateMode, togglePrivate] = usePrivacy();
   useEffect(() => {
-    const report = () => trackScreen(view === 'future' ? 'plan' : view)
+    const report = () => trackScreen(view === 'future' ? 'plan' : view === 'card-detail' ? 'cards' : view)
     report()
     window.addEventListener(ANALYTICS_UPDATED, report)
     return () => window.removeEventListener(ANALYTICS_UPDATED, report)
@@ -176,18 +180,18 @@ function Shell() {
       if (!reminder) return
       // Opening the card list preserves context and lets the person review the
       // dates before choosing their statement file. This runs only after PIN.
-      openCards()
+      reminder.cardId ? openCardDetail(reminder.cardId) : openCards()
     }
     window.addEventListener(REMINDER_OPEN, openReminder)
     openReminder()
     return () => window.removeEventListener(REMINDER_OPEN, openReminder)
-  }, [openCards]);
+  }, [openCards, openCardDetail]);
 
   // Hash routing keeps the browser's back button and page reloads working
   // without pulling in a router dependency. On Android the same history also
   // carries the hardware back button (see `initNativeShell`).
   useEffect(() => {
-    const onHashChange = () => setViewState(readHash());
+    const onHashChange = () => setRoute(readHash());
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
@@ -214,8 +218,8 @@ function Shell() {
           : "left",
       );
       if (resolved !== view) hapticTap();
-      window.location.hash = `/${resolved}`;
-      setViewState(resolved);
+      navigateTo(resolved);
+      setRoute(readHash());
     },
     [view, stopExplore],
   );
@@ -231,12 +235,16 @@ function Shell() {
   }, [openImport]);
 
   const swipe = useTabSwipe(view, setView);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+  }, [view, route.cardId]);
 
   return (
     <div className="finance-app">
       <WorkspaceRail view={view} onSelect={setView} />
       <div className="workspace-body">
-        <WorkspaceToolbar privateMode={privateMode} onTogglePrivate={togglePrivate} />
+        <WorkspaceToolbar view={view} privateMode={privateMode} onTogglePrivate={togglePrivate} />
         {state.notices.length > 0 && (
           <div className="mx-auto w-full max-w-app px-4 pt-4">
             <div
@@ -270,6 +278,8 @@ function Shell() {
         )}
 
         <main
+          id="main-content"
+          tabIndex={-1}
           className="workspace-content"
           style={{
             paddingBottom:
@@ -285,9 +295,15 @@ function Shell() {
                 direction === "right" ? "slide-from-right" : "slide-from-left"
               }
             >
+              <ScreenPaintMeasurement startedAt={renderStartedAt} />
               {view === "overview" && <OverviewView onNavigate={setView} />}
               {view === "spending" && <SpendingView />}
+              {view === 'analysis' && <AnalysisView onNavigate={setView} />}
               {view === "future" && <FutureView />}
+              {view === 'cards' && <CardsView onOpenCard={openCardDetail} />}
+              {view === 'card-detail' && route.cardId && <CardDetailView cardId={route.cardId} onBack={() => goBack('cards')} />}
+              {view === 'assets' && <AssetsView />}
+              {view === 'settings' && <SettingsPage onClose={() => goBack()} />}
             </div>
           </Suspense>
         </main>
@@ -298,11 +314,22 @@ function Shell() {
           view={view}
           onSelect={setView}
           onImport={openEntry}
-          onSettings={openSettings}
         />
       </div>
     </div>
   );
+}
+
+/** Runs only after the selected lazy view commits; no route or record identity leaves the page. */
+function ScreenPaintMeasurement({ startedAt }: { startedAt: number }) {
+  useEffect(() => {
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => recordDiagnostic('screen_render', Date.now() - startedAt));
+    });
+    return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
+  }, [startedAt]);
+  return null;
 }
 
 /* ── Swipe between tabs ──────────────────────────────────────────────────── */
@@ -352,6 +379,7 @@ function useTabSwipe(view: ViewId, setView: (id: ViewId) => void) {
         return;
 
       const index = NAV.findIndex((n) => n.id === view);
+      if (index < 0) return;
       const next = NAV[dx < 0 ? index + 1 : index - 1];
       if (next) setView(next.id);
     },
@@ -377,14 +405,12 @@ function BottomNav({
   view,
   onSelect,
   onImport,
-  onSettings,
 }: {
   view: ViewId;
   onSelect: (id: ViewId) => void;
   onImport: () => void;
-  onSettings: () => void;
 }) {
-  const [first, second, third] = NAV;
+  const [first, second, third, fourth] = NAV;
 
   return (
     <nav
@@ -427,18 +453,7 @@ function BottomNav({
           onSelect={onSelect}
         />
 
-        <button
-          type="button"
-          onClick={() => {
-            hapticTap();
-            onSettings();
-          }}
-          aria-label="Ayarlar"
-          className="flex h-[var(--tabbar-height)] flex-1 flex-col items-center justify-center gap-1 text-muted transition-colors duration-200"
-        >
-          <Settings2 size={20} />
-          <span className="text-label font-semibold">Ayarlar</span>
-        </button>
+        <TabButton item={fourth} active={view === fourth.id} onSelect={onSelect} />
       </div>
     </nav>
   );

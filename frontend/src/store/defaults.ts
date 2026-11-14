@@ -6,6 +6,8 @@ import type { Profile, Settings } from '../domain/types'
  */
 
 export const defaultProfile: Profile = {
+  assets: [],
+  assetValuations: [],
   cards: [],
   archivedCards: [],
   monthlyIncome: 0,
@@ -16,7 +18,7 @@ export const defaultProfile: Profile = {
 }
 
 export const defaultSettings: Settings = {
-  reminders: { enabled: false, hour: 9 },
+  reminders: { enabled: false, hour: 20 },
   theme: 'system',
   useLocalOcr: false,
   ocrEndpoint: 'http://127.0.0.1:8005/api/ocr',

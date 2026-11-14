@@ -5,6 +5,7 @@ import { clsx } from 'clsx'
 import { IconButton } from './primitives'
 import { hapticImpact, hapticWarn } from '../platform/haptics'
 import { setOverlayBackHandler } from '../platform/native'
+import { FeedbackHost } from './Feedback'
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -233,6 +234,8 @@ export function Modal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">{children}</div>
+
+        <FeedbackHost />
 
         {footer && (
           <footer className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">

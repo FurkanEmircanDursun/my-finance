@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyFilters, availableStatementMonths, coverageDaysByMonth } from './selectors'
+import { applyFilters, availablePeriodYears, availableStatementMonths, coverageDaysByMonth } from './selectors'
 import { emptyFilters, type Statement } from '../domain/types'
 import type { Transaction } from '../domain/types'
 
@@ -37,6 +37,27 @@ function tx(overrides: Partial<Transaction>): Transaction {
   }
   return { ...base, statementId: '', ...overrides }
 }
+
+describe('availablePeriodYears', () => {
+  it('shows only distinct recorded years without filling gaps or adding the current year', () => {
+    expect(availablePeriodYears([
+      tx({ date: '2021-03-01', kind: 'income', source: 'manual' }),
+      tx({ date: '2023-09-10' }), tx({ date: '2023-11-04' }),
+    ], [])).toEqual([2023, 2021])
+  })
+  it('uses the billed calendar year for an installment rather than its original purchase year', () => {
+    expect(availablePeriodYears([tx({ date: '2022-12-10', billedOn: '2025-01-05' })], [])).toEqual([2025])
+  })
+  it('includes zero-transaction statements and falls back to their start date when needed', () => {
+    expect(availablePeriodYears([], [
+      statement({ transactionCount: 0, periodStart: '2024-12-01', periodEnd: '2025-01-01' }),
+      statement({ periodStart: '2020-08-01' }), statement({}),
+    ])).toEqual([2025, 2020])
+  })
+  it('has no year options before any dated records exist', () => {
+    expect(availablePeriodYears([], [])).toEqual([])
+  })
+})
 
 describe('availableStatementMonths', () => {
   it('groups two banks statements from the same billing month into one entry', () => {

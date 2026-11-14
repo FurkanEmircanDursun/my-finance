@@ -7,9 +7,9 @@ import { isNative } from '../platform'
 
 /**
  * Cloud sync is entirely optional — the app works fully offline without any
- * of this ever running (see `store/AppStore.tsx`). These are only
- * instantiated lazily, the first time something actually needs Firebase, so a
- * user who never opens the account sheet never opens a connection to it.
+ * synchronization (see `store/AppStore.tsx`). Services initialize lazily when
+ * needed. Remote Config checks update policy before sign-in; Analytics and
+ * Performance Monitoring remain independently gated by device-local consent.
  *
  * Firestore lives in `./db`, not here: signing in needs only Auth, and a person
  * who has an account but is merely being asked "who is signed in?" at start-up

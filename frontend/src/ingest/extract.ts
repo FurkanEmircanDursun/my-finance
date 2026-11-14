@@ -1,12 +1,13 @@
 import { detectAdapter } from './banks'
 import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
 import { findColumnLayout, tagRewardColumn } from './columns'
+import { hasReadableText, isPdfFile } from './validation'
 
 /**
  * Turns a dropped file into plain text.
  *
  * Escalation ladder, cheapest first — each step only runs when the previous one
- * produced text no adapter recognises:
+ * produced no usable text (document validation happens before transaction parsing):
  *   1. UTF-8 read            (.txt, .csv)
  *   2. PDF.js text layer     (digitally generated statements)
  *   3. EBCDIC decode         (Akbank mainframe PDFs — instant and lossless)
@@ -241,8 +242,9 @@ async function extractPdfPages(file: File, onProgress?: ProgressFn): Promise<Tex
 
 /**
  * Steps 2 and 3 of the ladder: the text layer as it stands, then — when no
- * adapter recognises it — decoded as EBCDIC. Null means neither worked and the
- * caller should reach for OCR.
+ * adapter recognises it — decoded as EBCDIC. Readable unrelated documents also
+ * return their text so validation can reject them without running OCR. Null
+ * means neither worked and the caller should reach for OCR.
  */
 export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): ExtractResult | null {
   if (isRecognised(layerText)) return { text: layerText, engine: 'pdf-text' }
@@ -252,8 +254,10 @@ export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): 
   if (looksLikeEbcdic(layerText)) {
     onProgress?.('Ana bilgisayar kodlaması çözülüyor…')
     const decoded = decodeEbcdic(layerText)
-    if (isRecognised(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
+    if (isRecognised(decoded) || hasReadableText(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
   }
+
+  if (hasReadableText(layerText)) return { text: layerText, engine: 'pdf-text' }
 
   return null
 }
@@ -321,7 +325,7 @@ async function ocrInBrowser(file: File, onProgress?: ProgressFn): Promise<string
 
 export async function extractText(file: File, options: ExtractOptions): Promise<ExtractResult> {
   const { onProgress } = options
-  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+  const isPdf = isPdfFile(file)
 
   if (!isPdf) {
     onProgress?.(`${file.name} okunuyor…`)
@@ -334,7 +338,7 @@ export async function extractText(file: File, options: ExtractOptions): Promise<
 
   if (options.useLocalOcr) {
     const serviceText = await ocrViaService(file, options.ocrEndpoint, onProgress)
-    if (serviceText && isRecognised(serviceText)) return { text: serviceText, engine: 'ocr-service' }
+    if (serviceText && (isRecognised(serviceText) || hasReadableText(serviceText))) return { text: serviceText, engine: 'ocr-service' }
   }
 
   const browserText = await ocrInBrowser(file, onProgress)

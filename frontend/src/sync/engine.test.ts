@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SyncEngine, type SyncState } from './engine'
 import { MemoryCloud, type MemoryDevice } from './memoryTransport'
 import { memoryStorage } from './storage'
-import { applyChange, docIdOf, type Prefs, type RemoteChange, type Snapshot } from './model'
+import { applyChange, docIdOf, hasFinancialData, type Prefs, type RemoteChange, type Snapshot } from './model'
 import type { CommitOp, SyncTransport } from './transport'
 import { defaultProfile } from '../store/defaults'
 import type { CategoryRule, Statement, Transaction } from '../domain/types'
@@ -79,7 +79,7 @@ class Device {
         this.replaced++
         this.snapshot = { ...this.snapshot, transactions: [], statements: [], rules: [], profile: defaultProfile }
       },
-      hasLocalData: () => this.snapshot.transactions.length > 0 || this.snapshot.statements.length > 0,
+      hasLocalData: () => hasFinancialData(this.snapshot),
       onState: (s) => this.states.push(s),
       now: () => ++this.clock.t,
       debounceMs: 0,
@@ -128,6 +128,25 @@ function world() {
 }
 
 describe('recovering a terminated snapshot listener', () => {
+  it('keeps device data and hides raw cloud permission details', async () => {
+    const { device } = world()
+    const a = device('forbidden', { transactions: [tx('kept-local')] }, {
+      retryMs: [60_000],
+      transport: (inner: MemoryDevice): SyncTransport => ({
+        commit: (uid, ops) => inner.commit(uid, ops),
+        listen: (_uid, listener) => {
+          queueMicrotask(() => listener.onError(Object.assign(new Error('users/private-account token=secret'), { code: 'permission-denied' })))
+          return () => undefined
+        },
+      }),
+    })
+    await a.connect()
+    expect(a.status).toBe('error')
+    expect(a.ids).toEqual(['kept-local'])
+    expect(a.engine.getState().error).toContain('yetkin yok')
+    expect(a.engine.getState().error).not.toMatch(/private-account|secret|permission-denied/)
+    a.engine.stop()
+  })
   it('reattaches after an initial listener failure and keeps remote data', async () => {
     const { device } = world()
     const seeded = device('seed', { transactions: [tx('remote')] })
@@ -455,6 +474,34 @@ describe('the rest of the account', () => {
 /* ── Leaving, coming back, failing ────────────────────────────────────────── */
 
 describe('restarting', () => {
+  it.each([false, true])('downloads cloud records after legacy local clearing even with stale pending live metadata: %s', async pending => {
+    const { cloud, device } = world()
+    const original = device('original', { transactions: [tx('kept-in-account')] })
+    await original.connect()
+    await original.engine.stopAndDrain()
+    const baseline = structuredClone(original.storage.ledgers)
+    if (pending) baseline[UID]['profile/profile'] = { h: 'stale-live-profile', u: 2000, p: true }
+    const cleared = device('cleared-device')
+    Object.assign(cleared.storage, { ledgers: baseline, owner: UID })
+    await cleared.connect()
+    expect(cleared.ids).toEqual(['kept-in-account'])
+    expect(cloud.contents(UID).find(doc => doc.id === 'kept-in-account')?.deleted).toBe(false)
+    cleared.engine.stop()
+  })
+
+  it('checkpoints an explicit last-record deletion for a retained-device logout', async () => {
+    const { cloud, device } = world()
+    const original = device('original', { transactions: [tx('explicitly-deleted')] })
+    await original.connect()
+    original.snapshot = { ...original.snapshot, transactions: [] }
+    await original.engine.stopAndDrain(true)
+    expect(original.storage.ledgers[UID]['transactions/explicitly-deleted']).toMatchObject({ p: true, d: true })
+    const again = device('same-device')
+    Object.assign(again.storage, { ledgers: original.storage.ledgers, owner: UID })
+    await again.connect()
+    expect(cloud.contents(UID).find(doc => doc.id === 'explicitly-deleted')?.deleted).toBe(true)
+    again.engine.stop()
+  })
   it('a device that closed with unsent edits sends them next time', async () => {
     const { cloud, device } = world()
     const a = device('phone', { transactions: [tx('a')] })
@@ -542,6 +589,17 @@ describe('trouble', () => {
 /* ── Someone else's data ──────────────────────────────────────────────────── */
 
 describe('signing in on a device that holds another account’s data', () => {
+  it('still requires a decision when this account has an older local ledger', async () => {
+    const { device, cloud } = world()
+    const original = device('original', { transactions: [tx('mine')] })
+    await original.connect()
+    const shared = device('shared', { profile: { ...defaultProfile, currentBalance: 12300 } })
+    Object.assign(shared.storage, { ledgers: structuredClone(original.storage.ledgers), owner: 'other-account' })
+    await shared.connect()
+    expect(shared.status).toBe('decision')
+    expect(cloud.contents(UID).find(doc => doc.kind === 'profile')?.data).not.toMatchObject({ currentBalance: 12300 })
+    original.engine.stop(); shared.engine.stop()
+  })
   async function scenario() {
     const w = world()
     const owner = w.device('phone', { transactions: [tx('mine-1')] })
@@ -595,6 +653,17 @@ describe('signing in on a device that holds another account’s data', () => {
 /* ── What an older version left behind ────────────────────────────────────── */
 
 describe('documents written by an older version', () => {
+  it('does not overwrite an asset-only or balance-only device profile with a legacy profile', async () => {
+    const { cloud, device } = world()
+    cloud.seedLegacy(UID, { kind: 'profile', id: 'profile', data: { ...defaultProfile, monthlyIncome: 999 } })
+    const profile = { ...defaultProfile, currentBalance: 1200, assets: [{ id: 'gold', instrument: 'gold-gram' as const, quantityMicros: 1000000, updatedAt: 1 }] }
+    const local = device('local', { profile })
+    await local.connect()
+    expect(local.snapshot.profile.currentBalance).toBe(1200)
+    expect(local.snapshot.profile.assets).toEqual(profile.assets)
+    expect(local.snapshot.profile.monthlyIncome).toBe(0)
+    local.engine.stop()
+  })
   it('are migrated into the device, replaced by stamped copies, and purged', async () => {
     const { cloud, device } = world()
     const old = tx('legacy-1', { statementId: 'st-old', description: 'YEREL MARKET', merchant: 'YEREL MARKET' })

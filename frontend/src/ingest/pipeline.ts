@@ -1,9 +1,9 @@
-import { detectAdapter } from './banks'
 import { extractText, type ProgressFn } from './extract'
+import { isPdfFile, pdfExtractionError, validateStatementFile, validateStatementText } from './validation'
 import { createCategorizer } from './categorize'
 import { assignIds } from './identity'
 import { reconcile } from './reconcile'
-import { normalizeMerchant } from '../core/text'
+import { fold, normalizeMerchant } from '../core/text'
 import { monthLabel, monthOf } from '../core/date'
 import type { CategoryRule, ParseResult, Transaction } from '../domain/types'
 
@@ -49,25 +49,22 @@ export interface TextParseOptions {
 export function parseStatementText(text: string, options: TextParseOptions): ParseResult {
   const { onProgress } = options
 
-  if (!text.trim()) {
-    throw new ParseError('Dosya içeriği okunamadı.', 'PDF taranmış olabilir; Ayarlar\'dan yerel OCR servisini açmayı deneyin.')
-  }
+  const adapter = validateStatementText(text, { allowCsv: options.engine === 'text' })
 
-  const detection = detectAdapter(text)
-  if (!detection) {
-    throw new ParseError(
-      'Ekstre formatı tanınamadı.',
-      'Akbank, Garanti BBVA ve genel CSV dışa aktarımları destekleniyor.',
-    )
-  }
+  onProgress?.(`${adapter.bank} formatı ayrıştırılıyor…`)
+  const output = adapter.parse(text)
 
-  onProgress?.(`${detection.adapter.bank} formatı ayrıştırılıyor…`)
-  const output = detection.adapter.parse(text)
-
-  if (!output.rows.length) {
+  const reconciliation = reconcile(output.rows, output.summary)
+  // Empty is meaningful only when a supported bank explicitly says the cycle
+  // had no activity and its printed balance confirms it. Missing/failed text
+  // extraction must never clear a missing-statement warning.
+  const noActivity = /\b(?:BU\s+)?(?:EKSTRE\s+)?DONEM(?:DE|INDE)?(?:\s+ICI)?\s+(?:KART\s+)?(?:ISLEM(?:INIZ)?|HARCAMA(?:NIZ)?|HAREKET(?:INIZ)?)\s+(?:BULUNMAMAKTADIR|YOKTUR)\b/.test(fold(text).replace(/\s+/g, ' '))
+  const verifiedEmpty = adapter.id !== 'csv' && output.periodEnd !== null && output.skipped === 0
+    && noActivity && reconciliation.status === 'match' && reconciliation.expectedCharges === 0
+  if (!output.rows.length && !verifiedEmpty) {
     throw new ParseError(
       'Dosyada işlem satırı bulunamadı.',
-      `${detection.adapter.bank} olarak tanındı ama ${output.skipped} satır okunamadı.`,
+      `${adapter.bank} olarak tanındı ama ${output.skipped} satır okunamadı.`,
     )
   }
 
@@ -87,7 +84,7 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
   }
 
   const ruleMerchants = new Set(options.rules.map((r) => r.merchant))
-  const bank = detection.adapter.bank
+  const bank = adapter.bank
   const merchants = output.rows.map((row) => normalizeMerchant(row.description))
 
   const ids = assignIds(
@@ -116,7 +113,7 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
     bank,
     accountLabel: output.accountLabel,
     installment: row.installment,
-    source: detection.adapter.id === 'csv' ? 'csv' : 'statement',
+    source: adapter.id === 'csv' ? 'csv' : 'statement',
     // An instalment prints its original purchase date, which can sit months
     // before the statement that bills it. It is charged on the cut date.
     ...(billedOn(row.date, row.installment, output.periodStart, periodEnd) ? { billedOn: periodEnd! } : {}),
@@ -140,17 +137,25 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
     dueDate: output.dueDate,
     label,
     summary: output.summary,
-    reconciliation: reconcile(output.rows, output.summary),
+    reconciliation,
     ignored: output.ignored,
   }
 }
 
 export async function parseFile(file: File, options: PipelineOptions): Promise<ParseResult> {
-  const { text, engine } = await extractText(file, {
-    useLocalOcr: options.useLocalOcr,
-    ocrEndpoint: options.ocrEndpoint,
-    onProgress: options.onProgress,
-  })
+  await validateStatementFile(file)
+  let extracted: Awaited<ReturnType<typeof extractText>>
+  try {
+    extracted = await extractText(file, {
+      useLocalOcr: options.useLocalOcr,
+      ocrEndpoint: options.ocrEndpoint,
+      onProgress: options.onProgress,
+    })
+  } catch (error) {
+    if (isPdfFile(file)) throw pdfExtractionError(error)
+    throw error
+  }
+  const { text, engine } = extracted
 
   return parseStatementText(text, {
     rules: options.rules,

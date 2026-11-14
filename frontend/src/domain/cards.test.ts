@@ -94,13 +94,21 @@ describe('card persistence', () => {
     expect(Object.fromEntries(linked.transactions.map((tx) => [tx.id, tx.amount]))).toEqual(Object.fromEntries(transactions.map((tx) => [tx.id, tx.amount])))
     expect(linked.transactions.every((tx) => tx.cardId === card.id && tx.accountLabel === statement.accountLabel)).toBe(true)
   })
-  it('preserves card identity when restoring a removed card, even when re-added through the new-card form', () => {
+  it('restores the archived identity only when the same card ID is explicitly restored', () => {
     let state = reducer(initialState, { type: 'upsertCard', card })
     state = reducer(state, { type: 'removeCard', cardId: card.id })
     expect(state.profile.archivedCards).toEqual([card])
-    state = reducer(state, { type: 'upsertCard', card: { ...card, id: 'new-generated-id' } })
+    state = reducer(state, { type: 'upsertCard', card })
     expect(state.profile.cards).toEqual([card])
     expect(state.profile.archivedCards).toEqual([])
+  })
+  it('keeps a new physical ID even when an archived card has the same name and last four digits', () => {
+    let state = reducer(initialState, { type: 'upsertCard', card })
+    state = reducer(state, { type: 'removeCard', cardId: card.id })
+    const different = { ...card, id: 'new-generated-id' }
+    state = reducer(state, { type: 'upsertCard', card: different })
+    expect(state.profile.cards).toEqual([different])
+    expect(state.profile.archivedCards).toEqual([card])
   })
   it('keeps a selected card filter valid when the card is renamed', () => {
     let state = reducer(initialState, { type: 'upsertCard', card })

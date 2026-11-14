@@ -56,7 +56,7 @@ export function FutureView() {
         title="Ödeme planın kayıtlarınla oluşur"
         description="Ekstreni yükle; taksitlerin ve yaklaşan son ödeme tarihlerin burada görünsün. Düzenli ödemeler, yeterli kayıt oluşunca bulunur."
         action={
-          <div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={openImport}><Upload size={16} /> Ekstre yükle</Button><Button onClick={openEntry}><Plus size={16} /> Kayıt ekle</Button><Button variant="ghost" onClick={openSettings}>Tasarruf hedefi koy</Button></div>
+          <div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={() => openImport()}><Upload size={16} /> Ekstre yükle</Button><Button onClick={openEntry}><Plus size={16} /> Kayıt ekle</Button><Button variant="ghost" onClick={openSettings}>Tasarruf hedefi koy</Button></div>
         }
       />
     </div>
@@ -68,7 +68,7 @@ export function FutureView() {
       {upcoming.length > 0 ? <UpcomingSection payments={upcoming} /> : (
         <Section title="Yaklaşan ödemeler">
           <p className="max-w-xl text-body text-muted">Kayıtlarında önümüzdeki 45 güne ait bir ödeme tarihi bulunamadı. Güncel ekstreni ekleyerek son ödeme tarihini görebilirsin.</p>
-          <Button size="sm" variant="ghost" className="mt-3" onClick={openImport}><Upload size={15} /> Güncel ekstre ekle</Button>
+          <Button size="sm" variant="ghost" className="mt-3" onClick={() => openImport()}><Upload size={15} /> Güncel ekstre ekle</Button>
         </Section>
       )}
       {/* ── The sentence ─────────────────────────────────────────────────── */}

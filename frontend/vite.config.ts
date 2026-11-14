@@ -10,6 +10,7 @@ import react from '@vitejs/plugin-react'
  * touches cloud sync.
  */
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version: string
@@ -29,12 +30,17 @@ export default defineConfig({
     sourcemap: false,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
+      input: {
+        app: fileURLToPath(new URL('./index.html', import.meta.url)),
+        diagnostics: fileURLToPath(new URL('./diagnostics.html', import.meta.url)),
+      },
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return
           if (id.includes('pdfjs-dist')) return 'pdf'
           if (id.includes('tesseract')) return 'ocr'
           if (id.includes('recharts') || id.includes('d3-') || id.includes('victory')) return 'charts'
+          if (id.includes('@firebase/performance') || id.includes('firebase/performance')) return 'firebase-performance'
           // Auth and Firestore are separate chunks: asking "who is signed in?"
           // at start-up needs only the first, and the database client (the
           // larger half) is fetched when a session actually starts syncing.

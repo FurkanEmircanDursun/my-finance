@@ -1,3 +1,4 @@
+import { UserFacingError } from '../core/errors'
 import type { PluginListenerHandle } from '@capacitor/core'
 import type { ReminderPreferences } from '../domain/reminders'
 import { cloudAvailable } from '../firebase/available'
@@ -51,7 +52,7 @@ async function ensureListeners(): Promise<void> {
         if (changedToken) window.dispatchEvent(new Event(PUSH_TOKEN_UPDATED))
       }))
       handles.push(await PushNotifications.addListener('registrationError', () => {
-        tokenWaiter?.reject(new Error('Bildirim bağlantısı kurulamadı. İnternetini kontrol edip yeniden dene.'))
+        tokenWaiter?.reject(new UserFacingError('Bildirim bağlantısı kurulamadı. İnternetini kontrol edip yeniden dene.'))
       }))
       handles.push(await PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
         const data = notification.data
@@ -77,7 +78,7 @@ async function registrationToken(): Promise<string> {
   try {
     return await new Promise<string>((resolve, reject) => {
       tokenWaiter = { resolve, reject }
-      timer = setTimeout(() => reject(new Error('Bildirim bağlantısı zaman aşımına uğradı. Yeniden dene.')), 12_000)
+      timer = setTimeout(() => reject(new UserFacingError('Bildirim bağlantısı zaman aşımına uğradı. Yeniden dene.')), 12_000)
       void PushNotifications.register().catch(reject)
     })
   } finally { clearTimeout(timer); tokenWaiter = null }
@@ -117,7 +118,7 @@ export function syncCloudPush(uid: string | null, preferences: ReminderPreferenc
     // existing cloud plan in charge; only first-enrollment failure restores local mode.
     setRemoteReminderDelivery(true)
     await syncReminders([], { ...preferences, enabled: false })
-    if ((await getReminderStatus()).error) throw new Error('Cihaz hatırlatmaları devredilemedi.')
+    if ((await getReminderStatus()).error) throw new UserFacingError('Cihaz hatırlatmaları devredilemedi.')
     await setDoc(doc(getFirebaseDb(), 'users', uid, 'pushDevices', deviceId()), {
       token: nextToken, enabled: true, hour: preferences.hour, timeZone: 'Europe/Istanbul', updatedAt: serverTimestamp(),
     })
@@ -142,14 +143,14 @@ export function syncCloudPush(uid: string | null, preferences: ReminderPreferenc
 }
 
 export async function requestCloudPush(uid: string, preferences: ReminderPreferences, syncReady: boolean): Promise<void> {
-  if (!isAndroid() || !cloudPushBackendReady) throw new Error('Bulut bildirimleri bu sürümde henüz etkin değil. Cihaz hatırlatmalarını kullanabilirsin.')
-  if (!preferences.enabled) throw new Error('Önce ekstre hatırlatmalarını aç.')
-  if (!syncReady) throw new Error('Önce hesap eşitlemesinin tamamlanmasını bekle.')
+  if (!isAndroid() || !cloudPushBackendReady) throw new UserFacingError('Bulut bildirimleri bu sürümde henüz etkin değil. Cihaz hatırlatmalarını kullanabilirsin.')
+  if (!preferences.enabled) throw new UserFacingError('Önce ekstre hatırlatmalarını aç.')
+  if (!syncReady) throw new UserFacingError('Önce hesap eşitlemesinin tamamlanmasını bekle.')
   const { PushNotifications } = await import('@capacitor/push-notifications')
-  if ((await PushNotifications.requestPermissions()).receive !== 'granted') throw new Error('Bildirim izni verilmedi. Telefon ayarlarından açabilirsin.')
+  if ((await PushNotifications.requestPermissions()).receive !== 'granted') throw new UserFacingError('Bildirim izni verilmedi. Telefon ayarlarından açabilirsin.')
   localStorage.setItem(OPT_IN_KEY, 'enabled')
   await syncCloudPush(uid, preferences, syncReady)
-  if (!active) throw new Error(lastError ?? 'Bulut bildirimi bağlantısı kurulamadı. Yeniden dene.')
+  if (!active) throw new UserFacingError(lastError ?? 'Bulut bildirimi bağlantısı kurulamadı. Yeniden dene.')
 }
 
 /** Sign-out remains available offline. FCM token invalidation and document removal are best effort. */

@@ -1,0 +1,23 @@
+.transaction-item { display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; border-bottom: 1px solid var(--line); }
+li:last-child>.transaction-item { border-bottom: 0; }
+.transaction-item__main { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1; text-align: left; padding: 15px 0; border-radius: 9px; min-height: 72px; }
+button.transaction-item__main:hover { background: var(--bg-hover); }
+.transaction-item__icon { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 10px; color: var(--text-muted); background: var(--bg-sunken); }
+.transaction-item__icon.is-income { background: var(--positive-soft); color: var(--positive); }
+.transaction-item__copy { min-width: 0; flex: 1; }
+.transaction-item__copy>strong { display: block; color: var(--text); font-size: 13px; font-weight: 550; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.transaction-item__copy>small { display: block; font-size: 12px; line-height: 1.6; color: var(--text-muted); margin-top: 3px; overflow-wrap: anywhere; }
+.transaction-item__amount { color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.transaction-item__amount.is-income { color: var(--positive); }
+.transaction-item__delete { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 10px; color: var(--text-muted); }
+.transaction-item__delete:hover { background: var(--negative-soft); color: var(--negative); }
+.entry-date-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; }
+.entry-date-row input, .entry-date-row select { min-width: 0; width: 100%; }
+@media(max-width: 480px) {
+  .transaction-item__main { gap: 8px; flex-wrap: wrap; padding-block: 13px; }
+  .transaction-item__icon { width: 30px; height: 30px; border-radius: 8px; }
+  .transaction-item__copy>strong, .transaction-item__amount { font-size: 12px; }
+  .transaction-item__copy>small { font-size: 11px; }
+  .transaction-item__amount { margin-left: 38px; flex-basis: calc(100% - 38px); }
+}
+@media(max-width: 360px) { .entry-date-row { grid-template-columns: minmax(0,1fr); } }

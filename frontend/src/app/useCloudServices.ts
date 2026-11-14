@@ -7,9 +7,9 @@ import { PUSH_TOKEN_UPDATED, syncCloudPush } from '../platform/push'
 import { useStore } from '../store/AppStore'
 
 export function useCloudServices(): void {
-  const { state, authUser, authReady, sync } = useStore()
+  const { state, authUser, authReady, sync, sessionBusy } = useStore()
   useEffect(() => { void initializeProductAnalytics() }, [])
-  const uid = authUser && !authUser.isAnonymous ? authUser.uid : null
+  const uid = !sessionBusy && authUser && !authUser.isAnonymous ? authUser.uid : null
   const syncReady = sync.lastSyncedAt !== null && sync.pending === 0 && sync.status !== 'decision' && sync.status !== 'error'
   useEffect(() => {
     if (!state.hydrated || !authReady || !isAndroid()) return

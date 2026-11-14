@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>712411828559-pkf3umgcu5hgedjin5i4hccg6t0vtm74.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.712411828559-pkf3umgcu5hgedjin5i4hccg6t0vtm74</string>
+	<key>ANDROID_CLIENT_ID</key>
+	<string>712411828559-6ljocavtfril6ik4n3mv2d2p4pqcufsu.apps.googleusercontent.com</string>
+	<key>API_KEY</key>
+	<string>AIzaSyANT9HtiHH971rE5EHcbYWdAZbb4xjvH6k</string>
+	<key>GCM_SENDER_ID</key>
+	<string>712411828559</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.faraday.followfinance</string>
+	<key>PROJECT_ID</key>
+	<string>my-finance-webapp-fd</string>
+	<key>STORAGE_BUCKET</key>
+	<string>my-finance-webapp-fd.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:712411828559:ios:c2d9948da26cc44506f53a</string>
+</dict>
+</plist>

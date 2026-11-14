@@ -1,7 +1,0 @@
-{
-  "indexes": [],
-  "fieldOverrides": [
-    { "collectionGroup": "pushDevices", "fieldPath": "hour", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
-    { "collectionGroup": "notificationDeliveries", "fieldPath": "expireAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
-  ]
-}

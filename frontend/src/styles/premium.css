@@ -183,9 +183,12 @@ button.compact-transaction:hover { background:var(--bg-hover); }
 .entry-details>div { padding-top:14px; }
 .entry-submit { width:100%; min-height:52px; font-size:15px; }
 .entry-footnote { font-size:12px; color:var(--text-muted); text-align:center; line-height:1.7; }
-.save-feedback { position:fixed; z-index:80; bottom:calc(var(--safe-bottom) + 20px); left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100% - 32px); display:flex; align-items:center; gap:12px; background:var(--text); color:var(--bg-raised); padding:12px 14px; border-radius:14px; box-shadow:var(--shadow-overlay); animation:feedback-in 240ms var(--ease); }
+.save-feedback { position:fixed; z-index:45; bottom:calc(var(--safe-bottom) + 20px); left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100% - 32px); display:flex; align-items:center; gap:12px; background:var(--text); color:var(--bg-raised); padding:12px 14px; border-radius:14px; box-shadow:var(--shadow-overlay); animation:feedback-in 240ms var(--ease); }
 .save-feedback-message { display:flex; align-items:center; gap:10px; font-size:13px; }
 .save-feedback>button { flex-shrink:0; min-width:40px; min-height:40px; font-size:13px; }
+.feedback-slot { flex-shrink:0; padding:0 20px 12px; }
+.feedback-slot:empty { display:none; }
+.save-feedback.save-feedback-inline { position:static; transform:none; width:auto; max-width:none; margin:0; box-shadow:none; }
 .save-check { display:grid; place-items:center; width:28px; height:28px; flex-shrink:0; border-radius:50%; background:var(--bg-raised); color:var(--accent-text); animation:save-check 320ms var(--ease); }
 /* Onboarding is a short conversation with a visible, skippable path. */
 .setup-experience { min-height:100dvh; padding:calc(var(--safe-top) + 24px) max(24px,5vw) calc(var(--safe-bottom) + 32px); }

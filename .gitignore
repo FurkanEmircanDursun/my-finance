@@ -1,67 +1,20 @@
-# dependencies
 node_modules/
-.pnp
-.pnp.js
-
-# build output
-dist/
-build/
-*.tsbuildinfo
-
-# vite / bundler caches
-.vite/
-frontend/node_modules/.vite/
-
-# python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-*.egg-info/
-
-# environment
-.env
-.env.local
-.env.*.local
-
-# editors / os
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
-
-# logs
+frontend/dist/
+frontend/ios/DerivedData/
+frontend/ios/App/build/
+frontend/ios/App/Pods/
+frontend/ios/App/output/
+frontend/ios/App/App/public/
+frontend/ios/App/App/capacitor.config.json
+frontend/ios/App/App/config.xml
+frontend/ios/capacitor-cordova-ios-plugins/
+xcuserdata/
 *.log
-npm-debug.log*
-yarn-error.log*
-
-# local statement data (never commit real financial data)
-data/*.json
-!data/.gitkeep
-# anything in public/ is served by the dev server and copied into dist/,
-# so a statement dropped there would be published with the build
-frontend/public/*.pdf
-frontend/*.txt
-
-# Android — the release keystore and its passwords can never be regenerated;
-# losing them means the Play Store listing can never be updated again. Kept
-# out of version control entirely, back it up somewhere durable instead.
-/android-signing/
-frontend/android/keystore.properties
-frontend/android/app/google-services.json
-frontend/android/app/build/
-frontend/android/build/
-frontend/android/.gradle/
-frontend/android/capacitor-cordova-android-plugins/
-frontend/android/local.properties
-/artifacts/
-frontend/.playwright-cli/
-frontend/output/
-
-# Private financial audit reports
-data/statement-audit-*.md
-
-# Local browser validation artifacts
-/.playwright-cli/
-/output/
+*.tsbuildinfo
+.env
+.env.*
+*.pdf
+*.txt
+data/
+output/
+tmp/

@@ -8,11 +8,12 @@ import { useStore } from '../store/AppStore'
 import { describeSync, type Tone } from '../sync/present'
 import {
   authErrorMessage, continueWithEmail, reauthenticate, registerWithEmail, sendPasswordReset,
-  signInWithGoogle, signOutSession, type AuthUser,
+  signInWithGoogle, type AuthUser,
 } from '../firebase/auth'
 import { SyncDecision } from './SyncDecision'
 import { useNow } from './useNow'
 import { GoogleMark } from './GoogleConnectButton'
+import { UserFacingError } from '../core/errors'
 
 /**
  * Hesap ve senkron — the whole cloud story on one screen, and only when asked.
@@ -29,10 +30,11 @@ import { GoogleMark } from './GoogleConnectButton'
  * answer to "did that work?" is on screen the moment it is true.
  */
 export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { cloudAvailable, authReady, authUser, authError, retryAuth } = useStore()
+  const { cloudAvailable, authReady, authUser, authError, retryAuth, sessionError } = useStore()
 
   return (
     <Modal open={open} onClose={onClose} title="Hesap ve senkron">
+      {sessionError && <p className="mb-4 text-body text-negative" role="alert">{sessionError}</p>}
       {authError && (
         <div className="mb-5 space-y-2" role="alert">
           <p className="text-body text-negative">{authError}</p>
@@ -124,7 +126,7 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
         // this password and been refused: "sign in if the password is right" would
         // send them in a circle. What is left is a reset, or another way in.
         if ((err as { code?: string })?.code === 'auth/email-already-in-use') {
-          throw new Error(
+          throw new UserFacingError(
             'Bu e-posta zaten kayıtlı ve şifre uyuşmuyor. "Şifremi sıfırla"yı dene; hesabı Google ile açtıysan Google ile devam et.',
           )
         }
@@ -246,12 +248,13 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
 const PROVIDER: Record<string, string> = { 'google.com': 'Google', password: 'E-posta' }
 
 function SignedIn({ user }: { user: AuthUser }) {
-  const { state, sync, authUser, eraseCloud } = useStore()
+  const { state, sync, authUser, eraseCloud, logout } = useStore()
   const [leaving, setLeaving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wipeOpen, setWipeOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [clearDevice, setClearDevice] = useState(false)
 
   const via = user.providers.map((p) => PROVIDER[p]).filter(Boolean).join(' · ')
   const name = user.displayName ?? user.email ?? 'Hesabım'
@@ -260,7 +263,7 @@ function SignedIn({ user }: { user: AuthUser }) {
     setBusy(true)
     setError(null)
     try {
-      await signOutSession()
+      await logout({ clearLocal: clearDevice })
     } catch (err) {
       setError(authErrorMessage(err))
       setBusy(false)
@@ -315,7 +318,7 @@ function SignedIn({ user }: { user: AuthUser }) {
       )}
 
       <div className="space-y-2">
-        <Button className="w-full sm:w-auto" onClick={() => (unsent ? setLeaving(true) : void signOut())} disabled={busy}>
+        <Button className="w-full sm:w-auto" onClick={() => { setClearDevice(false); setLeaving(true) }} disabled={busy}>
           <LogOut size={16} />
           Çıkış yap
         </Button>
@@ -342,17 +345,19 @@ function SignedIn({ user }: { user: AuthUser }) {
         </div>
       </Disclosure>
 
-      <ConfirmDialog
+      <Modal
         open={leaving}
-        title="Çıkış yapılsın mı?"
-        message={`${sync.pending} değişiklik henüz buluta gönderilmedi. Bu cihazda kalır; aynı hesapla tekrar giriş yapınca gönderilir.`}
-        confirmLabel="Çıkış yap"
-        onCancel={() => setLeaving(false)}
-        onConfirm={() => {
-          setLeaving(false)
-          void signOut()
-        }}
-      />
+        onClose={() => setLeaving(false)}
+        title="Çıkış yap"
+        footer={<><Button onClick={() => setLeaving(false)}>Vazgeç</Button><Button variant={clearDevice ? 'danger' : 'primary'} onClick={() => { setLeaving(false); void signOut() }}>{clearDevice ? 'Çıkış yap ve cihazı temizle' : 'Çıkış yap'}</Button></>}
+      >
+        <div className="space-y-4">
+          <p className="text-body text-muted">Hesabındaki bulut verileri korunur. Tekrar giriş yaptığında kayıtlarına ulaşabilirsin.</p>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body text-ink"><input type="checkbox" checked={clearDevice} onChange={event => setClearDevice(event.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />Bu cihazdaki verileri de kaldır</label>
+          {clearDevice && <p className="text-label text-muted">Yalnızca bu cihazdaki işlemler, ekstreler ve profil temizlenir. Eşitlenmemiş yerel kayıtların varsa önce yedek al.</p>}
+          {unsent && <p className="text-label text-warning" role="status">{sync.pending} değişiklik henüz buluta gönderilmedi. {clearDevice ? 'Cihazı temizlersen bu yerel değişiklikler kaldırılır.' : 'Bu cihazda kalır; aynı hesapla giriş yaptığında eşitlenir.'}</p>}
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={wipeOpen}

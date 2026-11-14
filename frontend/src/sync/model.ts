@@ -1,3 +1,5 @@
+import { normalizeAssetHoldings } from '../domain/assets'
+import { mergeAssetValuations, normalizeAssetValuations } from '../domain/assetsHistory'
 import { hash } from '../core/hash'
 import type { CategoryRule, Profile, Statement, Transaction } from '../domain/types'
 
@@ -114,14 +116,21 @@ export function contentHash(value: unknown): string {
   return hash(stable(value))
 }
 
-const isDefaultProfile = (profile: Profile): boolean =>
+export const isDefaultProfile = (profile: Profile): boolean =>
   profile.monthlyIncome === 0 &&
   profile.spendingLimit === 0 &&
   profile.currentBalance === 0 &&
   profile.goal === null &&
   profile.budgets.length === 0 &&
   (profile.cards?.length ?? 0) === 0 &&
-  (profile.archivedCards?.length ?? 0) === 0
+  (profile.archivedCards?.length ?? 0) === 0 &&
+  (profile.assets?.length ?? 0) === 0 &&
+  (profile.assetValuations?.length ?? 0) === 0
+
+/** Financial ownership includes profiles and portfolios even without transactions. */
+export function hasFinancialData(snapshot: Snapshot): boolean {
+  return snapshot.transactions.length > 0 || snapshot.statements.length > 0 || snapshot.rules.length > 0 || !isDefaultProfile(snapshot.profile)
+}
 
 // ─── What changed here ────────────────────────────────────────────────────────
 
@@ -337,7 +346,17 @@ export function applyChange(snapshot: Snapshot, change: RemoteChange): Snapshot 
     transactions: merge('transactions', snapshot.transactions),
     statements: merge('statements', snapshot.statements),
     rules: merge('rules', snapshot.rules),
-    profile: change.profile ?? snapshot.profile,
+    profile: change.profile ? {
+      ...change.profile,
+      assets: Object.prototype.hasOwnProperty.call(change.profile, 'assets')
+        ? normalizeAssetHoldings(change.profile.assets)
+        : normalizeAssetHoldings(snapshot.profile.assets),
+      assetValuations: Object.prototype.hasOwnProperty.call(change.profile, 'assetValuations')
+        ? Array.isArray(change.profile.assetValuations) && change.profile.assetValuations.length === 0
+          ? []
+          : mergeAssetValuations(snapshot.profile.assetValuations, change.profile.assetValuations)
+        : normalizeAssetValuations(snapshot.profile.assetValuations),
+    } : snapshot.profile,
     prefs: change.prefs ?? snapshot.prefs,
   }
 }

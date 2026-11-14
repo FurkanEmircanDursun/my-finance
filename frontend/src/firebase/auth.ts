@@ -23,6 +23,8 @@ import {
 import { getFirebaseAuth } from './config'
 import { isNative } from '../platform'
 import { trackProductEvent } from '../platform/analytics'
+import { UserFacingError } from '../core/errors'
+import { firebaseErrorMessage } from './errors'
 
 export interface AuthUser {
   uid: string
@@ -196,7 +198,7 @@ async function performGoogleSignIn(): Promise<GoogleOutcome> {
     try {
       const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
       const idToken = result.credential?.idToken
-      if (!idToken) throw new Error('Google kimliği alınamadı. Yeniden dene veya e-posta ile giriş yap.')
+      if (!idToken) throw new UserFacingError('Google kimliği alınamadı. Yeniden dene veya e-posta ile giriş yap.')
       await attach(GoogleAuthProvider.credential(idToken))
       return 'done'
     } catch (error) {
@@ -270,8 +272,10 @@ export async function startAnonymousSession(): Promise<void> {
   await signInAnonymously(getFirebaseAuth())
 }
 
-export async function signOutSession(): Promise<void> {
+export async function signOutSession(expectedUid?: string): Promise<void> {
+  if (expectedUid && getFirebaseAuth().currentUser?.uid !== expectedUid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
   await import('../platform/push').then((push) => push.disconnectCloudPush())
+  if (expectedUid && getFirebaseAuth().currentUser?.uid !== expectedUid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
   await signOut(getFirebaseAuth())
   // Only clears the OS-level Google account cache the native plugin keeps;
   // `skipNativeAuth` means there was never a second native Firebase session to
@@ -300,7 +304,7 @@ export async function reauthenticate(password?: string): Promise<void> {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
     const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
     const idToken = result.credential?.idToken
-    if (!idToken) throw new Error('Google girişi tamamlanamadı.')
+    if (!idToken) throw new UserFacingError('Google girişi tamamlanamadı. Yeniden dene veya e-posta ile giriş yap.')
     await reauthenticateWithCredential(user, GoogleAuthProvider.credential(idToken))
     return
   }
@@ -308,42 +312,21 @@ export async function reauthenticate(password?: string): Promise<void> {
   await reauthenticateWithPopup(user, new GoogleAuthProvider())
 }
 
-export async function deleteCurrentAccount(): Promise<void> {
+export async function deleteCurrentAccount(expectedUid?: string): Promise<void> {
   const user = getFirebaseAuth().currentUser
+  if (expectedUid && user?.uid !== expectedUid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
   if (!user) return
   await import('../platform/push').then((push) => push.disconnectCloudPush())
+  if (expectedUid && getFirebaseAuth().currentUser?.uid !== expectedUid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
   await deleteUser(user)
 }
 
 // ─── Words for what went wrong ────────────────────────────────────────────────
 
-const ERROR_MESSAGES: Record<string, string> = {
-  'auth/email-already-in-use': 'Bu e-posta zaten kayıtlı. Şifren doğruysa giriş yap.',
-  'auth/credential-already-in-use': 'Bu hesap başka bir oturuma bağlı. Giriş yapmayı dene.',
-  'auth/account-exists-with-different-credential':
-    'Bu e-posta başka bir yöntemle kayıtlı. O yöntemle giriş yap; Google\'ı sonra bağlayabilirsin.',
-  'auth/invalid-email': 'E-posta adresi geçersiz.',
-  'auth/invalid-credential': 'E-posta veya şifre hatalı.',
-  'auth/wrong-password': 'E-posta veya şifre hatalı.',
-  'auth/missing-password': 'Şifreni yaz.',
-  'auth/user-not-found': 'Bu e-postayla kayıtlı bir hesap yok.',
-  'auth/user-disabled': 'Bu hesap devre dışı bırakılmış.',
-  'auth/weak-password': 'Şifre en az 6 karakter olmalı.',
-  'auth/popup-closed-by-user': 'Google penceresi kapatıldı.',
-  'auth/popup-blocked': 'Tarayıcı Google penceresini engelledi. Engeli kaldırıp tekrar dene.',
-  'auth/network-request-failed': 'İnternet bağlantısı yok veya çok zayıf.',
-  'auth/requires-recent-login': 'Bu işlem için önce kimliğini yeniden doğrulaman gerekiyor.',
-  'auth/too-many-requests': 'Çok fazla deneme yapıldı, biraz sonra tekrar dene.',
-  'auth/configuration-not-found': 'Bulut girişi henüz Firebase konsolunda etkinleştirilmedi.',
-  'auth/operation-not-allowed': 'Bu giriş yöntemi Firebase konsolunda henüz açılmadı.',
-  'auth/unauthorized-domain': 'Bu adres Firebase\'de yetkili alan adı olarak tanımlı değil.',
-  'auth/internal-error': 'Giriş servisi şu an yanıt vermedi, birazdan tekrar dene.',
-}
-
 /** Firebase errors carry a `code` like "auth/wrong-password"; this turns it into something to show. */
 export function authErrorMessage(error: unknown): string {
   const code = codeOf(error)
-  if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code]
+  if (error instanceof UserFacingError) return error.message
   if (isGoogleCancellation(error)) return 'Google girişi iptal edildi. Hazır olduğunda yeniden deneyebilirsin.'
   const message = messageOf(error)
   if (code === '10' || /(?:DEVELOPER_ERROR|(?:^|\s)10:|serverClientId.*(?:invalid|incorrect))/i.test(message)) {
@@ -352,7 +335,6 @@ export function authErrorMessage(error: unknown): string {
   if (/NoCredentialException|no credentials available|no google accounts/i.test(message)) {
     return 'Bu telefonda kullanılabilir Google hesabı bulunamadı. Telefon ayarlarından Google hesabı ekle veya e-posta ile devam et.'
   }
-  if (/network|unable to resolve host|connection.*failed/i.test(message)) return ERROR_MESSAGES['auth/network-request-failed']
-  if (error instanceof Error && !code && error.message) return error.message
-  return 'Bir şeyler ters gitti, tekrar dene.'
+  if (!code && /network|unable to resolve host|connection.*failed/i.test(message)) return firebaseErrorMessage({ code: 'auth/network-request-failed' }, 'auth')
+  return firebaseErrorMessage(error, 'auth')
 }

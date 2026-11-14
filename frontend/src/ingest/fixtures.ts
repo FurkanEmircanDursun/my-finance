@@ -8,6 +8,27 @@
  * balance: the charges sum to what its own cover implies.
  */
 
+/** A real no-activity state needs explicit bank wording and a balanced cover. */
+export const AKBANK_NO_ACTIVITY = `
+AKBANK AXESS HESAP ÖZETİ
+Dönem Borcu 0.00 TL
+Önceki Dönem Hesap Özeti Bakiyesi 0.00
+Ekstre Dönemi 29/08/2026-26/09/2026
+Hesap Kesim Tarihi 26/09/2026
+Son Ödeme Tarihi 06/10/2026
+Bu dönemde işleminiz bulunmamaktadır.
+`.trim()
+
+export const GARANTI_NO_ACTIVITY = `
+GARANTİ BBVA BONUS HESAP ÖZETİ
+Hesap Kesim Tarihi 28 Eylül 2026
+Son Ödeme Tarihi 08 Ekim 2026
+Bir önceki hesap kesim tarihiniz 28 Ağustos 2026
+Dönem Borcunuz 0,00 TL
+ÖNCEKİ DÖNEMDEN DEVİR EDİLEN TUTAR 0,00
+Bu ekstre döneminde harcamanız bulunmamaktadır.
+`.trim()
+
 /**
  * Garanti, as the PDF reader hands it over: the bonus column is already wrapped
  * in ⟦…⟧. Charges: 600 + 400 + 250 + 80 = 1.330, minus a 50 refund = 1.280. The

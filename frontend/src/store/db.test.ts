@@ -51,4 +51,18 @@ describe('IndexedDB write lifecycle', () => {
     expect(await dbSet('state', value)).toBe(false)
     expect(await dbGet('state')).toEqual(value)
   })
+  it('does not report an in-memory financial write as durable', async () => {
+    vi.stubGlobal('indexedDB', undefined)
+    const { dbReadFinancialState, dbWriteFinancialValue } = await import('./db')
+    await dbReadFinancialState()
+    const value = { transactions: ['memory-only'] }
+    expect(await dbWriteFinancialValue('state', value)).toBe(false)
+    expect(await dbReadFinancialState()).toEqual(value)
+  })
+  it('fails closed when opening an available IndexedDB throws instead of treating disk records as absent', async () => {
+    vi.stubGlobal('indexedDB', { open: () => { throw new Error('storage denied') } })
+    const { dbReadFinancialState, dbWriteFinancialValue } = await import('./db')
+    await expect(dbReadFinancialState()).rejects.toThrow('Cihaz veritabanı açılamadı')
+    await expect(dbWriteFinancialValue('state', { transactions: [] })).rejects.toThrow('Cihaz veritabanı açılamadı')
+  })
 })

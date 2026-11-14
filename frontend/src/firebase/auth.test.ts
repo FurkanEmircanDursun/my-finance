@@ -4,7 +4,7 @@ import { FirebaseAuthentication } from '@capacitor-firebase/authentication'
 import { authErrorMessage, completeRedirectSignIn, signInWithGoogle, signOutSession } from './auth'
 
 const session = vi.hoisted(() => ({
-  auth: { currentUser: null as null | { isAnonymous: boolean } },
+  auth: { currentUser: null as null | { uid?: string; isAnonymous: boolean } },
   native: false,
   disconnect: vi.fn().mockResolvedValue(undefined),
 }))
@@ -116,6 +116,19 @@ describe('Google sign-in across platforms', () => {
 })
 
 describe('sign-out and readable failures', () => {
+  it('does not sign out a different account after an asynchronous cleanup', async () => {
+    session.auth.currentUser = { uid: 'expected', isAnonymous: false }
+    session.disconnect.mockImplementationOnce(async () => { session.auth.currentUser = { uid: 'different', isAnonymous: false } })
+    await expect(signOutSession('expected')).rejects.toThrow('Hesap değişti')
+    expect(signOut).not.toHaveBeenCalled()
+  })
+
+  it('rejects an already changed account before disconnecting its push registration', async () => {
+    session.auth.currentUser = { uid: 'different', isAnonymous: false }
+    await expect(signOutSession('expected')).rejects.toThrow('Hesap değişti')
+    expect(session.disconnect).not.toHaveBeenCalled()
+    expect(signOut).not.toHaveBeenCalled()
+  })
   it('disconnects push before clearing identity and tolerates a native cache failure', async () => {
     session.native = true
     vi.mocked(FirebaseAuthentication.signOut).mockRejectedValue(new Error('Credential cache unavailable'))

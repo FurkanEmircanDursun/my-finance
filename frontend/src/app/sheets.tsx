@@ -1,4 +1,5 @@
 import { useExplore } from './ExploreContext'
+import { navigateTo } from './navigation'
 import {
   createContext,
   lazy,
@@ -15,6 +16,7 @@ import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
 import type { TxKind } from '../domain/types'
 import { EntrySheet } from './EntrySheet'
+import { useSharedPdfImport } from '../hooks/useSharedPdfImport'
 
 /**
  * Everything that is not one of the three tabs is a sheet, and every sheet in
@@ -32,9 +34,6 @@ import { EntrySheet } from './EntrySheet'
  * majority who never sign in.
  */
 
-const SettingsSheet = lazy(() =>
-  import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })),
-)
 const AccountSheet = lazy(() =>
   import('./AccountSheet').then((m) => ({ default: m.AccountSheet })),
 )
@@ -53,7 +52,6 @@ const ArchiveSheet = lazy(() =>
 const BudgetSheet = lazy(() =>
   import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })),
 )
-const CardsSheet = lazy(() => import('./CardsSheet').then((m) => ({ default: m.CardsSheet })))
 const TransactionsSheet = lazy(() =>
   import('../views/TransactionsSheet').then((m) => ({
     default: m.TransactionsSheet,
@@ -73,12 +71,13 @@ export interface TransactionQuery {
 interface SheetApi {
   openEntry: () => void
   openIncomeEntry: () => void
-  openImport: () => void
+  openImport: (cardId?: string) => void
   openSettings: () => void
   openAccount: () => void
   openIncome: () => void
   openBudgets: () => void
   openCards: () => void
+  openCardDetail: (cardId: string) => void
   openArchive: () => void
   /** One statement, line by line, added up the way the bank adds it. */
   openStatement: (statementId: string) => void
@@ -98,25 +97,27 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const { stopExplore } = useExplore()
   const { state, visible } = useStore()
   const [importOpen, setImportOpen] = useState(false)
+  const [importCardId, setImportCardId] = useState<string | undefined>()
   const [entryOpen, setEntryOpen] = useState<'expense' | 'income' | null>(null)
   const openEntry = useCallback(() => { stopExplore(); setEntryOpen('expense') }, [stopExplore])
   const openIncomeEntry = useCallback(() => { stopExplore(); setEntryOpen('income') }, [stopExplore])
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
-  const [cardsOpen, setCardsOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [statementId, setStatementId] = useState<string | null>(null)
   const [rewardsOpen, setRewardsOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
+  const sharedImport = useSharedPdfImport()
+  const sharedReady = !importOpen && !entryOpen && !accountOpen && !incomeOpen && !budgetsOpen && !archiveOpen && !statementId && !rewardsOpen && !txQuery
 
-  const openImport = useCallback(() => { stopExplore(); setImportOpen(true) }, [stopExplore])
-  const openSettings = useCallback(() => { stopExplore(); setSettingsOpen(true) }, [stopExplore])
+  const openImport = useCallback((cardId?: string) => { stopExplore(); setImportCardId(cardId); setImportOpen(true) }, [stopExplore])
+  const openSettings = useCallback(() => { stopExplore(); navigateTo('settings') }, [stopExplore])
   const openAccount = useCallback(() => { stopExplore(); setAccountOpen(true) }, [stopExplore])
   const openIncome = useCallback(() => { stopExplore(); setIncomeOpen(true) }, [stopExplore])
   const openBudgets = useCallback(() => { stopExplore(); setBudgetsOpen(true) }, [stopExplore])
-  const openCards = useCallback(() => { stopExplore(); setCardsOpen(true) }, [stopExplore])
+  const openCards = useCallback(() => { stopExplore(); navigateTo('cards') }, [stopExplore])
+  const openCardDetail = useCallback((cardId: string) => { stopExplore(); navigateTo('card-detail', cardId) }, [stopExplore])
   const openArchive = useCallback(() => { stopExplore(); setArchiveOpen(true) }, [stopExplore])
   const openStatement = useCallback((id: string) => { stopExplore(); setStatementId(id) }, [stopExplore])
   const openRewards = useCallback(() => { stopExplore(); setRewardsOpen(true) }, [stopExplore])
@@ -135,6 +136,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       openIncome,
       openBudgets,
       openCards,
+      openCardDetail,
       openArchive,
       openStatement,
       openRewards,
@@ -149,6 +151,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       openIncome,
       openBudgets,
       openCards,
+      openCardDetail,
       openArchive,
       openStatement,
       openRewards,
@@ -173,6 +176,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
 
   return (
     <SheetContext.Provider value={api}>
+      {sharedImport.error && <div role="alert" className="mx-5 mt-4 rounded-lg bg-warning-soft p-4 text-body text-warning"><p>{sharedImport.error}</p><div className="mt-2 flex gap-4"><button type="button" className="text-button" onClick={sharedImport.retry}>Yeniden dene</button><button type="button" className="text-button" onClick={sharedImport.dismissError}>Kapat</button></div></div>}
+      {sharedImport.delivery && !sharedReady && <p role="status" className="mx-5 mt-4 text-body text-muted">Paylaşılan PDF hazır. Açık işlemini bitirdiğinde otomatik eklenecek.</p>}
       {children}
       {entryOpen && (
         <EntrySheet
@@ -181,7 +186,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
         />
       )}
 
-      <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} />
+      <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} initialCardId={importCardId} />
+      {sharedImport.delivery && <ImportSheet key={sharedImport.delivery.id} open={sharedReady} onClose={sharedImport.finish} sharedFiles={sharedImport.delivery.files} />}
 
       {/* Not lazy and not behind a sheet: it must be able to appear on its own,
           wherever the person is, the moment sync needs an answer. It carries no
@@ -189,10 +195,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       <SyncGate />
 
       <Suspense fallback={null}>
-        {cardsOpen && <CardsSheet open onClose={() => setCardsOpen(false)} />}
-        {settingsOpen && (
-          <SettingsSheet open onClose={() => setSettingsOpen(false)} />
-        )}
         {accountOpen && (
           <AccountSheet open onClose={() => setAccountOpen(false)} />
         )}

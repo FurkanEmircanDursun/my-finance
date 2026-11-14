@@ -1,4 +1,5 @@
-import { dbGet, dbSet } from '../store/db'
+import { UserFacingError } from '../core/errors'
+import { dbReadFinancialValue, dbWriteFinancialValue } from '../store/db'
 import type { Ledger } from './model'
 
 /**
@@ -18,16 +19,16 @@ const OWNER_KEY = 'sync:owner'
 
 export const indexedDbStorage: SyncStorage = {
   async loadLedger(uid) {
-    return (await dbGet<Ledger>(ledgerKey(uid))) ?? {}
+    return (await dbReadFinancialValue<Ledger>(ledgerKey(uid))) ?? {}
   },
   async saveLedger(uid, ledger) {
-    await dbSet(ledgerKey(uid), ledger)
+    if (!await dbWriteFinancialValue(ledgerKey(uid), ledger)) throw new UserFacingError('Eşitleme kaydı cihazda saklanamadı.')
   },
   async getOwner() {
-    return (await dbGet<string>(OWNER_KEY)) ?? null
+    return (await dbReadFinancialValue<string>(OWNER_KEY)) ?? null
   },
   async setOwner(uid) {
-    await dbSet(OWNER_KEY, uid)
+    if (!await dbWriteFinancialValue(OWNER_KEY, uid)) throw new UserFacingError('Hesap sahipliği cihazda saklanamadı.')
   },
 }
 

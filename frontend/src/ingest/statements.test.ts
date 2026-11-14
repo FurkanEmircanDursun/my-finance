@@ -180,7 +180,7 @@ describe('reconciliation against the cover', () => {
   })
 
   it('is unverified, not wrong, when the cover prints nothing to compare against', () => {
-    const bare = 'GARANTİ BBVA BONUS\n05 Eylül 2026 A 100,00\n06 Eylül 2026 B 100,00\n07 Eylül 2026 C 100,00'
+    const bare = 'GARANTİ BBVA BONUS HESAP ÖZETİ\nHesap Kesim Tarihi 28 Eylül 2026\nSon Ödeme Tarihi 08 Ekim 2026\n05 Eylül 2026 A 100,00\n06 Eylül 2026 B 100,00\n07 Eylül 2026 C 100,00'
     expect(parse(bare).reconciliation.status).toBe('unverified')
   })
 })

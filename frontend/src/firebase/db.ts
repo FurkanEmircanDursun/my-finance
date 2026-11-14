@@ -1,8 +1,9 @@
 import {
-  initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager,
+  clearIndexedDbPersistence, initializeFirestore, memoryLocalCache, terminate,
   type Firestore,
 } from 'firebase/firestore'
 import { getFirebaseApp } from './config'
+import { UserFacingError } from '../core/errors'
 
 let dbInstance: Firestore | null = null
 
@@ -14,20 +15,19 @@ export function getFirebaseDb(): Firestore {
   // them outright.
   const common = { ignoreUndefinedProperties: true }
 
-  try {
-    // A persistent cache is what makes "offline" a normal state instead of an
-    // error: writes made without a connection are kept on disk and sent when it
-    // returns, even if the app is closed in between, and a reload shows the last
-    // known data at once instead of waiting for the network. One cache shared by
-    // every tab, so two open tabs cannot disagree with each other.
-    dbInstance = initializeFirestore(getFirebaseApp(), {
-      ...common,
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-    })
-  } catch {
-    // No IndexedDB (a private window, a locked-down WebView): sync still works,
-    // it just cannot outlive the page.
-    dbInstance = initializeFirestore(getFirebaseApp(), { ...common, localCache: memoryLocalCache() })
-  }
+  // The application snapshot and pending sync ledger already provide durable
+  // offline storage. A second disk cache would retain account records after
+  // this device's copy had been cleared.
+  dbInstance = initializeFirestore(getFirebaseApp(), { ...common, localCache: memoryLocalCache() })
   return dbInstance
+}
+
+/** Drops only SDK-local cached records, never a Firestore document. */
+export async function clearFirebaseDeviceCache(): Promise<void> {
+  const db = getFirebaseDb()
+  await terminate(db)
+  dbInstance = null
+  try { await clearIndexedDbPersistence(db) } catch {
+    throw new UserFacingError('Cihaz önbelleği temizlenemedi. Diğer Mizan sekmelerini kapatıp yeniden dene; bulut verilerin korunuyor.')
+  }
 }

@@ -1,4 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+const iosHasFirebase = existsSync(resolve(__dirname, 'ios/App/App/GoogleService-Info.plist'))
 
 const config: CapacitorConfig = {
   appId: 'com.faraday.followfinance',
@@ -8,6 +12,17 @@ const config: CapacitorConfig = {
     // The app never phones home except to Firebase (opt-in cloud sync) and its
     // own bundled assets, so cleartext traffic has no reason to be allowed.
     allowMixedContent: false,
+  },
+  ios: {
+    // FirebaseAuthentication configures the native Firebase SDK during plugin
+    // registration. Keep the offline app usable until its actual iOS app config
+    // is installed; never substitute Android/web Firebase credentials.
+    includePlugins: [
+      '@capacitor-firebase/analytics',
+      ...(iosHasFirebase ? ['@capacitor-firebase/authentication'] : []),
+      '@capacitor/app', '@capacitor/local-notifications', '@capacitor/push-notifications',
+      '@capacitor/splash-screen', '@capacitor/status-bar',
+    ],
   },
   plugins: {
     SplashScreen: {

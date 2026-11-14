@@ -193,17 +193,15 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, profile: { ...state.profile, ...action.profile } }
 
     case 'upsertCard': {
-      let card = sanitizeCards([action.card])[0]
+      const card = sanitizeCards([action.card])[0]
       if (!card) return state
       const cards = state.profile.cards ?? []
       const archivedCards = state.profile.archivedCards ?? []
-      const archived = archivedCards.find((item) => item.id === card.id || (item.bank === card.bank &&
-        ((card.last4 && item.last4 === card.last4) || cardDisplayName(item).toLocaleLowerCase('tr-TR') === cardDisplayName(card).toLocaleLowerCase('tr-TR'))))
-      if (archived) card = { ...card, id: archived.id }
+      const archived = archivedCards.find((item) => item.id === card.id)
       const old = cards.find((item) => item.id === card.id)
-      if (old && old.bank !== card.bank) return state
-      const label = cardDisplayName(card)
       const previous = old ?? archived
+      if (previous && previous.bank !== card.bank) return state
+      const label = cardDisplayName(card)
       if (cards.some((item) => item.id !== card.id && cardDisplayName(item).toLocaleLowerCase('tr-TR') === label.toLocaleLowerCase('tr-TR'))) return state
       return {
         ...state,
