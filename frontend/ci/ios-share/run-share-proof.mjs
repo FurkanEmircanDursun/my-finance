@@ -66,6 +66,8 @@ try {
   summary.stages.push('actual ad-hoc App+extension installed; containing app remains cold')
 
   const project = generateProbe(path.join(temporary, 'Probe'))
+  assert.equal(path.extname(project), '.xcodeproj', 'xcodebuild requires the project bundle directory')
+  assert.ok(existsSync(path.join(project, 'project.pbxproj')), 'The generated project bundle must contain its serialized AST')
   const derived = path.join(temporary, 'ProbeDerivedData')
   const destination = `platform=iOS Simulator,id=${device}`
   const common = ['-project', project, '-scheme', 'PDFShareProbe', '-configuration', 'Debug', '-destination', destination, '-derivedDataPath', derived, '-parallel-testing-enabled', 'NO', '-maximum-concurrent-test-simulator-destinations', '1', 'CODE_SIGN_IDENTITY=-', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGNING_REQUIRED=NO']

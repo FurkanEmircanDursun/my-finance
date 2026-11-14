@@ -106,7 +106,7 @@ export function generateProbe(outputRoot) {
   assert.equal(app.pbxNativeTarget.dependencies.length, 0)
   assert.equal(test.pbxNativeTarget.dependencies.length, 1)
   assert.ok(!readFileSync(projectPath, 'utf8').includes('com.apple.ApplicationGroups'))
-  return projectPath
+  return projectFolder
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
