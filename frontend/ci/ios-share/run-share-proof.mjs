@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import plist from 'simple-plist'
 import { generateProbe } from './generate-probe-project.mjs'
 
 assert.equal(process.platform, 'darwin', 'The real Simulator proof requires the Mac CI runner')
@@ -75,13 +76,41 @@ try {
   run('xcodebuild', ['test', ...common, '-only-testing:PDFShareProbeUITests/ShareFlowTests/testRealPDFShareTarget', '-maximum-test-execution-time-allowance', '120', '-resultBundlePath', path.join(proof, 'ShareTarget.xcresult')], { timeout: 210000 })
   summary.stages.push('real OS Share Sheet target and real extension success asserted by XCTest')
 
-  // The real extension's containerURL access may allocate the group lazily.
-  // Never create a group or call the receiver from this host-side harness.
-  let group
-  try { group = simctl(['get_app_container', device, 'com.faraday.followfinance', 'group.com.faraday.followfinance'], { capture: true }) }
-  catch (error) { try { simctl(['get_app_container', device, 'com.faraday.followfinance', 'groups']) } catch {}; throw error }
-  assert.ok(existsSync(group), 'The actual Mizan App Group container is unavailable after extension success')
-  summary.stages.push('strict actual App Group container lookup after real extension delivery passed')
+  const attachmentRoot = path.join(proof, 'ShareTarget-attachments')
+  run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', path.join(proof, 'ShareTarget.xcresult'), '--output-path', attachmentRoot])
+  const attachments = JSON.parse(readFileSync(path.join(attachmentRoot, 'manifest.json'), 'utf8')).flatMap(record => record.attachments ?? [])
+  const actualDevices = new Set(attachments.map(item => item.deviceId?.toUpperCase()).filter(Boolean))
+  assert.deepEqual([...actualDevices], [device.toUpperCase()], 'XCTest must use the exact preinstalled simulator, never a clone')
+
+  // Read only the OS-created group after the actual extension has saved.
+  // A cold containing app may have no app-specific simctl group association.
+  const groupId = 'group.com.faraday.followfinance'
+  let cliGroup
+  for (const owner of ['com.faraday.followfinance', 'com.faraday.followfinance.share']) {
+    try { cliGroup = simctl(['get_app_container', device, owner, groupId], { capture: true }); if (existsSync(cliGroup)) break }
+    catch { try { simctl(['get_app_container', device, owner, 'groups']) } catch {} }
+  }
+  const actualDevice = Object.values(JSON.parse(simctl(['list', 'devices', '--json'], { capture: true })).devices).flat().find(item => item.udid.toUpperCase() === device.toUpperCase())
+  assert.ok(actualDevice?.dataPath, 'The actual simulator must publish its data directory')
+  const dataRoot = realpathSync(actualDevice.dataPath)
+  assert.equal(path.basename(dataRoot), 'data', 'Metadata reads require the exact simulator data directory')
+  assert.equal(path.basename(path.dirname(dataRoot)).toUpperCase(), device.toUpperCase(), 'Metadata reads must stay under the exact simulator')
+  const groupsRoot = realpathSync(path.join(dataRoot, 'Containers', 'Shared', 'AppGroup'))
+  assert.equal(path.relative(dataRoot, groupsRoot), path.join('Containers', 'Shared', 'AppGroup'), 'Group metadata must stay in the exact OS AppGroup directory')
+  const matchingGroups = []
+  for (const entry of readdirSync(groupsRoot, { withFileTypes: true }).filter(item => item.isDirectory())) {
+    const directory = realpathSync(path.join(groupsRoot, entry.name))
+    assert.equal(path.dirname(directory), groupsRoot, 'An existing group must be a direct contained directory')
+    const metadataPath = path.join(directory, '.com.apple.mobile_container_manager.metadata.plist')
+    if (!existsSync(metadataPath)) continue
+    assert.ok(lstatSync(metadataPath).isFile(), 'Container metadata must be a real existing file')
+    if (plist.readFileSync(metadataPath).MCMMetadataIdentifier === groupId) matchingGroups.push(directory)
+  }
+  assert.equal(matchingGroups.length, 1, 'Exactly one OS-created Mizan App Group must exist')
+  const group = matchingGroups[0]
+  if (cliGroup && existsSync(cliGroup)) assert.equal(realpathSync(cliGroup), group, 'CLI and metadata discovery must identify the same existing group')
+  summary.groupDiscovery = { identifier: groupId, exactMetadataMatches: 1, cliResolved: Boolean(cliGroup && existsSync(cliGroup)) }
+  summary.stages.push('strict existing App Group identifier, unique metadata and path-containment gate passed')
   const hostData = simctl(['get_app_container', device, 'com.faraday.ci.PDFShareProbe', 'data'], { capture: true })
   const fixture = readFileSync(path.join(hostData, 'Documents', 'synthetic-share-proof.pdf'))
   let records = pdfRecords(group)
@@ -115,7 +144,7 @@ try {
 } finally {
   for (const name of ['ShareTarget', 'ForegroundImport']) {
     const bundle = path.join(proof, `${name}.xcresult`)
-    if (existsSync(bundle)) {
+    if (existsSync(bundle) && !existsSync(path.join(proof, `${name}-attachments`, 'manifest.json'))) {
       try { run('xcrun', ['xcresulttool', 'export', 'attachments', '--path', bundle, '--output-path', path.join(proof, `${name}-attachments`)]) }
       catch { console.error('Attachment export unavailable; the complete xcresult remains available.') }
     }

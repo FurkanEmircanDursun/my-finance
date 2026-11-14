@@ -13,6 +13,9 @@ leaves Mizan cold, selects the real OS activity, verifies extension success,
 then strictly looks up the actual App Group and verifies its receipt/PDF hash. It foregrounds Mizan
 and verifies automatic import and acknowledgement through the actual app UI.
 It never calls the native receiver directly or seeds the shared inbox.
+Group discovery requires a unique existing OS container with the exact Mizan
+metadata identifier and canonical path containment. A cold app's missing simctl
+association is not replaced by creating or assigning a container.
 
 UI execution has a total five-minute budget. The surrounding workflow has a
 20-minute limit. Only screenshots, accessibility attachments, xcresults and a
