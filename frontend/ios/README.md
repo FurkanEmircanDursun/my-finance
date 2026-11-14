@@ -12,6 +12,9 @@ npm ci --ignore-scripts
 npm run build
 npm run ios:sync
 npm run ios:validate
+swiftc ios/App/Shared/SharedPdfGeneration.swift scripts/test-shared-pdf-generation.swift \
+  -o /tmp/mizan-share-generation-tests
+/tmp/mizan-share-generation-tests
 xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData \
   CODE_SIGNING_ALLOWED=NO build
@@ -44,6 +47,10 @@ Authentication so the offline app and PDF import can still launch.
 - A successful UI acknowledgement deletes its private copies. Cancellation or
   disposal during a session change retains the delivery; deliberate account/device
   clearing calls `SharedPdf.clear` and must succeed before that boundary completes.
+  The App Group generation changes atomically with clearing. A Share Extension
+  that was already staging for the previous account cannot publish its files
+  afterward. Provider copying happens outside the lock; generation checking and
+  publishing use the same short cross-process file lock as clearing.
 
 Validate on iPhone/iPad: share one and several synthetic PDFs from Files and a bank
 app, cancel during preparation, open Mizan cold/warm/locked, repeat the same share,

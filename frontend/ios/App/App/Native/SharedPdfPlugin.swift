@@ -11,7 +11,7 @@ public final class SharedPdfPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "acknowledge", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clear", returnType: CAPPluginReturnPromise)
     ]
-    private let worker = DispatchQueue(label: "com.faraday.followfinance.shared-pdf")
+    private let worker = SharedPdfInbox.workQueue
     private var observers = [NSObjectProtocol]()
     public override func load() {
         for name in [UIApplication.didBecomeActiveNotification, SharedPdfInbox.changed] {

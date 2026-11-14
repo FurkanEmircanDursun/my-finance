@@ -1,6 +1,5 @@
 import Foundation
 import CryptoKit
-import Darwin
 
 struct SharedPdfFailure: LocalizedError {
     let message: String
@@ -21,6 +20,7 @@ struct SharedPdfRecord: Codable {
 /// This source is compiled into both targets. flock serializes the app and extension.
 final class SharedPdfInbox {
     static let shared = SharedPdfInbox()
+    static let workQueue = DispatchQueue(label: "com.faraday.followfinance.shared-pdf")
     static let maxBytes = 25 * 1024 * 1024
     static let maxFiles = 5
     static let maxInboxBytes = 50 * 1024 * 1024
@@ -40,13 +40,9 @@ final class SharedPdfInbox {
     }
     private func locked<T>(_ action: (URL) throws -> T) throws -> T {
         let root = try root()
-        let lock = open(root.appendingPathComponent(".lock").path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
-        guard lock >= 0 else { throw SharedPdfFailure(message: "PDF kuyruğu okunamadı.") }
-        defer { close(lock) }
-        guard flock(lock, LOCK_EX) == 0 else { throw SharedPdfFailure(message: "PDF kuyruğu okunamadı.") }
-        defer { flock(lock, LOCK_UN) }
-        return try action(root)
+        return try SharedPdfGeneration.withLock(at: root) { try action(root) }
     }
+    func currentGeneration() throws -> String { try locked { try SharedPdfGeneration.current(at: $0) } }
     private func recordURLs(_ root: URL) throws -> [URL] {
         try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
@@ -121,39 +117,50 @@ final class SharedPdfInbox {
         completed = true
         return total
     }
-    func receive(_ sources: [(URL, String)], isCancelled: () -> Bool = { false }) throws {
-        try locked { root in
+    func receive(_ sources: [(URL, String)], expectedGeneration: String? = nil, isCancelled: () -> Bool = { false }) throws {
+        let generation = try expectedGeneration ?? currentGeneration()
+        guard !sources.isEmpty && sources.count <= Self.maxFiles else { throw SharedPdfFailure(message: "Tek seferde en fazla 5 PDF paylaşabilirsin.") }
+        let staging = fm.temporaryDirectory.appendingPathComponent("mizan-shared-pdf-" + UUID().uuidString, isDirectory: true)
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+        defer { try? fm.removeItem(at: staging) }
+        var files = [SharedPdfFile](), hash = SHA256(), total = 0
+        // Provider reads and bounded copying never hold the cross-process inbox lock.
+        for (source, name) in sources {
             guard !isCancelled() else { throw SharedPdfFailure(message: "Paylaşım iptal edildi.") }
-            try cleanup(root)
-            guard !sources.isEmpty && sources.count <= Self.maxFiles else { throw SharedPdfFailure(message: "Tek seferde en fazla 5 PDF paylaşabilirsin.") }
-            let records = try recordURLs(root).map(read)
-            guard records.count < 10 else { throw SharedPdfFailure(message: "PDF kuyruğu dolu. Bekleyen içe aktarmayı tamamlayıp yeniden dene.") }
-            var available = Self.maxInboxBytes - records.flatMap(\.files).reduce(0) { $0 + $1.size }
-            var staged = [URL](), files = [SharedPdfFile](), hash = SHA256()
-            var committed = false
-            defer { if !committed { for file in staged { try? fm.removeItem(at: file) } } }
-            for (source, name) in sources {
+            let local = UUID().uuidString.lowercased() + ".pdf"
+            let destination = staging.appendingPathComponent(local)
+            let size = try Self.copyPdf(from: source, to: destination)
+            total += size
+            guard total <= Self.maxInboxBytes else { throw SharedPdfFailure(message: "PDF’lerin toplam boyutu 50 MB sınırını aşıyor.") }
+            let input = try FileHandle(forReadingFrom: destination)
+            defer { try? input.close() }
+            while let chunk = try input.read(upToCount: 32768), !chunk.isEmpty { hash.update(data: chunk) }
+            hash.update(data: Data([0]))
+            files.append(SharedPdfFile(name: Self.safeName(name), size: size, local: local))
+        }
+        let fingerprint = hash.finalize().map { String(format: "%02x", $0) }.joined()
+        do {
+            try locked { root in
+                try SharedPdfGeneration.require(generation, at: root)
                 guard !isCancelled() else { throw SharedPdfFailure(message: "Paylaşım iptal edildi.") }
-                let local = UUID().uuidString.lowercased() + ".pdf"
-                let destination = root.appendingPathComponent(local)
-                staged.append(destination)
-                let size = try Self.copyPdf(from: source, to: destination)
-                available -= size
-                guard available >= 0 else { throw SharedPdfFailure(message: "PDF kuyruğu dolu. Bekleyen içe aktarmayı tamamlayıp yeniden dene.") }
-                let input = try FileHandle(forReadingFrom: destination)
-                defer { try? input.close() }
-                while let chunk = try input.read(upToCount: 32768), !chunk.isEmpty { hash.update(data: chunk) }
-                hash.update(data: Data([0]))
-                files.append(SharedPdfFile(name: Self.safeName(name), size: size, local: local))
+                try cleanup(root)
+                let records = try recordURLs(root).map(read)
+                if records.contains(where: { $0.fingerprint == fingerprint }) { return }
+                guard records.count < 10, records.flatMap(\.files).reduce(0, { $0 + $1.size }) + total <= Self.maxInboxBytes else { throw SharedPdfFailure(message: "PDF kuyruğu dolu. Bekleyen içe aktarmayı tamamlayıp yeniden dene.") }
+                var moved = [URL](), committed = false
+                defer { if !committed { for file in moved { try? fm.removeItem(at: file) } } }
+                for file in files {
+                    let destination = root.appendingPathComponent(file.local)
+                    try fm.moveItem(at: staging.appendingPathComponent(file.local), to: destination)
+                    moved.append(destination)
+                }
+                let record = SharedPdfRecord(id: UUID().uuidString.lowercased(), files: files, fingerprint: fingerprint, createdAt: Date())
+                let data = try JSONEncoder().encode(record)
+                try data.write(to: root.appendingPathComponent(record.id + ".json"), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                committed = true
             }
-            let fingerprint = hash.finalize().map { String(format: "%02x", $0) }.joined()
-            if records.contains(where: { $0.fingerprint == fingerprint }) { return }
-            guard !isCancelled() else { throw SharedPdfFailure(message: "Paylaşım iptal edildi.") }
-            let record = SharedPdfRecord(id: UUID().uuidString.lowercased(), files: files, fingerprint: fingerprint, createdAt: Date())
-            let data = try JSONEncoder().encode(record)
-            let url = root.appendingPathComponent(record.id + ".json")
-            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-            committed = true
+        } catch SharedPdfGenerationError.changed {
+            throw SharedPdfFailure(message: "Paylaşım sırasında hesap değişti. PDF’leri yeniden paylaş.")
         }
         NotificationCenter.default.post(name: Self.changed, object: nil)
     }
@@ -178,7 +185,8 @@ final class SharedPdfInbox {
     }
     func clear() throws {
         try locked { root in
-            for url in try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) where url.lastPathComponent != ".lock" { try fm.removeItem(at: url) }
+            try SharedPdfGeneration.rotate(at: root)
+            for url in try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) where url.lastPathComponent != ".lock" && url.lastPathComponent != SharedPdfGeneration.fileName { try fm.removeItem(at: url) }
         }
     }
 }

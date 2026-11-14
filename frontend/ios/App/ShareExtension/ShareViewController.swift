@@ -8,6 +8,7 @@ final class ShareViewController: UIViewController {
     private let done = UIButton(type: .system)
     private let worker = DispatchQueue(label: "com.faraday.followfinance.share-extension")
     private var staging: URL?
+    private var generation: String?
     private let operation = Progress(totalUnitCount: 1)
     private var cancelled: Bool { operation.isCancelled }
     private var started = false
@@ -29,6 +30,8 @@ final class ShareViewController: UIViewController {
         let items = extensionContext?.inputItems.compactMap { $0 as? NSExtensionItem } ?? []
         let providers = items.flatMap { $0.attachments ?? [] }
         guard !providers.isEmpty, providers.count <= SharedPdfInbox.maxFiles, providers.allSatisfy({ $0.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) }) else { show("Tek seferde en fazla 5 PDF paylaşabilirsin.", success: false); return }
+        do { generation = try SharedPdfInbox.shared.currentGeneration() }
+        catch { show("PDF paylaşımı için Mizan uygulama grubu kullanılamıyor.", success: false); return }
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]); staging = folder }
         catch { show("Paylaşılan PDF alınamadı. Yeniden dene.", success: false); return }
@@ -37,11 +40,12 @@ final class ShareViewController: UIViewController {
     private func stage(_ providers: [NSItemProvider], index: Int, sources: [(URL, String)], bytes: Int, folder: URL) {
         guard !cancelled else { cleanup(); return }
         guard index < providers.count else {
+            guard let generation else { show("Paylaşılan PDF alınamadı. Yeniden dene.", success: false); return }
             done.isEnabled = false
             status.text = "PDF’ler kaydediliyor…"
             worker.async { [weak self] in
                 guard let self, !self.cancelled else { return }
-                do { try SharedPdfInbox.shared.receive(sources, isCancelled: { self.cancelled }); DispatchQueue.main.async { self.cleanup(); self.show("PDF’ler Mizan’a hazır. Mizan’ı açtığında içe aktarma başlayacak.", success: true) } }
+                do { try SharedPdfInbox.shared.receive(sources, expectedGeneration: generation, isCancelled: { self.cancelled }); DispatchQueue.main.async { self.cleanup(); self.show("PDF’ler Mizan’a hazır. Mizan’ı açtığında içe aktarma başlayacak.", success: true) } }
                 catch { DispatchQueue.main.async { self.cleanup(); self.show((error as? SharedPdfFailure)?.message ?? "Paylaşılan PDF alınamadı. Yeniden dene.", success: false) } }
             }
             return

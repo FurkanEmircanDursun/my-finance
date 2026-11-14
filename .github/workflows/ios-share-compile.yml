@@ -40,6 +40,10 @@ jobs:
         run: npm run ios:sync
       - name: Validate native share target wiring
         run: npm run ios:validate
+      - name: Test cross-process inbox clearing
+        run: |
+          swiftc ios/App/Shared/SharedPdfGeneration.swift scripts/test-shared-pdf-generation.swift -o "$RUNNER_TEMP/mizan-share-generation-tests"
+          "$RUNNER_TEMP/mizan-share-generation-tests"
       - name: Compile App and embedded share extension
         run: >-
           xcodebuild

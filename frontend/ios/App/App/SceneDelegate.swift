@@ -27,7 +27,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private func receiveDocuments(_ contexts: Set<UIOpenURLContext>) {
         let documents = contexts.map(\.url).filter(\.isFileURL)
         guard !documents.isEmpty else { return }
-        DispatchQueue.global(qos: .userInitiated).async {
+        SharedPdfInbox.workQueue.async {
             do { try SharedPdfInbox.shared.receive(documents.map { ($0, $0.lastPathComponent) }) }
             catch {
                 DispatchQueue.main.async {

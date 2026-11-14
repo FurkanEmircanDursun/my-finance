@@ -52,4 +52,5 @@ if (existsSync(path('App/GoogleService-Info.plist'))) {
   assert.ok(!config.packageClassList.includes('FirebaseAuthenticationPlugin'), 'Missing Firebase config must not crash offline startup')
 }
 assert.ok(readdirSync(path('Shared')).includes('SharedPdfInbox.swift'))
+assert.ok(readdirSync(path('Shared')).includes('SharedPdfGeneration.swift'))
 console.log('iOS target graph, embedded extension, App Groups, PDF activation, document opening and optional Firebase resources validated.')
