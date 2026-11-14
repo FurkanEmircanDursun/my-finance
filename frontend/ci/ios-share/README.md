@@ -9,8 +9,8 @@ card statement in its own Documents directory and shares its file URL through
 UIKit's real `UIActivityViewController`.
 
 The proof installs an ad-hoc-signed copy of the actual Mizan app and extension,
-checks the actual App Group container, selects the real OS activity, verifies
-extension success and the resulting receipt/PDF hash, then foregrounds Mizan
+leaves Mizan cold, selects the real OS activity, verifies extension success,
+then strictly looks up the actual App Group and verifies its receipt/PDF hash. It foregrounds Mizan
 and verifies automatic import and acknowledgement through the actual app UI.
 It never calls the native receiver directly or seeds the shared inbox.
 

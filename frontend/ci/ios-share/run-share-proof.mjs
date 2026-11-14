@@ -15,7 +15,7 @@ const summary = { status: 'preparing', stages: [], data: 'invented synthetic PDF
 let device, uiStarted
 const run = (command, args, options = {}) => {
   console.log(`\n[share-proof] ${command} ${args.join(' ')}`)
-  const result = spawnSync(command, args, { encoding: 'utf8', stdio: options.capture ? 'pipe' : 'inherit', timeout: options.timeout ?? 120000 })
+  const result = spawnSync(command, args, { encoding: 'utf8', stdio: options.capture ? 'pipe' : 'inherit', timeout: options.timeout ?? 120000, maxBuffer: 4 * 1024 * 1024 })
   if (result.status !== 0 || result.error) {
     if (options.capture) { if (result.stdout) console.error(result.stdout); if (result.stderr) console.error(result.stderr) }
     throw new Error(`${command} failed (${result.status ?? result.error?.code ?? 'unknown'})`)
@@ -60,13 +60,10 @@ try {
   run('codesign', ['--force', '--sign', '-', '--entitlements', 'ios/App/ShareExtension/ShareExtension.entitlements', path.join(app, 'PlugIns', 'MizanShare.appex')])
   run('codesign', ['--force', '--sign', '-', '--entitlements', 'ios/App/App/App.entitlements', app])
   run('codesign', ['--verify', '--strict', '--deep', app])
+  run('codesign', ['--display', '--entitlements', '-', '--xml', app])
+  run('codesign', ['--display', '--entitlements', '-', '--xml', path.join(app, 'PlugIns', 'MizanShare.appex')])
   simctl(['install', device, app])
-  simctl(['launch', device, 'com.faraday.followfinance'])
-  const group = simctl(['get_app_container', device, 'com.faraday.followfinance', 'group.com.faraday.followfinance'], { capture: true })
-  assert.ok(existsSync(group), 'The actual Mizan App Group container is unavailable')
-  assert.equal(pdfRecords(group).length, 0, 'The fresh Simulator must not contain seeded deliveries')
-  simctl(['terminate', device, 'com.faraday.followfinance'])
-  summary.stages.push('actual ad-hoc App+extension installation and App Group gate passed')
+  summary.stages.push('actual ad-hoc App+extension installed; containing app remains cold')
 
   const project = generateProbe(path.join(temporary, 'Probe'))
   const derived = path.join(temporary, 'ProbeDerivedData')
@@ -76,6 +73,13 @@ try {
   run('xcodebuild', ['test', ...common, '-only-testing:PDFShareProbeUITests/ShareFlowTests/testRealPDFShareTarget', '-maximum-test-execution-time-allowance', '120', '-resultBundlePath', path.join(proof, 'ShareTarget.xcresult')], { timeout: 210000 })
   summary.stages.push('real OS Share Sheet target and real extension success asserted by XCTest')
 
+  // The real extension's containerURL access may allocate the group lazily.
+  // Never create a group or call the receiver from this host-side harness.
+  let group
+  try { group = simctl(['get_app_container', device, 'com.faraday.followfinance', 'group.com.faraday.followfinance'], { capture: true }) }
+  catch (error) { try { simctl(['get_app_container', device, 'com.faraday.followfinance', 'groups']) } catch {}; throw error }
+  assert.ok(existsSync(group), 'The actual Mizan App Group container is unavailable after extension success')
+  summary.stages.push('strict actual App Group container lookup after real extension delivery passed')
   const hostData = simctl(['get_app_container', device, 'com.faraday.ci.PDFShareProbe', 'data'], { capture: true })
   const fixture = readFileSync(path.join(hostData, 'Documents', 'synthetic-share-proof.pdf'))
   let records = pdfRecords(group)
@@ -115,6 +119,12 @@ try {
     }
   }
   if (device) {
+    if (summary.status === 'failed') {
+      try {
+        const logs = simctl(['spawn', device, 'log', 'show', '--last', '2m', '--style', 'compact', '--predicate', 'process == "App" OR process == "MizanShare" OR process == "PDFShareProbe"'], { capture: true, timeout: 30000 })
+        writeFileSync(path.join(proof, 'recent-app-log.txt'), logs.split('\n').slice(-200).join('\n') + '\n')
+      } catch { console.error('Bounded app log capture unavailable; XCTest evidence remains available.') }
+    }
     try { simctl(['io', device, 'screenshot', path.join(proof, 'final-simulator.png')]) } catch {}
     try { simctl(['shutdown', device]) } catch {}
     try { simctl(['delete', device]) } catch {}
