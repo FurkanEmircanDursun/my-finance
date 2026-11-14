@@ -13,7 +13,7 @@ const harness = vi.hoisted(() => ({
   createWorker: vi.fn(),
 }))
 
-vi.mock('pdfjs-dist/build/pdf.min.mjs', () => ({
+vi.mock('pdfjs-dist/legacy/build/pdf.min.mjs', () => ({
   GlobalWorkerOptions: {},
   getDocument: () => ({
     promise: Promise.resolve({
@@ -27,7 +27,7 @@ vi.mock('pdfjs-dist/build/pdf.min.mjs', () => ({
     }),
   }),
 }))
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: 'mock-worker' }))
+vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url', () => ({ default: 'mock-worker' }))
 vi.mock('tesseract.js', () => ({ default: { createWorker: harness.createWorker } }))
 
 const file = () => new File(['%PDF-1.7\n'], 'ekstre.pdf', { type: 'application/pdf' })

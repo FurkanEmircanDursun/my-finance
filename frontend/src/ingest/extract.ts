@@ -52,8 +52,11 @@ let pdfjsPromise: Promise<any> | null = null
 async function loadPdfjs(): Promise<any> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
-      const lib = await import('pdfjs-dist/build/pdf.min.mjs' as string)
-      const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url' as string)).default
+      // Native WebViews can lack newer APIs such as Promise.withResolvers.
+      // Both realms need PDF.js's bundled compatibility code: a legacy main
+      // bundle paired with a modern worker still fails during PDF extraction.
+      const lib = await import('pdfjs-dist/legacy/build/pdf.min.mjs' as string)
+      const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url' as string)).default
       lib.GlobalWorkerOptions.workerSrc = workerUrl
       return lib
     })()
