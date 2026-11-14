@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.faraday.followfinance',
-  appName: 'My Finance',
+  appName: 'Mizan',
   webDir: 'dist',
   android: {
     // The app never phones home except to Firebase (opt-in cloud sync) and its
@@ -12,9 +12,10 @@ const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
       launchAutoHide: false,
-      backgroundColor: '#0b0e13',
-      androidSplashResourceName: 'splash',
+      backgroundColor: '#f5f5fa',
+      androidSplashResourceName: 'launch_splash',
     },
+    PushNotifications: { presentationOptions: ['alert', 'sound'] },
     FirebaseAuthentication: {
       // The app's own Firebase JS SDK session (see `firebase/auth.ts`) is the
       // single source of truth for who is signed in — on web and on native

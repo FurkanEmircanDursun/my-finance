@@ -35,7 +35,7 @@ describe('setSettings clears the period filter on mode switch', () => {
   })
 
   it('leaves the period filter alone when periodGrouping is set to its current value', () => {
-    // initialState.settings.periodGrouping is null; re-affirming null must not
+    // Re-affirming the default calendar mode must not
     // wipe filters a caller set moments earlier.
     const withMonthFilter = reducer(initialState, {
       type: 'setFilters',
@@ -44,7 +44,7 @@ describe('setSettings clears the period filter on mode switch', () => {
 
     const afterNoopSet = reducer(withMonthFilter, {
       type: 'setSettings',
-      settings: { periodGrouping: null },
+      settings: { periodGrouping: 'calendar' },
     })
 
     expect(afterNoopSet.filters.month).toBe('2026-08')

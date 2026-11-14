@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { ChevronDown, Plus, Search, Upload } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Empty, Meter, Section } from '../ui/primitives'
 import { MonthlyFlowChart } from '../ui/charts'
@@ -29,19 +29,29 @@ import type { RecurringPayment } from '../analytics/types'
  */
 export function SpendingView() {
   const { state, analysis, overall } = useStore()
-  const { openBudgets, openIncome, openTransactions } = useSheets()
+  const { openBudgets, openIncomeEntry, openTransactions, openImport, openEntry } = useSheets()
   const [detail, setDetail] = useState(false)
+  const [allCategories, setAllCategories] = useState(false)
 
   const { totals, categories, merchants, monthly, trend, habits, meta, budgets } = analysis
   const limit = state.profile.spendingLimit
   const latest = monthly[monthly.length - 1]
+  const shownCategories = allCategories ? categories : categories.slice(0, 6)
+  const period = state.filters.month === 'all' ? 'Tüm dönemler' : monthLabel(state.filters.month)
+  const heading = (
+    <header className="dashboard-title">
+      <div><h1>Harcamalar</h1><p>{period} · Paranın nereye gittiğini gör.</p></div>
+      <button type="button" className="quiet-button" onClick={() => openTransactions()}><Search size={17} /> İşlem ara</button>
+    </header>
+  )
 
   if (!meta.transactionCount) {
-    return <Empty title="Bu dönemde işlem yok" description="Üstteki dönem seçiminden başka bir ay seç." />
+    return <div>{heading}<Empty title="Bu dönemde henüz işlem yok" description={state.transactions.length ? 'Başka bir ay seçebilir veya bu döneme yeni bir kayıt ekleyebilirsin.' : 'İlk giderini ekle ya da Akbank veya Garanti ekstreni yükle. Harcamaların burada kategorilere ayrılır.'} action={<div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={openEntry}><Plus size={16} /> Gider ekle</Button><Button onClick={openImport}><Upload size={16} /> Ekstre yükle</Button></div>} /></div>
   }
 
   return (
     <div className="space-y-10">
+      {heading}
       {/* ── Two figures, and the rest folded away ────────────────────────── */}
       <section>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -52,26 +62,26 @@ export function SpendingView() {
           {/* "Kalan" is income minus spending. With no income on file it would read
               as −₺42.920 — the spending again, with a minus sign and a red
               colour — so until there is an income the tile asks for one. */}
-          {totals.incomeBasis > 0 ? (
+          {totals.income > 0 ? (
             <div className="surface p-5">
               <div
                 className={clsx(
                   'num text-figure font-semibold',
-                  totals.savings >= 0 ? 'text-positive' : 'text-negative',
+                  totals.net >= 0 ? 'text-positive' : 'text-negative',
                 )}
               >
-                {money(totals.savings, { sign: true })}
+                {money2(totals.net)}
               </div>
-              <div className="mt-2 text-body text-muted">Kalan</div>
+              <div className="mt-2 text-body text-muted">Gelirden kalan</div>
             </div>
           ) : (
             <button
               type="button"
-              onClick={openIncome}
+              onClick={openIncomeEntry}
               className="surface p-5 text-left transition-colors duration-200 hover:bg-hover"
             >
               <div className="num text-figure font-semibold text-faint">—</div>
-              <div className="mt-2 text-body text-muted">Kalan</div>
+              <div className="mt-2 text-body text-muted">Gelirden kalan</div>
               <div className="mt-1 text-label text-accent">Gelirini gir</div>
             </button>
           )}
@@ -83,20 +93,16 @@ export function SpendingView() {
           aria-expanded={detail}
           className="-ml-2 mt-3 flex h-11 items-center gap-1.5 rounded-[var(--radius)] px-2 text-body text-muted transition-colors duration-200 hover:bg-hover hover:text-ink"
         >
-          Detay
+          Harcama hesabını gör
           <ChevronDown size={16} className={clsx('transition-transform duration-200', detail && 'rotate-180')} />
         </button>
 
         {detail && (
           <dl className="rise-in mt-1 space-y-1">
             <DetailRow
-              label="Gelir"
-              value={money2(totals.incomeBasis)}
-              note={
-                totals.incomeAssumed ? 'ayarlardaki aylık gelirden'
-                : totals.income > 0 ? 'ekstredeki gelir satırları'
-                : 'girilmedi'
-              }
+              label="Kaydedilen gelir"
+              value={money2(totals.income)}
+              note={totals.income > 0 ? 'bu dönemdeki gelir kayıtları' : 'henüz eklenmedi'}
             />
             <DetailRow label="Brüt harcama" value={money2(totals.spend)} note={`${count(meta.spendCount)} işlem`} />
             <DetailRow label="− İadeler ve indirimler" value={money2(totals.refunds)} />
@@ -106,46 +112,19 @@ export function SpendingView() {
         )}
       </section>
 
-      {/* ── Month by month ───────────────────────────────────────────────── */}
-      {/* One month is not a series: a single fat bar says nothing the headline
-          has not already said, so the chart waits for a second month. */}
-      {(monthly.length >= 2 || (limit > 0 && latest)) && (
-        <Section
-          title={monthly.length >= 2 ? 'Ay ay' : 'Aylık limit'}
-          description={monthly.length >= 2 ? 'Soluk sütunlar kısmi dönemler' : undefined}
-          actions={monthly.length >= 2 ? <TrendPill value={trend.momPct} suffix="son iki tam ay" /> : undefined}
-        >
-          {monthly.length >= 2 && <MonthlyFlowChart data={monthly} height={200} showIncome />}
-
-          {limit > 0 && latest && (
-            <div className={monthly.length >= 2 ? 'mt-5 space-y-2' : 'space-y-2'}>
-              <div className="flex items-baseline justify-between gap-3">
-                <span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit</span>
-                <span className="num text-label text-muted">
-                  {money(latest.spend)} / {money(limit)}
-                </span>
-              </div>
-              <Meter
-                value={latest.spend}
-                max={limit}
-                tone={latest.spend > limit ? 'negative' : latest.spend > limit * 0.85 ? 'warning' : 'positive'}
-              />
-            </div>
-          )}
-        </Section>
-      )}
-
       {/* ── Categories ───────────────────────────────────────────────────── */}
       <Section
         title="Kategoriler"
+        description="İşlemlerini görmek veya kategorilerini değiştirmek için bir satıra dokun."
         actions={
           <Button size="sm" variant="ghost" onClick={openBudgets}>
             Limitler
           </Button>
         }
       >
+        {categories.length === 0 && <Empty compact title="Kategorilere ayrılacak gider yok" description="Gelir ve kart borcu ödemeleri bu listeye eklenmez. İlk harcamanı kaydedebilirsin." action={<Button onClick={openEntry}><Plus size={16} /> Gider ekle</Button>} />}
         <ul className="-mx-2">
-          {categories.map((stat) => {
+          {shownCategories.map((stat) => {
             const budget = budgets.items.find((b) => b.category === stat.id)
             return (
               <li key={stat.id}>
@@ -198,12 +177,21 @@ export function SpendingView() {
         </ul>
         <BreakdownFooter
           categories={categories}
-          shown={categories.length}
+          shown={shownCategories.length}
           refundsOutside={totals.unallocatedRefunds}
           netSpend={totals.netSpend}
           onOpenRefunds={() => openTransactions({ kinds: ['refund'], title: 'İade ve indirimler' })}
         />
+        {categories.length > 6 && <Button variant="ghost" className="mt-3 w-full" onClick={() => setAllCategories(value => !value)} aria-expanded={allCategories}>{allCategories ? 'İlk 6 kategoriyi göster' : `${count(categories.length)} kategorinin tümünü gör`}<ChevronDown size={16} className={clsx('transition-transform duration-200', allCategories && 'rotate-180')} /></Button>}
       </Section>
+
+      {/* Comparison is secondary to finding the spending that caused it. */}
+      {(monthly.length >= 2 || (limit > 0 && latest)) && (
+        <SpendingDisclosure title={monthly.length >= 2 ? 'Aylar arası karşılaştırma' : 'Aylık harcama limiti'} description={monthly.length >= 2 ? `${count(monthly.length)} ayın gelir, gider ve limit görünümü` : latest ? `${monthLabel(latest.month)} · ${money(latest.spend)} / ${money(limit)}` : undefined}>
+          {monthly.length >= 2 && <><div className="mb-3"><TrendPill value={trend.momPct} suffix="son iki tam ay" /></div><MonthlyFlowChart data={monthly} height={200} showIncome /><p className="mt-2 text-label text-faint">Soluk sütunlar kısmi dönemleri gösterir.</p></>}
+          {limit > 0 && latest && <div className={monthly.length >= 2 ? 'mt-5 space-y-2' : 'space-y-2'}><div className="flex items-baseline justify-between gap-3"><span className="text-label text-muted">{monthLabel(latest.month)} · aylık limit</span><span className="num text-label text-muted">{money(latest.spend)} / {money(limit)}</span></div><Meter value={latest.spend} max={limit} tone={latest.spend > limit ? 'negative' : latest.spend > limit * 0.85 ? 'warning' : 'positive'} /></div>}
+        </SpendingDisclosure>
+      )}
 
       {/* ── Subscriptions ────────────────────────────────────────────────── */}
       {/* Read from `overall`, never the selected period: recurring detection
@@ -214,6 +202,7 @@ export function SpendingView() {
       />
 
       {/* ── Merchants ────────────────────────────────────────────────────── */}
+      {(merchants.length > 0 || habits.length > 0 || trend.movers.length > 0) && <SpendingDisclosure title="İşyerleri ve harcama alışkanlıkları" description={`${count(merchants.length)} işyeri · sık ödemeler ve geçen aya göre değişimler`}>
       <Section title="En çok harcadığın yerler">
         <ul className="-mx-2">
           {merchants.slice(0, 8).map((merchant) => (
@@ -281,11 +270,25 @@ export function SpendingView() {
           </ul>
         </Section>
       )}
+      </SpendingDisclosure>}
     </div>
   )
 }
 
 /* ── Pieces ──────────────────────────────────────────────────────────────── */
+
+function SpendingDisclosure({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <details className="group border-t border-line pt-2" onToggle={event => setExpanded(event.currentTarget.open)}>
+      <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-4 rounded-[var(--radius)] py-3 text-left">
+        <h2 className="text-title font-semibold text-ink">{title}{description && <span className="mt-1 block text-label font-normal text-muted">{description}</span>}</h2>
+        <ChevronDown size={18} className="shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      {expanded && <div className="space-y-8 pb-3 pt-4">{children}</div>}
+    </details>
+  )
+}
 
 function DetailRow({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
@@ -317,17 +320,20 @@ function RecurringSection({
   const monthly = active.reduce((s, r) => s + r.monthlyEquivalent, 0)
 
   return (
-    <Section
+    <SpendingDisclosure
       title="Düzenli ödemeler"
-      description={`Ayda ${money(monthly)} · yılda ${money(active.reduce((s, r) => s + r.annualCost, 0))}`}
-      actions={
+      description={`${count(active.length)} aktif ödeme · ayda yaklaşık ${money(monthly)}`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-label text-muted">Aktif ödemelerin yıllık karşılığı {money(active.reduce((s, r) => s + r.annualCost, 0))}. Tüm kayıtlarından tahmin edilir.</p>
+        {
         lapsed.length > 0 && (
           <Button size="sm" variant="ghost" onClick={() => setShowLapsed((v) => !v)}>
             {showLapsed ? 'Durmuşları gizle' : `Durmuş (${lapsed.length})`}
           </Button>
         )
-      }
-    >
+        }
+      </div>
       <ul className="-mx-2">
         {rows.map((item) => {
           const rise = item.priceChangePct !== null && item.priceChangePct >= 10
@@ -356,6 +362,6 @@ function RecurringSection({
           )
         })}
       </ul>
-    </Section>
+    </SpendingDisclosure>
   )
 }

@@ -9,6 +9,7 @@ import { useStore } from '../store/AppStore'
 import { useImport } from '../hooks/useImport'
 import { count } from '../core/money'
 import type { ImportOutcome } from '../domain/types'
+import { cardDisplayName } from '../domain/cards'
 
 /**
  * Importing a statement is an action, not a place, so it no longer has a tab.
@@ -27,6 +28,9 @@ const ACCEPT = {
 }
 
 function usePicker(onFinished?: (outcomes: ImportOutcome[]) => void) {
+  const { state } = useStore()
+  const cards = state.profile.cards ?? []
+  const [cardId, setCardId] = useState(cards.length === 1 ? cards[0].id : '')
   const { run, progress } = useImport()
   const [queue, setQueue] = useState<File[]>([])
   const [rejected, setRejected] = useState(false)
@@ -42,12 +46,12 @@ function usePicker(onFinished?: (outcomes: ImportOutcome[]) => void) {
   const dropzone = useDropzone({ onDrop, accept: ACCEPT, multiple: true, disabled: progress.running })
 
   const start = async () => {
-    const outcomes = await run(queue)
+    const outcomes = await run(queue, cardId || undefined)
     setQueue([])
     if (outcomes) onFinished?.(outcomes)
   }
 
-  return { dropzone, queue, setQueue, rejected, progress, start }
+  return { dropzone, queue, setQueue, rejected, progress, start, cards, cardId, setCardId }
 }
 
 /* ── The panel itself ────────────────────────────────────────────────────── */
@@ -59,11 +63,19 @@ function Picker({
   onFinished?: (outcomes: ImportOutcome[]) => void
   primaryLabel: string
 }) {
-  const { dropzone, queue, setQueue, rejected, progress, start } = usePicker(onFinished)
+  const { dropzone, queue, setQueue, rejected, progress, start, cards, cardId, setCardId } = usePicker(onFinished)
   const { getRootProps, getInputProps, isDragActive } = dropzone
 
   return (
     <div className="space-y-4">
+      {cards.length > 0 && <label className="block">
+        <span className="mb-2 block text-body text-muted">Bu ekstre hangi karta ait?</span>
+        <select value={cardId} onChange={(event) => setCardId(event.target.value)} disabled={progress.running} className="h-11 w-full rounded-[var(--radius)] border border-line bg-raised px-3 text-body text-ink">
+          <option value="">Kart seç (genel CSV için boş bırak)</option>
+          {cards.map((card) => <option key={card.id} value={card.id}>{cardDisplayName(card)}</option>)}
+        </select>
+        <span className="mt-1.5 block text-label text-muted">Aynı bankadaki kartlarını ayırmak için ilgili kartı seç. Farklı kartların dosyalarını ayrı aktar.</span>
+      </label>}
       <div
         {...getRootProps()}
         className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-[var(--radius-lg)] border border-dashed px-6 py-14 text-center transition-colors duration-200 ${

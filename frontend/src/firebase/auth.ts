@@ -22,6 +22,7 @@ import {
 } from 'firebase/auth'
 import { getFirebaseAuth } from './config'
 import { isNative } from '../platform'
+import { trackProductEvent } from '../platform/analytics'
 
 export interface AuthUser {
   uid: string
@@ -45,6 +46,15 @@ function toAuthUser(user: User): AuthUser {
 }
 
 const codeOf = (error: unknown): string | undefined => (error as { code?: string })?.code
+const messageOf = (error: unknown): string => (error as { message?: string })?.message ?? ''
+
+/** Native Credential Manager reports cancellation without a Firebase code. */
+function isGoogleCancellation(error: unknown): boolean {
+  const code = codeOf(error) ?? ''
+  return ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', '12501', 'SIGN_IN_CANCELLED'].includes(code)
+    || /(?:CANCELED|CANCELLED|CANCELLATION)/i.test(code)
+    || /(?:user (?:cancelled|canceled)|(?:sign.in|authorization|activity) (?:is )?(?:cancelled|canceled)|(?:cancelled|canceled) by (?:the )?user)/i.test(messageOf(error))
+}
 
 /**
  * `onAuthStateChanged` fires on sign-in/sign-out/account-switch, but *not*
@@ -59,8 +69,8 @@ export function getCurrentAuthUser(): AuthUser | null {
 }
 
 /** Fires once immediately with the current session, then on every change. */
-export function onAuthChange(callback: (user: AuthUser | null) => void): () => void {
-  return onAuthStateChanged(getFirebaseAuth(), (user) => callback(user ? toAuthUser(user) : null))
+export function onAuthChange(callback: (user: AuthUser | null) => void, onError?: (error: unknown) => void): () => void {
+  return onAuthStateChanged(getFirebaseAuth(), (user) => callback(user ? toAuthUser(user) : null), onError)
 }
 
 /**
@@ -165,16 +175,34 @@ export type GoogleOutcome = 'done' | 'redirecting' | 'cancelled'
  * Firebase JS session, which is what the rest of the app reads. Every path ends
  * in the one session, attached the same way.
  */
-export async function signInWithGoogle(): Promise<GoogleOutcome> {
+let googleSignInFlight: Promise<GoogleOutcome> | null = null
+
+/** Sharing one in-flight request prevents competing Google account pickers. */
+export function signInWithGoogle(): Promise<GoogleOutcome> {
+  if (!googleSignInFlight) {
+    googleSignInFlight = performGoogleSignIn().then(outcome => {
+      if (outcome === 'done') trackProductEvent('sign_in_completed')
+      return outcome
+    }).finally(() => { googleSignInFlight = null })
+  }
+  return googleSignInFlight
+}
+
+async function performGoogleSignIn(): Promise<GoogleOutcome> {
   const auth = getFirebaseAuth()
 
   if (isNative()) {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-    const result = await FirebaseAuthentication.signInWithGoogle()
-    const idToken = result.credential?.idToken
-    if (!idToken) throw new Error('Google girişi tamamlanamadı.')
-    await attach(GoogleAuthProvider.credential(idToken))
-    return 'done'
+    try {
+      const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
+      const idToken = result.credential?.idToken
+      if (!idToken) throw new Error('Google kimliği alınamadı. Yeniden dene veya e-posta ile giriş yap.')
+      await attach(GoogleAuthProvider.credential(idToken))
+      return 'done'
+    } catch (error) {
+      if (isGoogleCancellation(error)) return 'cancelled'
+      throw error
+    }
   }
 
   const provider = new GoogleAuthProvider()
@@ -217,14 +245,19 @@ export async function signInWithGoogle(): Promise<GoogleOutcome> {
  * start-up; a no-op when the page was not reached by a redirect.
  */
 export async function completeRedirectSignIn(): Promise<void> {
+  // The native picker returns credentials directly; browser redirects do not
+  // participate in its lifecycle and must not delay native session recovery.
+  if (isNative()) return
   const auth = getFirebaseAuth()
   try {
     await getRedirectResult(auth)
   } catch (error) {
     if (codeOf(error) === 'auth/credential-already-in-use') {
       const refused = GoogleAuthProvider.credentialFromError(error as never)
-      if (refused) await signInWithCredential(auth, refused)
-      return
+      if (refused) {
+        await signInWithCredential(auth, refused)
+        return
+      }
     }
     throw error
   }
@@ -238,6 +271,7 @@ export async function startAnonymousSession(): Promise<void> {
 }
 
 export async function signOutSession(): Promise<void> {
+  await import('../platform/push').then((push) => push.disconnectCloudPush())
   await signOut(getFirebaseAuth())
   // Only clears the OS-level Google account cache the native plugin keeps;
   // `skipNativeAuth` means there was never a second native Firebase session to
@@ -245,7 +279,9 @@ export async function signOutSession(): Promise<void> {
   // reuse the same account with no picker.
   if (isNative()) {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-    await FirebaseAuthentication.signOut()
+    // The JS sign-out already succeeded. An unavailable OS credential cache
+    // must not turn that success into a misleading account error.
+    await FirebaseAuthentication.signOut().catch(() => undefined)
   }
 }
 
@@ -262,7 +298,7 @@ export async function reauthenticate(password?: string): Promise<void> {
 
   if (isNative()) {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
-    const result = await FirebaseAuthentication.signInWithGoogle()
+    const result = await FirebaseAuthentication.signInWithGoogle({ skipNativeAuth: true })
     const idToken = result.credential?.idToken
     if (!idToken) throw new Error('Google girişi tamamlanamadı.')
     await reauthenticateWithCredential(user, GoogleAuthProvider.credential(idToken))
@@ -275,6 +311,7 @@ export async function reauthenticate(password?: string): Promise<void> {
 export async function deleteCurrentAccount(): Promise<void> {
   const user = getFirebaseAuth().currentUser
   if (!user) return
+  await import('../platform/push').then((push) => push.disconnectCloudPush())
   await deleteUser(user)
 }
 
@@ -307,6 +344,15 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function authErrorMessage(error: unknown): string {
   const code = codeOf(error)
   if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code]
+  if (isGoogleCancellation(error)) return 'Google girişi iptal edildi. Hazır olduğunda yeniden deneyebilirsin.'
+  const message = messageOf(error)
+  if (code === '10' || /(?:DEVELOPER_ERROR|(?:^|\s)10:|serverClientId.*(?:invalid|incorrect))/i.test(message)) {
+    return 'Bu Android sürümünün Google giriş yapılandırması doğrulanamadı. E-posta ile giriş yapabilir, durumu geliştiriciye iletebilirsin.'
+  }
+  if (/NoCredentialException|no credentials available|no google accounts/i.test(message)) {
+    return 'Bu telefonda kullanılabilir Google hesabı bulunamadı. Telefon ayarlarından Google hesabı ekle veya e-posta ile devam et.'
+  }
+  if (/network|unable to resolve host|connection.*failed/i.test(message)) return ERROR_MESSAGES['auth/network-request-failed']
   if (error instanceof Error && !code && error.message) return error.message
   return 'Bir şeyler ters gitti, tekrar dene.'
 }

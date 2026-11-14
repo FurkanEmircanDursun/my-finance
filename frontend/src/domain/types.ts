@@ -57,6 +57,8 @@ export interface Transaction {
   categoryLocked: boolean
   bank: string
   accountLabel: string
+  /** User-managed card, when explicitly selected during import. */
+  cardId?: string
   installment: Installment | null
   source: TxSource
   /**
@@ -173,6 +175,7 @@ export interface Statement {
   bank: string
   /** "Akbank Axess", "Garanti Bonus Platinum" — as printed. */
   accountLabel?: string
+  cardId?: string
   transactionCount: number
   /** Rows the parser saw but rejected — surfaced so coverage is auditable. */
   skippedCount: number
@@ -245,7 +248,24 @@ export interface SavingsGoal {
   startingAmount: Money
 }
 
+export type CardBank = 'akbank' | 'garanti'
+
+export interface CreditCard {
+  id: string
+  bank: CardBank
+  name: string
+  /** Last four digits only; the full card number is never requested. */
+  last4?: string
+  statementDay: number
+  entryDay: number
+  remindersEnabled: boolean
+}
+
 export interface Profile {
+  /** Optional for compatibility with older backups and synced profiles. */
+  cards?: CreditCard[]
+  /** Removed configurations retained so re-adding a card preserves import identity. */
+  archivedCards?: CreditCard[]
   monthlyIncome: Money
   /** Global monthly spend ceiling; 0 disables the pace widgets. */
   spendingLimit: Money
@@ -261,6 +281,7 @@ export interface Profile {
 }
 
 export interface Settings {
+  reminders?: { enabled: boolean; hour: number }
   theme: 'light' | 'dark' | 'system'
   /** Contact the local OCR service for scanned PDFs. */
   useLocalOcr: boolean

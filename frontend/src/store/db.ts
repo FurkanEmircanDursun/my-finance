@@ -13,6 +13,7 @@ const DB_VERSION = 1
 const STORE = 'kv'
 
 let dbPromise: Promise<IDBDatabase | null> | null = null
+let openConnection: IDBDatabase | null = null
 
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise
@@ -34,7 +35,10 @@ function openDb(): Promise<IDBDatabase | null> {
       const db = request.result
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
     }
-    request.onsuccess = () => resolve(request.result)
+    request.onsuccess = () => {
+      openConnection = request.result
+      resolve(openConnection)
+    }
     request.onerror = () => resolve(null)
     request.onblocked = () => resolve(null)
   })
@@ -60,13 +64,7 @@ export async function dbGet<T>(key: string): Promise<T | undefined> {
   })
 }
 
-export async function dbSet(key: string, value: unknown): Promise<boolean> {
-  const db = await openDb()
-  if (!db) {
-    memoryFallback.set(key, value)
-    return false
-  }
-
+function writeValue(db: IDBDatabase, key: string, value: unknown): Promise<boolean> {
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE, 'readwrite')
@@ -77,6 +75,18 @@ export async function dbSet(key: string, value: unknown): Promise<boolean> {
     } catch {
       resolve(false)
     }
+  })
+}
+
+export function dbSet(key: string, value: unknown): Promise<boolean> {
+  // Hydration opens the database before editing is possible. Reuse that handle
+  // synchronously so a lifecycle flush queues its transaction in this call,
+  // rather than waiting for an awaited, already-resolved promise.
+  if (openConnection) return writeValue(openConnection, key, value)
+  return openDb().then((db) => {
+    if (db) return writeValue(db, key, value)
+    memoryFallback.set(key, value)
+    return false
   })
 }
 

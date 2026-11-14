@@ -6,6 +6,8 @@ import type { Profile, Settings } from '../domain/types'
  */
 
 export const defaultProfile: Profile = {
+  cards: [],
+  archivedCards: [],
   monthlyIncome: 0,
   spendingLimit: 0,
   currentBalance: 0,
@@ -14,10 +16,11 @@ export const defaultProfile: Profile = {
 }
 
 export const defaultSettings: Settings = {
+  reminders: { enabled: false, hour: 9 },
   theme: 'system',
   useLocalOcr: false,
   ocrEndpoint: 'http://127.0.0.1:8005/api/ocr',
-  periodGrouping: null,
+  periodGrouping: 'calendar',
   lockPinHash: null,
   lockPinSalt: null,
   onboardingSeen: false,

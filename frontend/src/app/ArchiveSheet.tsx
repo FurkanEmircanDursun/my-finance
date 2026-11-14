@@ -121,7 +121,7 @@ export function ArchiveSheet({
   const exportCsv = async (period: MonthKey | 'all') => {
     const scoped = period === 'all' ? transactions : periods.find((p) => p.key === period)?.transactions ?? []
     const text = buildCsv(scoped, statements, (tx) => periodMonthOf(tx, grouping, statementMonths))
-    const name = period === 'all' ? `my-finance-islemler-${todayKey()}.csv` : `my-finance-${period}-${todayKey()}.csv`
+    const name = period === 'all' ? `mizan-islemler-${todayKey()}.csv` : `mizan-${period}-${todayKey()}.csv`
     report(await saveTextFile(name, text, 'text/csv;charset=utf-8'), name, text)
   }
 

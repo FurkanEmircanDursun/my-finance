@@ -1,0 +1,10 @@
+{
+  "origin": "Authored Mizan vector identity, frontend/public/mizan-mark.svg. Rasterized locally with Sharp; no external image source.",
+  "source": "public/mizan-mark.svg",
+  "files": [
+    "mizan-icon-192.png",
+    "mizan-icon-512.png",
+    "mizan-maskable.png",
+    "apple-touch-icon.png"
+  ]
+}

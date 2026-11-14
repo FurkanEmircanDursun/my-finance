@@ -15,7 +15,7 @@ const BATCH = 400
 export async function wipeCloudData(uid: string): Promise<void> {
   const db = getFirebaseDb()
 
-  for (const name of KINDS) {
+  for (const name of [...KINDS, 'pushDevices']) {
     const snap = await getDocs(collection(db, 'users', uid, name))
     for (let i = 0; i < snap.docs.length; i += BATCH) {
       const batch = writeBatch(db)

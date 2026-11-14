@@ -8,6 +8,7 @@ import type {
 import type { Analysis } from '../analytics/types'
 import { buildStatementMonthIndex, periodMonthOf } from './selectors'
 import { defaultProfile, defaultSettings, type AppState } from './state'
+import { sanitizeCards } from '../domain/cards'
 import { migratePersisted, STATE_VERSION, type Persisted } from './migrate'
 
 /**
@@ -253,7 +254,7 @@ export function buildBackup({ state, overall, appVersion, period = 'all', now = 
     format: BACKUP_FORMAT,
     schemaVersion: STATE_VERSION,
     exportedAt: now.toISOString(),
-    app: { name: 'My Finance', version: appVersion },
+    app: { name: 'Mizan', version: appVersion },
     currency: 'TRY',
     units: {
       amount: 'kuruş — 1/100 TL, integer. 12345 means ₺123,45',
@@ -318,7 +319,7 @@ export function buildBackup({ state, overall, appVersion, period = 'all', now = 
 }
 
 export function backupFileName(period: MonthKey | 'all', today: DayKey): string {
-  return period === 'all' ? `my-finance-yedek-${today}.json` : `my-finance-${period}-${today}.json`
+  return period === 'all' ? `mizan-yedek-${today}.json` : `mizan-${period}-${today}.json`
 }
 
 // ─── Restoring ────────────────────────────────────────────────────────────────
@@ -406,7 +407,7 @@ export function parseBackup(text: string): BackupParseResult {
   const source = (wrapped ? (json.data as Record<string, unknown>) : json) as Record<string, unknown>
 
   if (!Array.isArray(source.transactions)) {
-    return { ok: false, error: 'Dosyada işlem listesi bulunamadı; bu bir My Finance yedeği değil.' }
+    return { ok: false, error: 'Dosyada işlem listesi bulunamadı; bu bir Mizan yedeği değil.' }
   }
 
   // Files from before schema 3 carry no version of their own; they were all v2.
@@ -528,13 +529,21 @@ export function applyBackup(
 
   const haveRule = new Set(current.rules.map((r) => r.merchant))
   const newRules = backup.rules.filter((r) => !haveRule.has(r.merchant))
+  const currentCards = sanitizeCards(current.profile.cards)
+  const cardIds = new Set(currentCards.map((card) => card.id))
+  const removedIds = new Set(sanitizeCards(current.profile.archivedCards).map((card) => card.id))
+  const cards = [...currentCards, ...sanitizeCards(backup.profile.cards).filter((card) => !cardIds.has(card.id) && !removedIds.has(card.id))]
+  const activeIds = new Set(cards.map((card) => card.id))
+  const archivedById = new Map(sanitizeCards(backup.profile.archivedCards).map((card) => [card.id, card]))
+  for (const card of sanitizeCards(current.profile.archivedCards)) archivedById.set(card.id, card)
+  const archivedCards = [...archivedById.values()].filter((card) => !activeIds.has(card.id))
 
   return {
     transactions: [...current.transactions, ...newTx].sort(sortDesc),
     statements: [...current.statements, ...newSt],
     rules: [...current.rules, ...newRules],
     // A profile already filled in on this device is not overwritten by a file's.
-    profile: hasProfile(current.profile) ? current.profile : { ...defaultProfile, ...backup.profile },
+    profile: { ...(hasProfile(current.profile) ? current.profile : { ...defaultProfile, ...backup.profile }), cards, archivedCards },
     settings: current.settings,
     added: { transactions: newTx.length, statements: newSt.length, rules: newRules.length },
   }

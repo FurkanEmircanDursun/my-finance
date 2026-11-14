@@ -1,16 +1,18 @@
-import { useState, type ReactNode } from 'react'
-import { ChevronDown, Cloud, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { trackScreen } from '../platform/analytics'
+import { ChevronDown, CreditCard, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { Badge, Button, Field, Segmented, Skeleton, TextInput } from '../ui/primitives'
+import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
 import { ConfirmDialog, Modal } from '../ui/Modal'
 import { money, toMinor, toMajor, count } from '../core/money'
 import { todayKey, monthOf, monthLabel, monthDiff } from '../core/date'
 import { hashPin, randomSalt, verifyPin, PIN_LENGTH } from '../core/pin'
 import type { SavingsGoal } from '../domain/types'
 import { useStore } from '../store/AppStore'
-import { describeSync } from '../sync/present'
-import { useNow } from './useNow'
 import { useSheets } from './sheets'
+import { NotificationSettings } from './NotificationSettings'
+import { AccountPanel } from './AccountPanel'
+import { CloudServicesSettings } from './CloudServicesSettings'
 
 /**
  * Ayarlar, as a sheet with four blocks instead of a page with ten sections.
@@ -29,8 +31,9 @@ import { useSheets } from './sheets'
  *   Kategori bütçeleri moved next to the categories they cap, in Harcamalar.
  */
 export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => { if (open) trackScreen('settings') }, [open])
   const { state, dispatch, authUser, cloudAvailable } = useStore()
-  const { openArchive, openAccount } = useSheets()
+  const { openArchive, openAccount, openCards } = useSheets()
   const [resetOpen, setResetOpen] = useState(false)
 
   const { profile, settings, transactions, statements, rules } = state
@@ -44,6 +47,12 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <Modal open={open} onClose={onClose} title="Ayarlar" variant="sheet">
       <div className="space-y-10">
+        <AccountPanel onOpen={() => { onClose(); openAccount() }} />
+        <CloudServicesSettings />
+        <Block title="Kartlar ve hatırlatmalar">
+          <Button onClick={() => { onClose(); openCards() }}><CreditCard size={18} /> Kartlarım ({profile.cards?.length ?? 0})</Button>
+          <NotificationSettings />
+        </Block>
         {/* ── Para ────────────────────────────────────────────────────────── */}
         <Block title="Para">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -82,16 +91,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         </Block>
 
         {/* ── Hesap ───────────────────────────────────────────────────────── */}
-        {cloudAvailable && (
-          <Block title="Hesap ve senkron">
-            <AccountRow
-              onOpen={() => {
-                onClose()
-                openAccount()
-              }}
-            />
-          </Block>
-        )}
 
         {/* ── Veri ────────────────────────────────────────────────────────── */}
         <Block
@@ -142,8 +141,8 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             </Field>
 
             <Field label="Tanıtım" hint="Uygulamanın ne yaptığını anlatan giriş ekranları">
-              <Button onClick={() => dispatch({ type: 'setSettings', settings: { onboardingSeen: false } })}>
-                Tanıtımı tekrar göster
+              <Button onClick={() => { onClose(); dispatch({ type: 'setSettings', settings: { onboardingSeen: false } }) }}>
+                Kurulum rehberini aç
               </Button>
             </Field>
 
@@ -190,7 +189,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
         </Disclosure>
 
         <p className="pt-2 text-center text-label text-faint">
-          My Finance {__APP_VERSION__} · {authUser ? 'bulutla eşitleniyor' : 'veriler bu cihazda'}
+          Mizan {__APP_VERSION__} · {authUser ? 'bulutla eşitleniyor' : 'veriler bu cihazda'}
         </p>
       </div>
 
@@ -526,49 +525,6 @@ function AppLock() {
         PIN yalnızca bu cihazda tuzlanmış özet olarak saklanır; bulut senkronu açıkken bile PIN ve özeti
         hiçbir yere gönderilmez.
       </p>
-    </div>
-  )
-}
-
-/* ── Cloud account ───────────────────────────────────────────────────────── */
-
-/**
- * One line that says where the account stands and one button that opens the
- * place to change it. The forms live in the account sheet, not here: Ayarlar is
- * for things set once, and signing in is a flow, not a setting.
- */
-function AccountRow({ onOpen }: { onOpen: () => void }) {
-  const { authReady, authUser, sync } = useStore()
-  const now = useNow()
-
-  if (!authReady) return <Skeleton className="h-11 w-full" />
-
-  if (!authUser) {
-    return (
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 text-body text-muted">Kapalı. Veriler yalnızca bu cihazda.</p>
-        <Button onClick={onOpen}>
-          <Cloud size={16} />
-          Giriş yap
-        </Button>
-      </div>
-    )
-  }
-
-  const view = describeSync(sync, now)
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body font-semibold text-ink">
-          {authUser.isAnonymous ? 'Hesapsız oturum' : (authUser.displayName ?? authUser.email ?? 'Hesabım')}
-        </p>
-        <p className="text-label text-muted">
-          {view.title}
-          {view.tone === 'positive' && ' · '}
-          {view.tone === 'positive' && view.detail.replace(/\.$/, '')}
-        </p>
-      </div>
-      <Button onClick={onOpen}>Yönet</Button>
     </div>
   )
 }

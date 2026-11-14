@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { CalendarClock, ChevronRight, Receipt } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { CalendarClock, ChevronDown, ChevronRight, Plus, Receipt, Upload } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button, Empty, Meter, Section, Segmented } from '../ui/primitives'
 import { CashFlowChart, CommitmentChart, GoalTrajectoryChart } from '../ui/charts'
@@ -24,7 +24,7 @@ import { useSheets } from '../app/sheets'
  */
 export function FutureView() {
   const { state, overall } = useStore()
-  const { openSettings } = useSheets()
+  const { openSettings, openImport, openEntry } = useSheets()
   const { installments, commitments, recurring, goal, forecast } = overall
 
   const upcoming = useMemo(
@@ -43,25 +43,41 @@ export function FutureView() {
     (max, m) => (m.total > (max?.total ?? 0) ? m : max),
     commitments[0] as (typeof commitments)[number] | undefined,
   )
+  const heading = (
+    <header className="dashboard-title">
+      <div><h1>Gelecek</h1><p>Yaklaşan ödemeler. Daha rahat bir plan.</p></div>
+      <button type="button" className="quiet-button" onClick={openSettings}>Planı düzenle</button>
+    </header>
+  )
 
   if (!open.length && !activeRecurring.length && !goal && !hasForecast && !upcoming.length) {
-    return (
+    return <div>{heading}
       <Empty
-        title="Bağlı bir ödeme yok"
+        title="Ödeme planın kayıtlarınla oluşur"
+        description="Ekstreni yükle; taksitlerin ve yaklaşan son ödeme tarihlerin burada görünsün. Düzenli ödemeler, yeterli kayıt oluşunca bulunur."
         action={
-          <Button onClick={openSettings}>Tasarruf hedefi koy</Button>
+          <div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={openImport}><Upload size={16} /> Ekstre yükle</Button><Button onClick={openEntry}><Plus size={16} /> Kayıt ekle</Button><Button variant="ghost" onClick={openSettings}>Tasarruf hedefi koy</Button></div>
         }
       />
-    )
+    </div>
   }
 
   return (
     <div className="space-y-10">
+      {heading}
+      {upcoming.length > 0 ? <UpcomingSection payments={upcoming} /> : (
+        <Section title="Yaklaşan ödemeler">
+          <p className="max-w-xl text-body text-muted">Kayıtlarında önümüzdeki 45 güne ait bir ödeme tarihi bulunamadı. Güncel ekstreni ekleyerek son ödeme tarihini görebilirsin.</p>
+          <Button size="sm" variant="ghost" className="mt-3" onClick={openImport}><Upload size={15} /> Güncel ekstre ekle</Button>
+        </Section>
+      )}
       {/* ── The sentence ─────────────────────────────────────────────────── */}
       <section>
-        <span className="num text-hero font-semibold text-ink">{money(twelveMonthTotal)}</span>
-        <p className="mt-4 max-w-xl text-body text-muted">
-          Önümüzdeki 12 ayda bağlı olan tutar. {heaviest && heaviest.total > 0 && (
+        <h2 className="text-title font-semibold text-ink">Kayıtlarına göre ödeme yükün</h2>
+        <p className="mt-3 max-w-xl text-body text-muted">
+          {next && next.total > 0 ? <><span className="font-semibold text-ink">{monthLabel(next.month)}</span> için <span className="num font-semibold text-ink">{money(next.total)}</span> bağlı. </> : 'Kayıtlı taksit veya aktif düzenli ödeme görünmüyor. '}
+          {twelveMonthTotal > 0 && <>Son kayıtlarından sonraki 12 ayın tahmini toplamı <span className="num font-semibold text-ink">{money(twelveMonthTotal)}</span>. </>}
+          {heaviest && heaviest.total > 0 && (
             <>
               En yoğun ay <span className="font-semibold text-ink">{monthLabel(heaviest.month)}</span>:{' '}
               <span className="font-semibold text-ink">{money(heaviest.total)}</span>.{' '}
@@ -83,8 +99,8 @@ export function FutureView() {
             as "you have none" rather than "I have not seen enough yet". */}
         {overall.meta.months.length < 3 && (
           <p className="mt-3 max-w-xl text-label leading-relaxed text-faint">
-            Abonelik ve faturaları fark edebilmem için en az üç aylık ekstre gerekir; şimdilik{' '}
-            {count(overall.meta.months.length)} ay var. Taksitler ise ilk ekstreden itibaren görünür.
+            Düzenli ödemeleri belirlemek için en az üç aylık kayıt gerekir; şu an{' '}
+            {count(overall.meta.months.length)} ay var. Taksitler ilk ekstreden itibaren görünür.
           </p>
         )}
 
@@ -92,9 +108,9 @@ export function FutureView() {
           <div className="mt-6 space-y-2">
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-body text-muted">
-                Gelecek ay gelirinin{' '}
+                {monthLabel(next.month)} yükü, aylık gelirinin{' '}
                 <span className="num font-semibold text-ink">{percent((next.total / income) * 100)}</span>
-                {"'i"} şimdiden bağlı
+                {"'i"}
               </span>
               <span className="num text-label text-faint">
                 {money(next.total)} / {money(income)}
@@ -110,16 +126,14 @@ export function FutureView() {
       </section>
 
       {/* ── The ladder ───────────────────────────────────────────────────── */}
-      <Section title="12 ay" description="Bugünden sonra hiç harcama yapılmasa bile ödenecek">
+      {twelveMonthTotal > 0 && <FutureDisclosure title="12 aylık ödeme planı" description={`${money(twelveMonthTotal)} · kalan taksitler ve aktif düzenli ödemelerin tahmini`}>
         <CommitmentChart data={commitments} height={210} />
-      </Section>
-
-      {/* ── What lands next ──────────────────────────────────────────────── */}
-      {upcoming.length > 0 && <UpcomingSection payments={upcoming} />}
+        <p className="mt-3 max-w-xl text-label text-muted">Bu plan son kayıtlarından sonraki aydan başlar. Yeni harcamalar, fiyat değişiklikleri ve iptal edilen abonelikler tahmini değiştirir.</p>
+      </FutureDisclosure>}
 
       {/* ── Instalments ──────────────────────────────────────────────────── */}
       {open.length > 0 && (
-        <Section title="Taksitler" description={`Kalan ${money(open.reduce((s, p) => s + p.remainingAmount, 0))}`}>
+        <FutureDisclosure title="Açık taksitler" description={`${count(open.length)} plan · kalan ${money(open.reduce((s, p) => s + p.remainingAmount, 0))}`}>
           <ul className="-mx-2">
             {open.map((plan) => (
               <li key={plan.id} className="px-2 py-3">
@@ -130,18 +144,18 @@ export function FutureView() {
                     <span className="ml-1 text-label font-normal text-faint">/ay</span>
                   </span>
                 </div>
-                <div className="mt-2 flex items-center gap-3">
+                <div className="mt-2 flex flex-wrap items-center gap-3">
                   <Meter value={plan.paidCount} max={plan.totalCount} className="flex-1" />
                   {/* "2/3" alone reads as a fraction of something; the last month
                       is the date people actually plan around. */}
-                  <span className="num w-40 shrink-0 text-right text-label text-faint">
+                  <span className="num shrink-0 text-right text-label text-faint">
                     {plan.paidCount}/{plan.totalCount} taksit · son {monthLabel(plan.endMonth, true)}
                   </span>
                 </div>
               </li>
             ))}
           </ul>
-        </Section>
+        </FutureDisclosure>
       )}
 
       {/* ── Forecast ─────────────────────────────────────────────────────── */}
@@ -150,7 +164,7 @@ export function FutureView() {
           which is a statement about the average, not a forecast. It waits for an
           income or a balance. */}
       {hasForecast && (forecast.totalIn > 0 || forecast.hasOpeningBalance) ? (
-        <ForecastSection forecast={forecast} onOpenSettings={openSettings} />
+        <FutureDisclosure title="Nakit akışı tahmini" description="30, 60 veya 90 gün sonraki olası durum"><ForecastSection forecast={forecast} onOpenSettings={openSettings} /></FutureDisclosure>
       ) : hasForecast ? (
         <Section title="Nakit akışı">
           <button
@@ -174,11 +188,26 @@ export function FutureView() {
 
 /* ── Upcoming ────────────────────────────────────────────────────────────── */
 
+function FutureDisclosure({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <details className="group border-t border-line pt-2" onToggle={event => setExpanded(event.currentTarget.open)}>
+      <summary className="flex min-h-[64px] cursor-pointer list-none items-center justify-between gap-4 rounded-[var(--radius)] py-3 text-left">
+        <h2 className="text-title font-semibold text-ink">{title}{description && <span className="mt-1 block text-label font-normal text-muted">{description}</span>}</h2>
+        <ChevronDown size={18} className="shrink-0 text-muted transition-transform duration-200 group-open:rotate-180" aria-hidden="true" />
+      </summary>
+      {expanded && <div className="pb-3 pt-4">{children}</div>}
+    </details>
+  )
+}
+
 function UpcomingSection({ payments }: { payments: UpcomingPayment[] }) {
+  const [showAll, setShowAll] = useState(false)
+  const shown = showAll ? payments : payments.slice(0, 4)
   return (
     <Section title="Yaklaşan ödemeler" description="Önümüzdeki 45 gün">
       <ul className="-mx-2">
-        {payments.map((payment, index) => (
+        {shown.map((payment, index) => (
           <li
             key={`${payment.kind}-${payment.date}-${index}`}
             className="flex min-h-[56px] items-center gap-3 px-2 py-2.5"
@@ -194,14 +223,15 @@ function UpcomingSection({ payments }: { payments: UpcomingPayment[] }) {
                 {payment.minimum !== null && ` · asgari ${money(payment.minimum)}`}
               </span>
             </span>
-            {payment.amount !== null && (
+            {payment.amount !== null ? (
               <span className="num shrink-0 text-body font-semibold text-ink">
                 {money(payment.amount, { decimals: payment.kind === 'statement' })}
               </span>
-            )}
+            ) : <span className="shrink-0 text-label text-faint">Tutar bilinmiyor</span>}
           </li>
         ))}
       </ul>
+      {payments.length > 4 && <Button variant="ghost" className="mt-3 w-full" onClick={() => setShowAll(value => !value)} aria-expanded={showAll}>{showAll ? 'İlk 4 ödemeyi göster' : `${count(payments.length)} ödemenin tümünü gör`}<ChevronDown size={16} className={clsx('transition-transform duration-200', showAll && 'rotate-180')} /></Button>}
     </Section>
   )
 }
@@ -227,15 +257,15 @@ function ForecastSection({
 
   return (
     <Section
-      title="Nakit akışı"
+      title="Beklenen bakiye"
       actions={
         <Segmented
           value={horizon}
           onChange={setHorizon}
           options={[
-            { value: '30', label: '30' },
-            { value: '60', label: '60' },
-            { value: '90', label: '90' },
+            { value: '30', label: '30 gün' },
+            { value: '60', label: '60 gün' },
+            { value: '90', label: '90 gün' },
           ]}
         />
       }
@@ -273,6 +303,7 @@ function ForecastSection({
 /* ── Savings goal ────────────────────────────────────────────────────────── */
 
 function GoalSection({ goal }: { goal: GoalProgress }) {
+  const [showTrajectory, setShowTrajectory] = useState(false)
   const onPace = goal.status === 'ahead' || goal.status === 'reached'
   const g = goal.goal
 
@@ -291,7 +322,9 @@ function GoalSection({ goal }: { goal: GoalProgress }) {
         )}
       </p>
 
-      <GoalTrajectoryChart points={goal.points} height={220} onPace={onPace} />
+      <details className="group" onToggle={event => setShowTrajectory(event.currentTarget.open)}>
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-body text-accent">Hedefin gidişatını gör<ChevronDown size={16} className="transition-transform duration-200 group-open:rotate-180" aria-hidden="true" /></summary>
+      {showTrajectory && <><GoalTrajectoryChart points={goal.points} height={220} onPace={onPace} />
 
       <div className="mt-3 flex flex-wrap items-center gap-5 text-label text-muted">
         <span className="flex items-center gap-2">
@@ -305,7 +338,8 @@ function GoalSection({ goal }: { goal: GoalProgress }) {
           />
           Gerçekleşen
         </span>
-      </div>
+      </div></>}
+      </details>
     </Section>
   )
 }

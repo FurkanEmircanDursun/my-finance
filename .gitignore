@@ -55,4 +55,13 @@ frontend/android/build/
 frontend/android/.gradle/
 frontend/android/capacitor-cordova-android-plugins/
 frontend/android/local.properties
+/artifacts/
+frontend/.playwright-cli/
+frontend/output/
 
+# Private financial audit reports
+data/statement-audit-*.md
+
+# Local browser validation artifacts
+/.playwright-cli/
+/output/

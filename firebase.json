@@ -16,6 +16,18 @@
       }
     ]
   },
+  "functions": [{
+    "source": "functions",
+    "codebase": "reminders",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", "*.log", "test"],
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run check"]
+  }],
+  "emulators": {
+    "firestore": { "port": 8089 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

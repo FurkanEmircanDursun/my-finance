@@ -119,7 +119,9 @@ const isDefaultProfile = (profile: Profile): boolean =>
   profile.spendingLimit === 0 &&
   profile.currentBalance === 0 &&
   profile.goal === null &&
-  profile.budgets.length === 0
+  profile.budgets.length === 0 &&
+  (profile.cards?.length ?? 0) === 0 &&
+  (profile.archivedCards?.length ?? 0) === 0
 
 // ─── What changed here ────────────────────────────────────────────────────────
 

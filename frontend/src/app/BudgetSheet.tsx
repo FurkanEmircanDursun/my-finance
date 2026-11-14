@@ -1,56 +1,98 @@
+import { useState } from 'react'
+import { Check, Target } from 'lucide-react'
 import { Modal } from '../ui/Modal'
-import { TextInput } from '../ui/primitives'
+import { Button, Field, TextInput } from '../ui/primitives'
 import { useStore } from '../store/AppStore'
-import { toMajor, toMinor } from '../core/money'
-import { CATEGORIES, type CategoryId } from '../domain/categories'
+import { toMajor } from '../core/money'
+import { entryAmount } from '../domain/entry'
+import { CATEGORIES } from '../domain/categories'
 
-/**
- * Category ceilings, set next to the categories they cap.
- *
- * These used to live in Ayarlar, three screens away from the list of what was
- * actually spent — so setting a limit meant remembering a number from one place
- * and typing it in another. A blank field means "not tracked", which is why
- * there is no on/off switch: leaving it empty is the off switch.
- */
-export function BudgetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function BudgetSheet({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
   const { state, dispatch } = useStore()
-  const { budgets } = state.profile
-
-  const setBudget = (category: CategoryId, raw: string) => {
-    const limit = toMinor(Number.parseFloat(raw.replace(',', '.')) || 0)
-    const rest = budgets.filter((b) => b.category !== category)
+  const initial = (amount: number) =>
+    amount > 0 ? String(toMajor(amount)).replace('.', ',') : ''
+  const [total, setTotal] = useState(initial(state.profile.spendingLimit))
+  const [drafts, setDrafts] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      state.profile.budgets.map((b) => [b.category, initial(b.limit)]),
+    ),
+  )
+  const validValue = (raw: string) => !raw.trim() || entryAmount(raw) !== null
+  const valid = validValue(total) && Object.values(drafts).every(validValue)
+  const save = () => {
+    if (!valid) return
     dispatch({
       type: 'setProfile',
-      profile: { budgets: limit > 0 ? [...rest, { category, limit }] : rest },
+      profile: {
+        spendingLimit: entryAmount(total) ?? 0,
+        budgets: CATEGORIES.flatMap((def) => {
+          const limit = entryAmount(drafts[def.id] ?? '')
+          return limit ? [{ category: def.id, limit }] : []
+        }),
+      },
     })
+    onClose()
   }
-
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Aylık limitler"
-      description="Boş bıraktığın kategoriler takip edilmez"
+      title="Bütçe rotanı belirle"
+      description="Sana uygun bir sınır. Dilediğinde değiştirebilirsin."
+      footer={
+        <Button variant="primary" disabled={!valid} onClick={save}>
+          <Check size={16} /> Limitleri kaydet
+        </Button>
+      }
     >
-      <ul className="-mx-2">
-        {CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => {
-          const budget = budgets.find((b) => b.category === def.id)
-          return (
-            <li key={def.id} className="flex min-h-[56px] items-center gap-3 px-2 py-2">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: def.color }} />
-              <span className="min-w-0 flex-1 truncate text-body text-ink">{def.label}</span>
+      <div className="budget-editor">
+        <Target size={24} />
+        <Field
+          label="Toplam aylık harcama limiti (TL)"
+          hint="Örnek: 30.000. Takibi kapatmak için boş bırak."
+        >
+          <TextInput
+            inputMode="decimal"
+            value={total}
+            onChange={(e) => setTotal(e.target.value)}
+            placeholder="30.000"
+            aria-invalid={!validValue(total)}
+          />
+        </Field>
+      </div>
+      <details className="category-budget-editor">
+        <summary>Kategori bazında limit de belirle</summary>
+        <ul>
+          {CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
+            <li key={def.id}>
+              <span>{def.label}</span>
               <TextInput
                 inputMode="decimal"
                 aria-label={`${def.label} aylık limiti`}
                 className="w-32 text-right"
                 placeholder="—"
-                value={budget ? String(toMajor(budget.limit)) : ''}
-                onChange={(e) => setBudget(def.id, e.target.value)}
+                value={drafts[def.id] ?? ''}
+                onChange={(e) =>
+                  setDrafts((prev) => ({ ...prev, [def.id]: e.target.value }))
+                }
+                aria-invalid={!validValue(drafts[def.id] ?? '')}
               />
             </li>
-          )
-        })}
-      </ul>
+          ))}
+        </ul>
+      </details>
+      {!valid && (
+        <p role="alert" className="text-body text-negative">
+          Tutarı Türkçe biçimde gir: 1.250,50. Limiti kaldırmak için alanı boş
+          bırak.
+        </p>
+      )}
     </Modal>
   )
 }

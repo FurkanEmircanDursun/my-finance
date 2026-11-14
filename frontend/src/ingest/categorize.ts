@@ -1,6 +1,6 @@
 import { lookupPhrase, lookupToken, type CategoryId } from '../domain/categories'
 import type { CategoryRule } from '../domain/types'
-import { normalizeMerchant, tokens } from '../core/text'
+import { fold, normalizeMerchant, tokens } from '../core/text'
 
 /**
  * Classification order:
@@ -35,7 +35,9 @@ export function createCategorizer(rules: readonly CategoryRule[] = []): Categori
 
     let result: CategoryId = 'other'
 
-    const phrase = lookupPhrase(merchant)
+    // Processor stripping can remove the brand itself (APPLE.COM/BILL).
+    // Check explicit phrases on the original text before its lossy grouping key.
+    const phrase = lookupPhrase(fold(description).replace(/[^A-Z0-9]+/g, ' ')) ?? lookupPhrase(merchant)
     if (phrase) {
       result = phrase
     } else {

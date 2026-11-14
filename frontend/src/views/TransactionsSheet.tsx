@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { Badge, Button, Empty, Field, Segmented, TextInput } from '../ui/primitives'
+import { Badge, Button, Empty, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
-import { money, money2, count, toMinor } from '../core/money'
-import { fullDayLabel, parseAnyDate, todayKey } from '../core/date'
-import { fold, normalizeMerchant } from '../core/text'
-import { hash } from '../core/hash'
+import { money, money2, count } from '../core/money'
+import { fullDayLabel } from '../core/date'
+import { fold } from '../core/text'
+import { EntrySheet } from '../app/EntrySheet'
 import { CATEGORIES, categoryColor, categoryLabel, type CategoryId } from '../domain/categories'
 import { spendAmount, type Transaction, type TxKind } from '../domain/types'
 import { useStore } from '../store/AppStore'
@@ -229,110 +229,5 @@ function TransactionRow({
 /* ── Manual entry ────────────────────────────────────────────────────────── */
 
 function ManualTransactionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { dispatch } = useStore()
-  const [date, setDate] = useState(todayKey())
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
-  const [kind, setKind] = useState<TxKind>('expense')
-  const [category, setCategory] = useState<CategoryId>('other')
-
-  const valid = description.trim().length > 0 && Number.parseFloat(amount.replace(',', '.')) > 0
-
-  const submit = () => {
-    const parsedDate = parseAnyDate(date) ?? todayKey()
-    const value = toMinor(Math.abs(Number.parseFloat(amount.replace(',', '.'))))
-    const merchant = normalizeMerchant(description)
-
-    dispatch({
-      type: 'addManual',
-      transaction: {
-        id: hash(`manual|${parsedDate}|${value}|${merchant}|${Date.now()}`),
-        date: parsedDate,
-        description: description.trim(),
-        merchant,
-        amount: value,
-        kind,
-        category,
-        categoryLocked: true,
-        bank: 'Manuel',
-        accountLabel: 'Manuel kayıt',
-        installment: null,
-        source: 'manual',
-      },
-    })
-
-    setDate(todayKey())
-    setDescription('')
-    setAmount('')
-    setKind('expense')
-    setCategory('other')
-    onClose()
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="İşlem ekle"
-      footer={
-        <Button variant="primary" disabled={!valid} onClick={submit}>
-          Ekle
-        </Button>
-      }
-    >
-      <div className="space-y-4">
-        <Field label="Açıklama">
-          <TextInput
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Örn. Kira ödemesi"
-          />
-        </Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Tutar (₺)">
-            <TextInput
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0,00"
-            />
-          </Field>
-          <Field label="Tarih">
-            <TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-        </div>
-
-        <Field label="Tür">
-          <Segmented
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: 'expense', label: 'Harcama' },
-              { value: 'income', label: 'Gelir' },
-            ]}
-          />
-        </Field>
-
-        <Field label="Kategori">
-          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {CATEGORIES.map((def) => (
-              <button
-                key={def.id}
-                type="button"
-                onClick={() => setCategory(def.id)}
-                className={clsx(
-                  'flex min-h-[44px] items-center gap-2 rounded-[var(--radius)] px-3 text-left text-body transition-colors duration-200',
-                  category === def.id ? 'bg-accent-soft text-accent-text' : 'bg-sunken text-ink hover:bg-hover',
-                )}
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: def.color }} />
-                <span className="truncate">{def.label}</span>
-              </button>
-            ))}
-          </div>
-        </Field>
-      </div>
-    </Modal>
-  )
+  return open ? <EntrySheet onClose={onClose} /> : null
 }

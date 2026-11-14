@@ -1,6 +1,8 @@
-# My Finance
+# Mizan
 
-Kredi kartı ekstrenizi tarayıcıda okuyup analiz eden kişisel finans aracı. Dosyalar cihazınızdan çıkmaz; ayrıştırma, sınıflandırma ve tüm analiz tarayıcıda çalışır, veriler IndexedDB'de yerel olarak saklanır. İsterseniz bir Google ya da e-posta hesabıyla verileriniz cihazlarınız arasında eşitlenir; hesap açmak zorunlu değildir.
+**Ayın dengesi, senin elinde.** Mizan; kart, kira, nakit giderleri ve kaydedilen geliri takvim ayında bir araya getiren kişisel bütçe uygulamasıdır. Önceki adı My Finance olan aynı uygulamanın yeni kimliğidir. Mevcut kayıtlar, kart kimlikleri ve yedek uyumluluğu korunur.
+
+Ekstre dosyaları cihazda ayrıştırılır; analiz ve sınıflandırma tarayıcıda çalışır, kayıtlar IndexedDB’de saklanır. Hesap zorunlu değildir. Google veya e-posta hesabıyla isteğe bağlı eşitleme açıldığında ayrıştırılmış kayıtlar Firebase’e gönderilir.
 
 ```bash
 cd frontend
@@ -19,19 +21,37 @@ Servisi Ayarlar bölümünden etkinleştirin. Kapalıyken taranmış PDF'ler tar
 
 ---
 
+## Mizan deneyimi — 14 Kasım 2026
+
+Mürekkep laciverti gezinme, iris moru eylemler ve ferah okuma yüzeyleri Mizan’ın yeni görsel sistemini oluşturur. Özet ekranı kaydedilen gelir, net gider ve gelirden kalanı; aylık harcama alanı, görünür günlük/birikimli grafik, kategori dağılımı, son hareketler ve kart tarihleriyle birleştirir. Kalan tutar banka bakiyesi olarak sunulmaz.
+
+İlk açılışta örnek bir ayı deneyebilirsiniz: geliri değiştirin, kirayı dahil edin veya çıkarın, harcama limitini hareket ettirin. Örnekler kayıtlara eklenmez. Ardından kart, gelir ve isteğe bağlı hatırlatmaları tamamlayabilir ya da bütün adımları atlayabilirsiniz. Gerçek kayıt akışına girildiğinde örnek görünüm kapanır.
+
+Hızlı kayıt tutar ve kategoriyle başlar; açıklama isteğe bağlıdır. Kayıt sonrası geri alma, tutar gizliliği, açık/koyu tema ve azaltılmış hareket desteği devam eder. Masaüstünde kenar çubuğu, telefonda güvenli alanları gözeten alt gezinme kullanılır. Yeni M simgesi web, Android launcher, bildirim ve açılış kaynaklarında aynı kimliği taşır.
+
+Bu çalışma kaynak kodu ve yerel önizlemeyi yeniler. Bu görevde Firebase yayını veya yeni APK üretilmedi; mevcut bulut kurulumu ve cihaz teslimi yeni bir dağıtım kanıtı olarak sunulmaz. Ayrıntılar: [Mizan yenileme kaydı](docs/MIZAN_REDESIGN.md), [tasarım sistemi](DESIGN.md).
+
+### Tarihsel bağlam: 7 Kasım 2026, Android 2.5
+
+O tarihteki tasarım beyaz yüzeyler, yeşil eylemler ve gerektiğinde açılan ayrıntılarla aylık özeti sadeleştiriyordu. Mizan bu görsel kimliği değiştirir; aşağıdaki kart ve bildirim yetenekleri önceki uygulama çalışmasının bağlamıdır. İlk kurulum dört adımda kart, gelir ve hatırlatmaları açıklar. Google girişi ilk kurulumda ve ana hesap alanında görünürdür. Hızlı kayıt tutar ve kategoriyle tamamlanır; açıklama isteğe bağlıdır ve kayıt sonrası geri alma bulunur. Aylık özette kaydedilen gelir, gider ve gelirden kalan birlikte görünür. Akbank ve Garanti için birden fazla kart, her kart için ekstre kesim günü ve aylık veri giriş günü tanımlanabilir. Ekstre aktarımında kart seçimi geçmişi birbirinden ayırır; kartı kaldırmak kayıtları silmez.
+
+Android bildirimlerinin cihaz üzerinde izinle zamanlanması önceki sürümde uygulanmıştı. 7 Kasım kaydında Firebase FCM sunucu/istemci kurulumu, kullanıcı onayıyla Blaze planı ve Türkiye saatine göre saatlik zamanlayıcının etkinleştirilmesi raporlandı. Bu altyapı durumu 14 Kasım tasarım çalışmasında yeniden sorgulanmadı. Bulut bildirimleri için hesap eşitlemesini tamamlayıp ayrıca izin verin. İsteğe bağlı Analytics yalnız cihaz izni sonrasında ürün olaylarını ölçer. [Firebase kurulum durumu](docs/FIREBASE_2_5.md). Ayarlar bölümünde saat seçimi ve test bildirimi bulunur. [APK üretme, kurulum ve cihaz test rehberi](docs/APK_TESTING.md). Önceki sürümün tarihli doğrulaması [2.3 sürüm notlarında](docs/RELEASE_2_3.md) saklanır.
+
 ## Ne yapar
 
-Üç sekme ve birkaç açılır sayfa. İlk sekme tek başına yeterli; gerisi derinleşmek isteyene.
+Üç analiz sekmesi ve ortak kayıt akışı. Kredi kartı ekstresi yüklemeden kira, nakit gider veya gelir kaydıyla başlanabilir. Masaüstünde kenar çubuğu, telefonda alt gezinme kullanılır.
 
 | Sekme | İçerik |
 |---|---|
-| **Özet** | Seçili ekstrenin harcamasını kuruşuna kadar verir, hemen altında **ekstre hesabını** (önceki bakiye − ödemeler + dönem harcamaları = bankanın yazdığı dönem borcu) gösterir; sonra iki sayı (aylık ortalama, gelecek ay bağlı tutar), en önemli üç bulgu, toplamı tutan kategori listesi, **bonus ve puan** ve günlük akış |
+| **Özet** | Takvim ayında net harcama; kart, kira/aidat ve diğer kart dışı gider dökümü; kaydedilen gelir ve kalan; günlük ritim, kategoriler, bulgular, son hareketler ve tam ekstre kontrolü |
 | **Harcamalar** | Net harcama ve kalan (gelir girilmişse), aylık seri ve limit (iki ay varsa), kategoriler ve limitleri, düzenli ödemeler, işyerleri, "küçük ama sık" alışkanlıklar, geçen aya göre hareket edenler |
 | **Gelecek** | 12 aylık bağlı tutar merdiveni, yaklaşan ödemeler (ekstre borcu ve asgari ödemesiyle), açık taksit planları, nakit akışı tahmini, tasarruf hedefi |
 
-**Ekstre seçimi.** Sol üstteki düğme bir **dönem** ve bir **kart** seçtirir; ekranın tamamı o ekstreye göre değişir (bir kart + bir ay = bir ekstre). Ekstre dönemi, bankanın kestiği dönemdir; takvim ayı seçeneği yoktur, çünkü bankanın basılı toplamlarıyla hiçbir şey tutmaz. Ekstre hesabındaki satıra dokununca o ekstrenin **her satırı** açılır: alışveriş, taksit, faiz ve ücret, iade/indirim ve ödemeler ayrı ayrı toplanır, toplamları dönem harcamasını verir.
+**Dönem ve hesap seçimi.** Üstteki kontrol takvim ayını ve varsa kartı seçtirir. Tüm hesaplar seçiliyken kart, kira ve nakit birlikte analiz edilir. Ekstre hesabı belgenin tamamına aittir; ekstre kesim dönemi takvim ayıyla aynı olmadığından iki toplamın eşit olması beklenmez. Özet veya ekstre arşivinden belgenin mutabakatı ve her satırı açılır.
 
-**Rakamlar neden tutar.** Her liste, üstündeki rakama toplanır: kategoriler (ve "Diğer N kategori", "İade ve indirimler" satırları) ana rakama, ekstreler bankanın dönem borcuna. Harcama dönem borcuna yalnızca önceki borç tamamen ödenmişse eşittir; değilse ekstre hesabı farkın ne olduğunu (ödenmeden devreden bakiye) bir cümleyle söyler.
+**Kayıt ekleme.** Ana eylemden gelir/gider, gerçek tarih, kategori ve Nakit / Banka-EFT / Diğer yöntemi seçilir. Kira ve fatura kısayolları bulunur. Türkçe tutarlar tam okunur: `15.000` ve `1.250,50`. Sabit gider sayfasında geçmiş aylara toplu kayıt girilebilir. Kart borcu ödemesi yeni harcama sayılmaz; iadeler net harcamayı azaltır. Kayıtlı gelir bulunmadan kalan tutar uydurulmaz.
+
+**Kontrol.** Ekstre toplamları güncel işlem kayıtlarıyla yeniden karşılaştırılır. Eksik/silinmiş satır fark yaratırsa ana görünümde uyarılır. Banka toplamının eşleşmesi, bütün kategorilerin doğru olduğu anlamına gelmez; belirsiz işyerleri kullanıcı kontrolüne bırakılır.
 
 **Bonus ve puan.** Garanti Bonus ve Akbank Chip-para: kazanılan (otomatik fatura bonusu, kampanyalar, alışverişten), harcanan ve kalan; borca etkisi yoktur, harcamaya katılmaz. Bankanın basılı toplamı esastır; satırlar toplamı açıklar.
 
@@ -41,7 +61,7 @@ Ayrıca **Bulgular** (tüm sıra dışı işlemler, mükerrer çekimler, açıkl
 
 ### Geçmiş ve veri
 
-Özet → "Geçmiş ve veri" (ya da Ayarlar → Veri). Üç katman, her biri bir tıkla açılır:
+Kenar çubuğu → "Ekstreler ve yedekler" (ya da Ayarlar → Veri). Üç katman, her biri bir tıkla açılır:
 
 | Katman | Gösterdiği |
 |---|---|
@@ -98,9 +118,11 @@ Yeni bir banka eklemek: `src/ingest/banks/` altına bir adaptör dosyası yazıp
 npm run dev         # geliştirme sunucusu
 npm run build       # tip kontrolü + üretim derlemesi
 npm run typecheck   # yalnızca tip kontrolü
-npm test            # birim testleri (vitest) — 373 test
+npm test            # birim testleri (vitest)
 npm run verify -- <ekstre.pdf>   # gerçek bir ekstreyi okuyup bankanın toplamıyla karşılaştırır
 ```
+
+Güncel yenilemenin kapsamı ve doğrulama sınırları: [Mizan yenileme kaydı](docs/MIZAN_REDESIGN.md). Önceki sürüm hazırlığı tarihsel bağlamdır: [Sürüm hazırlığı](docs/RELEASE_READINESS.md). Görsel sistem: [DESIGN.md](DESIGN.md).
 
 ## Mimari
 
@@ -115,17 +137,17 @@ src/
   store/       reducer, IndexedDB kalıcılık, seçiciler, yedek/göç
   sync/        bulut senkron motoru (saf model + motor + Firestore taşıyıcısı)
   firebase/    Auth (Google, e-posta) ve yapılandırma; hepsi tembel yüklenir
-  ui/          tasarım sistemi ilkelleri, grafik sarmalayıcıları
-  views/       bölüm ekranları
-  app/         kabuk, gezinme, hesap/ayar/arşiv sayfaları, tema
+  ui/          Brand, BudgetRibbon, MoneyValue, ilkeller ve grafikler
+  views/       bölüm ekranları ve useOverviewModel sunum modeli
+  app/         yaşam döngüsü, WorkspaceChrome, kurulum, hesap/ayar/arşiv ve tema
 ```
 
 ## Gizlilik
 
 - Varsayılan olarak hiçbir işlem verisi ağa çıkmaz; ekstre dosyaları ise hesap açsanız bile **hiçbir zaman** cihazdan çıkmaz (ayrıştırma tarayıcıdadır). Yalnızca siz giriş yaparsanız, ayrıştırılmış kayıtlar (işlem, ekstre özeti, kural, profil) Google Firebase'de **yalnızca sizin hesabınızın okuyabileceği** biçimde (`firestore.rules`) saklanır. Giriş yapmadıkça hiçbir kayıt gönderilmez; bulut düğmesinin görünebilmesi için yalnızca "oturum var mı?" kontrolü yapılır (Firebase Auth SDK'sı yüklenir ve bu kontrol sırasında Firebase'in kimlik servislerine bağlanabilir). Firestore istemcisi ise ancak bir oturum eşitlemeye başlayınca indirilir.
-- Yazı tipi (Inter) Google Fonts'tan yüklenir; bu istek hiçbir finansal veri taşımaz.
+- DM Sans Variable yazı tipi ve Türkçe karakterleri uygulamaya yerel olarak paketlenir; Google Fonts isteği yapılmaz.
 - Yerel OCR servisi yalnızca siz açtığınızda ve yalnızca `127.0.0.1` üzerinde çalışır; hiçbir şeyi diske yazmaz.
-- Veriler tarayıcınızın IndexedDB'sinde durur. "Geçmiş ve veri" ekranından JSON/CSV alabilir, yedekten geri yükleyebilir ya da Ayarlar'dan tamamen silebilirsiniz.
+- Veriler tarayıcınızın IndexedDB'sinde durur. "Ekstreler ve yedekler" ekranından JSON/CSV alabilir, yedekten geri yükleyebilir ya da Ayarlar'dan tamamen silebilirsiniz.
 - Sürüm yükseltmeleri veriyi **silmez, taşır**. Şema değiştiğinde eski kayıtlar yeni kimlik ve alan düzenine çevrilir; yalnızca okunamayacak kadar eski ya da yabancı bir kayıt reddedilir.
 - Test verileri gerçek yerleşimlerden alınmış ama tutarlar, işyerleri ve numaralar uydurmadır; depoya kişisel finansal veri girmez.
 

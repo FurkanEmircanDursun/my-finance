@@ -4,12 +4,14 @@ import { X } from 'lucide-react'
 import { clsx } from 'clsx'
 import { IconButton } from './primitives'
 import { hapticImpact, hapticWarn } from '../platform/haptics'
+import { setOverlayBackHandler } from '../platform/native'
 
 const FOCUSABLE =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /** Open sheets, oldest first. Only the last one answers Escape and Tab. */
 const openStack: symbol[] = []
+const closeHandlers = new Map<symbol, () => void>()
 
 /** Past this much of a drag, or this fast, the sheet is being thrown away. */
 const DISMISS_DISTANCE = 110
@@ -73,6 +75,13 @@ export function Modal({
     // is answered first, not closed together with everything under it.
     const token = Symbol()
     openStack.push(token)
+    closeHandlers.set(token, () => closeRef.current())
+    setOverlayBackHandler(() => {
+      const top = openStack[openStack.length - 1]
+      if (!top) return false
+      closeHandlers.get(top)?.()
+      return true
+    })
     const onKeyDown = (event: KeyboardEvent) => {
       if (openStack[openStack.length - 1] !== token) return
 
@@ -117,6 +126,8 @@ export function Modal({
       document.removeEventListener('keydown', onKeyDown)
       const at = openStack.indexOf(token)
       if (at !== -1) openStack.splice(at, 1)
+      closeHandlers.delete(token)
+      if (openStack.length === 0) setOverlayBackHandler(null)
       document.body.style.overflow = previousOverflow
       restoreRef.current?.focus?.()
     }

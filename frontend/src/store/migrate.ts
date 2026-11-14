@@ -2,6 +2,7 @@ import { normalizeMerchant } from '../core/text'
 import { classify } from '../ingest/categorize'
 import { idFor, identityKey } from '../ingest/identity'
 import type { CategoryRule, Profile, Settings, Statement, Transaction } from '../domain/types'
+import { sanitizeCards } from '../domain/cards'
 
 /**
  * Schema versions of what is written to IndexedDB (and exported as a backup).
@@ -160,7 +161,7 @@ export function migratePersisted(stored: unknown): MigrationResult | null {
       transactions,
       statements: loose.statements ?? [],
       rules,
-      profile: loose.profile as Profile,
+      profile: { ...loose.profile, cards: sanitizeCards(loose.profile?.cards), archivedCards: sanitizeCards(loose.profile?.archivedCards) } as Profile,
       settings: loose.settings as Settings,
     },
   }

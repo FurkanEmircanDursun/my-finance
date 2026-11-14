@@ -2,12 +2,47 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Every document a user's data lives under is scoped to their own uid;
-    // nobody, including another authenticated user, can read or write a path
-    // that is not their own — anonymous accounts included, since `uid` is
-    // still unique and stable for them.
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // Existing sync data: transactions, statements, rules and meta singletons.
+    // Sync writes include a nonnegative millisecond version _u; tombstones
+    // contain only _u and _d. Legacy documents can still be read and deleted.
+    // Device registration: token (20..4096 chars), enabled (bool), hour (0..23),
+    // timeZone (Europe/Istanbul), updatedAt (server timestamp). No financial data.
+    // Delivery receipts are server-owned and never writable by a client.
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function isValidSyncDocument(data) {
+      return data is map && data.keys().size() <= 40 &&
+        data._u is int && data._u >= 0 &&
+        (!('_d' in data) || (data._d == true && data.keys().hasOnly(['_u', '_d'])));
+    }
+
+    function isValidPushDevice(data) {
+      return data.keys().hasAll(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
+        data.keys().hasOnly(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
+        data.token is string && data.token.size() >= 20 && data.token.size() <= 4096 &&
+        data.enabled is bool && data.hour is int && data.hour >= 0 && data.hour <= 23 &&
+        data.timeZone == 'Europe/Istanbul' && data.updatedAt == request.time;
+    }
+
+    // Explicit depth prevents the old recursive grant from also allowing users
+    // to forge notification receipts or future server-only subcollections.
+    match /users/{uid}/{kind}/{id} {
+      allow read, delete: if isOwner(uid) && kind in ['transactions', 'statements', 'rules', 'meta'];
+      allow create, update: if isOwner(uid) && kind in ['transactions', 'statements', 'rules', 'meta'] &&
+        isValidSyncDocument(request.resource.data);
+    }
+
+    match /users/{uid}/pushDevices/{installationId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) &&
+        request.auth.token.firebase.sign_in_provider != 'anonymous' &&
+        installationId.matches('^[a-f0-9]{32}$') && isValidPushDevice(request.resource.data);
+    }
+
+    match /users/{uid}/notificationDeliveries/{id} {
+      allow read, write: if false;
     }
   }
 }

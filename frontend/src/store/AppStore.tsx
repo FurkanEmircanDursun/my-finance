@@ -9,7 +9,6 @@ import {
   buildStatementMonthIndex, coverageDaysByMonth, periodMonthOf,
 } from './selectors'
 import { analyzeMemo, type AnalysisContext } from '../analytics/engine'
-import { monthOf } from '../core/date'
 import { cloudAvailable } from '../firebase/available'
 import type { AuthUser } from '../firebase/auth'
 import type { SyncEngine } from '../sync/engine'
@@ -18,7 +17,6 @@ import type { Analysis } from '../analytics/types'
 import type { Transaction } from '../domain/types'
 
 const PERSIST_KEY = 'state'
-const PERSIST_DEBOUNCE_MS = 400
 
 export type { SyncState, SyncStatus } from '../sync/status'
 
@@ -37,6 +35,9 @@ interface StoreValue {
   authUser: AuthUser | null
   /** False until Firebase has said whether a session exists, so the screen never flashes "signed out". */
   authReady: boolean
+  /** A recoverable sign-in startup or redirect error, shown beside the account action. */
+  authError: string | null
+  retryAuth: () => void
   /** Where cloud sync stands; meaningful only while signed in. */
   sync: SyncState
   /** Sends everything now and retries whatever failed. */
@@ -64,10 +65,11 @@ function toPersisted(state: AppState): Persisted {
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [state, rawDispatch] = useReducer(reducer, initialState)
-  const saveTimer = useRef<number | null>(null)
   const engineRef = useRef<SyncEngine | null>(null)
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [authReady, setAuthReady] = useState(!cloudAvailable)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [authEpoch, setAuthEpoch] = useState(0)
   const [sync, setSync] = useState<SyncState>(initialSyncState)
   // Bumped to start the sync engine afresh, e.g. after a failed erase stopped it.
   const [engineEpoch, setEngineEpoch] = useState(0)
@@ -121,26 +123,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [dispatch])
 
-  // ── Save, debounced — and at once when the page is leaving ──────────────────
+  // Persist durable changes as soon as React commits them. Waiting for a debounce
+  // let a quick Undo followed by reload restore the older, already-saved record:
+  // browsers can abort IndexedDB work first started during pagehide.
   useEffect(() => {
     if (!state.hydrated) return
-    if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
-    saveTimer.current = window.setTimeout(() => {
-      void dbSet(PERSIST_KEY, toPersisted(state))
-    }, PERSIST_DEBOUNCE_MS)
+    void dbSet(PERSIST_KEY, toPersisted(state))
+  }, [state.hydrated, state.transactions, state.statements, state.rules, state.profile, state.settings])
 
-    return () => {
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
-    }
-  }, [state])
-
-  // A change made in the last 400 ms before the tab is closed or the app is sent
-  // to the background would otherwise never be written.
+  // Best-effort lifecycle flush also covers a dispatch before its React effect.
+  // Normal saves above do not depend on this callback completing during unload.
   useEffect(() => {
     const flush = () => {
       const current = stateRef.current
       if (!current.hydrated) return
-      if (saveTimer.current !== null) window.clearTimeout(saveTimer.current)
       void dbSet(PERSIST_KEY, toPersisted(current))
     }
     const onHide = () => {
@@ -170,20 +166,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ? availableStatementMonths(state.statements)
         : availableMonths(state.transactions)
 
-    // With a single period "all" and that period are the same picture, and the
-    // choice is not made until there is a second one to choose between — which
-    // may only arrive with this session's first import, not at load.
-    if (periods.length <= 1) return
+    // Wait for the first recorded month before selecting a landing period.
+    if (periods.length === 0) return
     defaultedPeriod.current = true
 
-    // Prefer the newest month a statement actually reached. The current month
-    // usually holds only the salary and rent entered by hand — this month's
-    // statement has not arrived yet — and opening on it would show a thin
-    // slice of the picture rather than the last month there is a full one for.
-    const withStatements = new Set(
-      state.transactions.filter((tx) => tx.source === 'statement').map((tx) => monthOf(tx.date)),
-    )
-    const landing = periods.find((month) => withStatements.has(month)) ?? periods[0]
+    // Calendar analysis opens on the newest recorded month, including manual
+    // rent or salary. A one-month dataset still names its actual month.
+    const landing = periods[0]
     dispatch({ type: 'setFilters', filters: { month: landing } })
   }, [state.hydrated, state.settings.periodGrouping, state.statements, state.transactions, state.filters.month, dispatch])
 
@@ -202,23 +191,38 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     let unsubscribe: (() => void) | undefined
     let cancelled = false
 
-    import('../firebase/auth').then(async ({ onAuthChange, completeRedirectSignIn }) => {
+    setAuthReady(false)
+    setAuthError(null)
+
+    import('../firebase/auth').then(async ({ onAuthChange, completeRedirectSignIn, authErrorMessage }) => {
       if (cancelled) return
-      // A Google sign-in that left the page and came back finishes here, before
-      // the first "who is signed in" answer, so it never shows as signed out.
-      await completeRedirectSignIn().catch(() => undefined)
-      if (cancelled) return
+      // Subscribe first: a redirect failure must not hide a valid saved
+      // session or leave the account area loading forever.
       unsubscribe = onAuthChange((user) => {
+        if (cancelled) return
         setAuthUser(user)
         setAuthReady(true)
+      }, (error) => {
+        if (cancelled) return
+        setAuthError(authErrorMessage(error))
+        setAuthReady(true)
       })
+      try {
+        await completeRedirectSignIn()
+      } catch (error) {
+        if (!cancelled) setAuthError(authErrorMessage(error))
+      }
+    }).catch(() => {
+      if (cancelled) return
+      setAuthError('Hesap servisi açılamadı. Bağlantını kontrol edip yeniden dene; kayıtların bu cihazda duruyor.')
+      setAuthReady(true)
     })
 
     return () => {
       cancelled = true
       unsubscribe?.()
     }
-  }, [state.hydrated])
+  }, [state.hydrated, authEpoch])
 
   // ── Cloud sync, while signed in ─────────────────────────────────────────────
   const uid = authUser?.uid ?? null
@@ -253,12 +257,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         getSnapshot: () => toSnapshot(stateRef.current),
         apply: (change) => dispatch({ type: 'remote', change }),
         replaceLocal: () => dispatch({ type: 'clearData' }),
-        hasLocalData: () => stateRef.current.transactions.length > 0 || stateRef.current.statements.length > 0,
+        hasLocalData: () => stateRef.current.transactions.length > 0 || stateRef.current.statements.length > 0 || (stateRef.current.profile.cards?.length ?? 0) > 0 || (stateRef.current.profile.archivedCards?.length ?? 0) > 0,
         onState: setSync,
       })
       engineRef.current = engine
       await engine.start()
-    })()
+    })().catch((error: unknown) => {
+      if (cancelled) return
+      setSync({ ...initialSyncState, status: 'error', error: error instanceof Error ? error.message : 'Senkronizasyon başlatılamadı.' })
+    })
 
     return () => {
       cancelled = true
@@ -283,8 +290,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * now-permanent account instead of still showing "anonymous".
    */
   const refreshAuthUser = useCallback(() => {
-    import('../firebase/auth').then(({ getCurrentAuthUser }) => setAuthUser(getCurrentAuthUser()))
+    import('../firebase/auth').then(({ getCurrentAuthUser }) => {
+      setAuthUser(getCurrentAuthUser())
+      setAuthError(null)
+    })
   }, [])
+
+  const retryAuth = useCallback(() => setAuthEpoch((n) => n + 1), [])
 
   const syncNow = useCallback(() => engineRef.current?.syncNow(), [])
   const resolveSync = useCallback((choice: 'merge' | 'replace') => engineRef.current?.resolve(choice), [])
@@ -377,10 +389,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<StoreValue>(
     () => ({
-      state, dispatch, visible, analysis, overall, cloudAvailable, authUser, authReady, sync,
+      state, dispatch, visible, analysis, overall, cloudAvailable, authUser, authReady, authError, retryAuth, sync,
       syncNow, resolveSync, eraseCloud, refreshAuthUser,
     }),
-    [state, dispatch, visible, analysis, overall, authUser, authReady, sync, syncNow, resolveSync, eraseCloud, refreshAuthUser],
+    [state, dispatch, visible, analysis, overall, authUser, authReady, authError, retryAuth, sync, syncNow, resolveSync, eraseCloud, refreshAuthUser],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

@@ -59,7 +59,7 @@ describe('the backup file', () => {
     expect(backup.format).toBe(BACKUP_FORMAT)
     expect(backup.schemaVersion).toBe(STATE_VERSION)
     expect(backup.exportedAt).toBe('2026-10-03T10:00:00.000Z')
-    expect(backup.app).toEqual({ name: 'My Finance', version: '9.9.9' })
+    expect(backup.app).toEqual({ name: 'Mizan', version: '9.9.9' })
     expect(backup.units.amount).toMatch(/kuruş/)
     expect(Object.keys(backup.units.kinds)).toEqual(['expense', 'refund', 'income', 'payment'])
   })
@@ -109,8 +109,8 @@ describe('the backup file', () => {
   })
 
   it('names its files by what they hold', () => {
-    expect(backupFileName('all', '2026-10-03')).toBe('my-finance-yedek-2026-10-03.json')
-    expect(backupFileName('2026-09', '2026-10-03')).toBe('my-finance-2026-09-2026-10-03.json')
+    expect(backupFileName('all', '2026-10-03')).toBe('mizan-yedek-2026-10-03.json')
+    expect(backupFileName('2026-09', '2026-10-03')).toBe('mizan-2026-09-2026-10-03.json')
   })
 })
 

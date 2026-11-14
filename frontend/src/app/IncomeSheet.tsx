@@ -4,10 +4,11 @@ import { clsx } from 'clsx'
 import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { useStore } from '../store/AppStore'
-import { money, toMinor } from '../core/money'
+import { money } from '../core/money'
 import { monthLabel, monthOf, todayKey, yearOf } from '../core/date'
 import { CATEGORIES, categoryLabel, type CategoryId } from '../domain/categories'
 import { buildLedgerSeries, buildMonthLedgers, monthsOfYear } from '../domain/ledger'
+import { entryAmount } from '../domain/entry'
 import type { MonthKey } from '../core/date'
 
 /**
@@ -26,7 +27,7 @@ export function IncomeSheet({ open, onClose }: { open: boolean; onClose: () => v
   const today = todayKey()
   const thisMonth = monthOf(today)
   const [year, setYear] = useState(yearOf(today))
-  const [editing, setEditing] = useState<MonthKey | null>(null)
+  const [editing, setEditing] = useState<MonthKey | null>(thisMonth)
 
   const years = useMemo(() => {
     const set = new Set<number>([yearOf(today)])
@@ -62,7 +63,7 @@ export function IncomeSheet({ open, onClose }: { open: boolean; onClose: () => v
 
       <ul className="-mx-2">
         {ledgers.map((row) => {
-          const untouched = row.income === 0 && row.entries.length === 0
+          const untouched = row.income === 0 && row.entries.length === 0 && row.statementSpend === 0 && row.manualSpend === 0
           const spend = row.statementSpend + row.manualSpend
           return (
             <li key={row.month} className="border-b border-line last:border-b-0">
@@ -139,7 +140,7 @@ function MonthEntries({
   const [category, setCategory] = useState<CategoryId>('other')
   const [repeat, setRepeat] = useState(false)
 
-  const value = toMinor(Math.abs(Number.parseFloat(amount.replace(',', '.')) || 0))
+  const value = entryAmount(amount) ?? 0
   const valid = label.trim().length > 0 && value > 0
 
   const submit = () => {
@@ -231,7 +232,7 @@ function MonthEntries({
             onChange={(e) => setLabel(e.target.value)}
           />
         </Field>
-        <Field label="Tutar (₺)">
+        <Field label="Tutar (₺)" hint="Örnek: 15.000,50">
           <TextInput
             inputMode="decimal"
             value={amount}

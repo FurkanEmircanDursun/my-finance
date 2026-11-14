@@ -1,9 +1,10 @@
 import { uid } from '../core/hash'
 import type { CategoryId } from '../domain/categories'
 import type {
-  CategoryRule, Filters, ImportOutcome, Profile, Settings, Statement, Transaction,
+  CategoryRule, CreditCard, Filters, ImportOutcome, Profile, Settings, Statement, Transaction,
 } from '../domain/types'
 import { emptyFilters } from '../domain/types'
+import { cardDisplayName, sanitizeCards } from '../domain/cards'
 import { applyBackup, type RestoreMode } from './backup'
 import { defaultProfile, defaultSettings } from './defaults'
 import { STATE_VERSION, type Persisted } from './migrate'
@@ -67,6 +68,8 @@ export type Action =
   | { type: 'removeStatement'; statementId: string }
   | { type: 'setFilters'; filters: Partial<Filters> }
   | { type: 'setProfile'; profile: Partial<Profile> }
+  | { type: 'upsertCard'; card: CreditCard }
+  | { type: 'removeCard'; cardId: string }
   | { type: 'setSettings'; settings: Partial<Settings> }
   | { type: 'removeRule'; ruleId: string }
   | { type: 'clearImportLog' }
@@ -102,9 +105,15 @@ export function reducer(state: AppState, action: Action): AppState {
       // statement imported by an older build.
       const byId = new Map(state.statements.map((st) => [st.id, st]))
       for (const st of action.statements) byId.set(st.id, st)
+      const transactions = merged.map((tx) => {
+        const statement = tx.statementId ? byId.get(tx.statementId) : undefined
+        return statement?.cardId && tx.cardId !== statement.cardId
+          ? { ...tx, cardId: statement.cardId, accountLabel: statement.accountLabel ?? tx.accountLabel }
+          : tx
+      })
       return {
         ...state,
-        transactions: merged,
+        transactions,
         statements: [...byId.values()],
         lastImport: action.outcomes,
       }
@@ -183,6 +192,48 @@ export function reducer(state: AppState, action: Action): AppState {
     case 'setProfile':
       return { ...state, profile: { ...state.profile, ...action.profile } }
 
+    case 'upsertCard': {
+      let card = sanitizeCards([action.card])[0]
+      if (!card) return state
+      const cards = state.profile.cards ?? []
+      const archivedCards = state.profile.archivedCards ?? []
+      const archived = archivedCards.find((item) => item.id === card.id || (item.bank === card.bank &&
+        ((card.last4 && item.last4 === card.last4) || cardDisplayName(item).toLocaleLowerCase('tr-TR') === cardDisplayName(card).toLocaleLowerCase('tr-TR'))))
+      if (archived) card = { ...card, id: archived.id }
+      const old = cards.find((item) => item.id === card.id)
+      if (old && old.bank !== card.bank) return state
+      const label = cardDisplayName(card)
+      const previous = old ?? archived
+      if (cards.some((item) => item.id !== card.id && cardDisplayName(item).toLocaleLowerCase('tr-TR') === label.toLocaleLowerCase('tr-TR'))) return state
+      return {
+        ...state,
+        profile: {
+          ...state.profile,
+          cards: old ? cards.map((item) => item.id === card.id ? card : item) : [...cards, card],
+          archivedCards: archivedCards.filter((item) => item.id !== card.id),
+        },
+        filters: previous && cardDisplayName(previous) !== label
+          ? { ...state.filters, cards: state.filters.cards.map((selected) => selected === cardDisplayName(previous) ? label : selected) }
+          : state.filters,
+        transactions: state.transactions.map((tx) => tx.cardId === card.id ? { ...tx, accountLabel: label } : tx),
+        statements: state.statements.map((statement) => statement.cardId === card.id ? {
+          ...statement, accountLabel: label,
+          label: statement.accountLabel ? statement.label.replace(statement.accountLabel, label) : statement.label,
+        } : statement),
+      }
+    }
+
+    case 'removeCard': {
+      // Card configuration can be removed without erasing imported financial history.
+      const removed = state.profile.cards?.find((card) => card.id === action.cardId)
+      if (!removed) return state
+      return { ...state, profile: {
+        ...state.profile,
+        cards: (state.profile.cards ?? []).filter((card) => card.id !== action.cardId),
+        archivedCards: [...(state.profile.archivedCards ?? []).filter((card) => card.id !== action.cardId), removed],
+      } }
+    }
+
     case 'setSettings': {
       const settings = { ...state.settings, ...action.settings }
 
@@ -231,7 +282,7 @@ export function reducer(state: AppState, action: Action): AppState {
           next.transactions === state.transactions ? state.transactions : [...next.transactions].sort(newestFirst),
         statements: next.statements,
         rules: next.rules,
-        profile: profile ? { ...defaultProfile, ...profile } : state.profile,
+        profile: profile ? { ...defaultProfile, ...profile, cards: sanitizeCards(profile.cards), archivedCards: sanitizeCards(profile.archivedCards) } : state.profile,
         settings,
         // The period filter names months of the old grouping.
         filters:

@@ -12,6 +12,7 @@ import {
 } from '../firebase/auth'
 import { SyncDecision } from './SyncDecision'
 import { useNow } from './useNow'
+import { GoogleMark } from './GoogleConnectButton'
 
 /**
  * Hesap ve senkron — the whole cloud story on one screen, and only when asked.
@@ -28,10 +29,16 @@ import { useNow } from './useNow'
  * answer to "did that work?" is on screen the moment it is true.
  */
 export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { cloudAvailable, authReady, authUser } = useStore()
+  const { cloudAvailable, authReady, authUser, authError, retryAuth } = useStore()
 
   return (
     <Modal open={open} onClose={onClose} title="Hesap ve senkron">
+      {authError && (
+        <div className="mb-5 space-y-2" role="alert">
+          <p className="text-body text-negative">{authError}</p>
+          <Button size="sm" onClick={retryAuth}>Bağlantıyı yeniden dene</Button>
+        </div>
+      )}
       {!cloudAvailable ? (
         <p className="text-body text-muted">Bu sürümde bulut senkronu kurulu değil; veriler yalnızca bu cihazda tutulur.</p>
       ) : !authReady ? (
@@ -91,6 +98,7 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
       const outcome = await signInWithGoogle()
       if (outcome === 'done') refreshAuthUser()
       if (outcome === 'redirecting') setNotice("Google'a yönlendiriliyorsun…")
+      if (outcome === 'cancelled') setNotice('Giriş iptal edildi. İstediğin zaman yeniden deneyebilirsin.')
     })
 
   const submit = (event: FormEvent) => {
@@ -146,18 +154,17 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
         kendiliğinden eşitlenir. Açmazsan her şey yalnızca bu cihazda kalır.
       </p>
 
-      <Button className="w-full" onClick={google} disabled={busy !== null}>
+      <Button className="google-connect-button w-full" onClick={google} disabled={busy !== null} aria-busy={busy === 'google'}>
         <GoogleMark />
         {busy === 'google' ? 'Google bekleniyor…' : 'Google ile devam et'}
       </Button>
 
-      <div className="flex items-center gap-3 text-label text-faint" aria-hidden>
-        <span className="h-px flex-1 bg-line" />
-        veya e-posta ile
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {error && <p className="text-body text-negative" role="alert">{error}</p>}
+      {notice && <p className="text-body text-muted" role="status">{notice}</p>}
 
-      <form onSubmit={submit} className="space-y-4" noValidate>
+      <details className="account-email-options">
+      <summary className="flex min-h-11 cursor-pointer items-center text-body font-semibold text-muted">E-posta ile devam et</summary>
+      <form onSubmit={submit} className="mt-4 space-y-4" noValidate>
         <Field label="E-posta">
           <TextInput
             type="email"
@@ -195,17 +202,6 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
           </div>
         </Field>
 
-        {error && (
-          <p className="text-body text-negative" role="alert">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p className="text-body text-positive" role="status">
-            {notice}
-          </p>
-        )}
-
         {noMatch ? (
           <div className="space-y-3 rounded-[var(--radius-lg)] bg-sunken p-4" role="status">
             <div>
@@ -235,24 +231,13 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
           </div>
         )}
       </form>
+      </details>
 
       <p className="text-label text-faint">
         İşlemler, ekstreler, kategori kuralları, hedef ve bütçeler, tema bulutta yalnızca senin hesabının
         erişebileceği şekilde saklanır. Uygulama kilidi (PIN) hiçbir zaman gönderilmez.
       </p>
     </div>
-  )
-}
-
-/** The mark, in its own colours: it is a logo, not a theme token. */
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
-      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.5-4.2 7-10.3 7-17.6z" />
-      <path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z" />
-      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z" />
-    </svg>
   )
 }
 

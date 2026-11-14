@@ -21,11 +21,12 @@ export async function syncStatusBar(theme: ResolvedTheme): Promise<void> {
   if (!isNative()) return
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
-    await StatusBar.setOverlaysWebView({ overlay: true })
+    // Android 15+ enforces edge-to-edge; an unsupported overlay call must not
+    // prevent the icon contrast from following the app's selected theme.
+    await StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {})
     await StatusBar.setStyle({ style: theme === 'dark' ? Style.Dark : Style.Light })
   } catch {
-    // Some OEM shells refuse the overlay call; the icon-colour call above is
-    // the part that matters and lands independently.
+    // Keep theme changes usable when the native status-bar plugin is unavailable.
   }
 }
 
@@ -39,6 +40,11 @@ export async function syncStatusBar(theme: ResolvedTheme): Promise<void> {
  * forgot to unregister keeps swallowing every press after it is gone.
  */
 let backInterceptor: (() => boolean) | null = null
+let overlayBackHandler: (() => boolean) | null = null
+
+export function setOverlayBackHandler(handler: (() => boolean) | null): void {
+  overlayBackHandler = handler
+}
 
 export function setBackInterceptor(handler: (() => boolean) | null): void {
   backInterceptor = handler
@@ -54,6 +60,7 @@ export async function initNativeShell(): Promise<() => void> {
 
   const { App: CapacitorApp } = await import('@capacitor/app')
   const listener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+    if (overlayBackHandler?.()) return
     if (backInterceptor?.()) return
     if (canGoBack) window.history.back()
     else void CapacitorApp.exitApp()

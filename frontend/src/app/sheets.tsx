@@ -1,11 +1,20 @@
+import { useExplore } from './ExploreContext'
 import {
-  createContext, lazy, Suspense, useCallback, useContext, useMemo, useState, type ReactNode,
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
 } from 'react'
 import { ImportSheet } from './ImportSheet'
 import { SyncGate } from './SyncDecision'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
 import type { TxKind } from '../domain/types'
+import { EntrySheet } from './EntrySheet'
 
 /**
  * Everything that is not one of the three tabs is a sheet, and every sheet in
@@ -23,15 +32,32 @@ import type { TxKind } from '../domain/types'
  * majority who never sign in.
  */
 
-const SettingsSheet = lazy(() => import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })))
-const AccountSheet = lazy(() => import('./AccountSheet').then((m) => ({ default: m.AccountSheet })))
-const StatementSheet = lazy(() => import('./StatementSheet').then((m) => ({ default: m.StatementSheet })))
-const RewardsSheet = lazy(() => import('./RewardsSheet').then((m) => ({ default: m.RewardsSheet })))
-const IncomeSheet = lazy(() => import('./IncomeSheet').then((m) => ({ default: m.IncomeSheet })))
-const ArchiveSheet = lazy(() => import('./ArchiveSheet').then((m) => ({ default: m.ArchiveSheet })))
-const BudgetSheet = lazy(() => import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })))
+const SettingsSheet = lazy(() =>
+  import('./SettingsSheet').then((m) => ({ default: m.SettingsSheet })),
+)
+const AccountSheet = lazy(() =>
+  import('./AccountSheet').then((m) => ({ default: m.AccountSheet })),
+)
+const StatementSheet = lazy(() =>
+  import('./StatementSheet').then((m) => ({ default: m.StatementSheet })),
+)
+const RewardsSheet = lazy(() =>
+  import('./RewardsSheet').then((m) => ({ default: m.RewardsSheet })),
+)
+const IncomeSheet = lazy(() =>
+  import('./IncomeSheet').then((m) => ({ default: m.IncomeSheet })),
+)
+const ArchiveSheet = lazy(() =>
+  import('./ArchiveSheet').then((m) => ({ default: m.ArchiveSheet })),
+)
+const BudgetSheet = lazy(() =>
+  import('./BudgetSheet').then((m) => ({ default: m.BudgetSheet })),
+)
+const CardsSheet = lazy(() => import('./CardsSheet').then((m) => ({ default: m.CardsSheet })))
 const TransactionsSheet = lazy(() =>
-  import('../views/TransactionsSheet').then((m) => ({ default: m.TransactionsSheet })),
+  import('../views/TransactionsSheet').then((m) => ({
+    default: m.TransactionsSheet,
+  })),
 )
 
 export interface TransactionQuery {
@@ -45,11 +71,14 @@ export interface TransactionQuery {
 }
 
 interface SheetApi {
+  openEntry: () => void
+  openIncomeEntry: () => void
   openImport: () => void
   openSettings: () => void
   openAccount: () => void
   openIncome: () => void
   openBudgets: () => void
+  openCards: () => void
   openArchive: () => void
   /** One statement, line by line, added up the way the bank adds it. */
   openStatement: (statementId: string) => void
@@ -66,33 +95,65 @@ export function useSheets(): SheetApi {
 }
 
 export function SheetProvider({ children }: { children: ReactNode }) {
+  const { stopExplore } = useExplore()
   const { state, visible } = useStore()
   const [importOpen, setImportOpen] = useState(false)
+  const [entryOpen, setEntryOpen] = useState<'expense' | 'income' | null>(null)
+  const openEntry = useCallback(() => { stopExplore(); setEntryOpen('expense') }, [stopExplore])
+  const openIncomeEntry = useCallback(() => { stopExplore(); setEntryOpen('income') }, [stopExplore])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
+  const [cardsOpen, setCardsOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [statementId, setStatementId] = useState<string | null>(null)
   const [rewardsOpen, setRewardsOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
 
-  const openImport = useCallback(() => setImportOpen(true), [])
-  const openSettings = useCallback(() => setSettingsOpen(true), [])
-  const openAccount = useCallback(() => setAccountOpen(true), [])
-  const openIncome = useCallback(() => setIncomeOpen(true), [])
-  const openBudgets = useCallback(() => setBudgetsOpen(true), [])
-  const openArchive = useCallback(() => setArchiveOpen(true), [])
-  const openStatement = useCallback((id: string) => setStatementId(id), [])
-  const openRewards = useCallback(() => setRewardsOpen(true), [])
-  const openTransactions = useCallback((query?: TransactionQuery) => setTxQuery(query ?? {}), [])
+  const openImport = useCallback(() => { stopExplore(); setImportOpen(true) }, [stopExplore])
+  const openSettings = useCallback(() => { stopExplore(); setSettingsOpen(true) }, [stopExplore])
+  const openAccount = useCallback(() => { stopExplore(); setAccountOpen(true) }, [stopExplore])
+  const openIncome = useCallback(() => { stopExplore(); setIncomeOpen(true) }, [stopExplore])
+  const openBudgets = useCallback(() => { stopExplore(); setBudgetsOpen(true) }, [stopExplore])
+  const openCards = useCallback(() => { stopExplore(); setCardsOpen(true) }, [stopExplore])
+  const openArchive = useCallback(() => { stopExplore(); setArchiveOpen(true) }, [stopExplore])
+  const openStatement = useCallback((id: string) => { stopExplore(); setStatementId(id) }, [stopExplore])
+  const openRewards = useCallback(() => { stopExplore(); setRewardsOpen(true) }, [stopExplore])
+  const openTransactions = useCallback(
+    (query?: TransactionQuery) => { stopExplore(); setTxQuery(query ?? {}) },
+    [stopExplore],
+  )
 
   const api = useMemo<SheetApi>(
     () => ({
-      openImport, openSettings, openAccount, openIncome, openBudgets, openArchive,
-      openStatement, openRewards, openTransactions,
+      openEntry,
+      openIncomeEntry,
+      openImport,
+      openSettings,
+      openAccount,
+      openIncome,
+      openBudgets,
+      openCards,
+      openArchive,
+      openStatement,
+      openRewards,
+      openTransactions,
     }),
-    [openImport, openSettings, openAccount, openIncome, openBudgets, openArchive, openStatement, openRewards, openTransactions],
+    [
+      openEntry,
+      openIncomeEntry,
+      openImport,
+      openSettings,
+      openAccount,
+      openIncome,
+      openBudgets,
+      openCards,
+      openArchive,
+      openStatement,
+      openRewards,
+      openTransactions,
+    ],
   )
 
   const source = txQuery?.overall ? state.transactions : visible
@@ -106,11 +167,19 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     )
   }, [source, txQuery])
 
-  const title = txQuery?.title ?? (txQuery?.category ? categoryLabel(txQuery.category) : 'İşlemler')
+  const title =
+    txQuery?.title ??
+    (txQuery?.category ? categoryLabel(txQuery.category) : 'İşlemler')
 
   return (
     <SheetContext.Provider value={api}>
       {children}
+      {entryOpen && (
+        <EntrySheet
+          initialKind={entryOpen}
+          onClose={() => setEntryOpen(null)}
+        />
+      )}
 
       <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} />
 
@@ -120,10 +189,19 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       <SyncGate />
 
       <Suspense fallback={null}>
-        {settingsOpen && <SettingsSheet open onClose={() => setSettingsOpen(false)} />}
-        {accountOpen && <AccountSheet open onClose={() => setAccountOpen(false)} />}
-        {incomeOpen && <IncomeSheet open onClose={() => setIncomeOpen(false)} />}
-        {budgetsOpen && <BudgetSheet open onClose={() => setBudgetsOpen(false)} />}
+        {cardsOpen && <CardsSheet open onClose={() => setCardsOpen(false)} />}
+        {settingsOpen && (
+          <SettingsSheet open onClose={() => setSettingsOpen(false)} />
+        )}
+        {accountOpen && (
+          <AccountSheet open onClose={() => setAccountOpen(false)} />
+        )}
+        {incomeOpen && (
+          <IncomeSheet open onClose={() => setIncomeOpen(false)} />
+        )}
+        {budgetsOpen && (
+          <BudgetSheet open onClose={() => setBudgetsOpen(false)} />
+        )}
         {archiveOpen && (
           <ArchiveSheet
             open
@@ -134,10 +212,23 @@ export function SheetProvider({ children }: { children: ReactNode }) {
             }}
           />
         )}
-        {statementId !== null && <StatementSheet open onClose={() => setStatementId(null)} statementId={statementId} />}
-        {rewardsOpen && <RewardsSheet open onClose={() => setRewardsOpen(false)} />}
+        {statementId !== null && (
+          <StatementSheet
+            open
+            onClose={() => setStatementId(null)}
+            statementId={statementId}
+          />
+        )}
+        {rewardsOpen && (
+          <RewardsSheet open onClose={() => setRewardsOpen(false)} />
+        )}
         {txQuery !== null && (
-          <TransactionsSheet open onClose={() => setTxQuery(null)} title={title} transactions={rows} />
+          <TransactionsSheet
+            open
+            onClose={() => setTxQuery(null)}
+            title={title}
+            transactions={rows}
+          />
         )}
       </Suspense>
     </SheetContext.Provider>

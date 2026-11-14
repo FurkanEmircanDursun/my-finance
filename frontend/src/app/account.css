@@ -1,0 +1,38 @@
+.account-panel {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+.account-panel__intro { display: flex; align-items: flex-start; gap: 14px; }
+.account-panel__icon { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; color: var(--accent-text); background: var(--accent-soft); }
+.account-panel__copy { min-width: 0; flex: 1; }
+.account-panel__copy h2 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 650; letter-spacing: -.015em; color: var(--text); overflow-wrap: anywhere; }
+.account-panel__copy p { margin: 5px 0 0; max-width: 44ch; font-size: 13px; line-height: 1.6; color: var(--text-muted); }
+.account-panel__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.account-panel__actions > div { flex: 1 1 210px; }
+.google-connect-button { min-height: 48px; }
+.account-panel__footer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 16px; }
+.account-panel__status { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; font-size: 12px; }
+.account-panel__error { margin-top: 14px; padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.6; color: var(--negative); }
+.account-panel__error p { margin: 0 0 8px; }
+.account-panel--local { display: flex; align-items: center; gap: 12px; color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.account-pill { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg-raised); color: var(--text); font-size: 13px; font-weight: 600; transition: background 160ms, transform 160ms; }
+.account-pill:hover { background: var(--bg-hover); }
+.account-pill:active { transform: scale(.97); }
+.account-pill--warning { color: var(--warning); }
+.account-pill__dot { display: inline-block; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.account-tone-positive { color: var(--positive); }
+.account-tone-warning { color: var(--warning); }
+.account-tone-negative { color: var(--negative); }
+.account-tone-accent { color: var(--accent); }
+.account-tone-neutral { color: var(--text-muted); }
+@media (max-width: 420px) {
+  .account-panel { padding: 18px; }
+  .account-panel__actions > div { flex-basis: 100%; }
+  .account-panel__actions > button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-pill { transition: none; }
+  .account-pill:active { transform: none; }
+}

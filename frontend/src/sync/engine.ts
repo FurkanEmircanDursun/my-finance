@@ -53,6 +53,7 @@ export class SyncEngine {
   private retryIndex = 0
   private stopped = false
   private firstDone = false
+  private listenFailed = false
   private held: RemoteSnapshot | null = null
   private inflight = new Set<string>()
   private online = typeof navigator === 'undefined' ? true : navigator.onLine !== false
@@ -76,10 +77,7 @@ export class SyncEngine {
     // Starting without a network is "çevrimdışı", not an endless "bağlanıyor".
     if (!this.online) this.setState({ status: 'offline' })
 
-    this.unlisten =this.o.transport.listen(this.o.uid, {
-      onSnapshot: (snapshot) => this.enqueue(() => this.handle(snapshot)),
-      onError: (error) => this.fail(error),
-    })
+    this.subscribe()
   }
 
   stop(): void {
@@ -112,7 +110,30 @@ export class SyncEngine {
   /** Send everything now, retrying whatever failed. */
   syncNow(): void {
     if (this.stopped) return
-    this.enqueue(() => this.flush())
+    this.enqueue(async () => {
+      // Firestore snapshot listeners stop after an error. A retry must attach
+      // a new listener; flushing alone cannot recover an initial failure.
+      if ((this.listenFailed || !this.firstDone) && !this.held) this.subscribe()
+      await this.flush()
+    })
+  }
+
+  private subscribe(): void {
+    this.unlisten?.()
+    this.listenFailed = false
+    if (!this.firstDone) this.setState({ status: this.online ? 'connecting' : 'offline' })
+    try {
+      this.unlisten = this.o.transport.listen(this.o.uid, {
+        onSnapshot: (snapshot) => this.enqueue(() => this.handle(snapshot)),
+        onError: (error) => {
+          this.listenFailed = true
+          this.fail(error)
+        },
+      })
+    } catch (error) {
+      this.listenFailed = true
+      this.fail(error)
+    }
   }
 
   /** The person's answer to "this device holds someone else's data". */
@@ -290,7 +311,7 @@ export class SyncEngine {
     if (online) {
       this.retryIndex = 0
       this.setState({
-        status: this.pendingCount() > 0 ? 'syncing' : this.state.status === 'offline' ? 'synced' : this.state.status,
+        status: !this.firstDone ? 'connecting' : this.pendingCount() > 0 ? 'syncing' : this.state.status === 'offline' ? 'synced' : this.state.status,
       })
       this.syncNow()
     } else {
@@ -348,7 +369,8 @@ function adoptLegacy(docs: RemoteDoc[], local: Snapshot): { change: RemoteChange
   // A profile the account had, on a device that has none of its own.
   const profile = docs.find((d) => d.kind === 'profile' && !d.deleted)
   const untouched =
-    local.profile.monthlyIncome === 0 && local.profile.goal === null && local.profile.budgets.length === 0
+    local.profile.monthlyIncome === 0 && local.profile.goal === null && local.profile.budgets.length === 0 &&
+    (local.profile.cards?.length ?? 0) === 0 && (local.profile.archivedCards?.length ?? 0) === 0
   if (profile?.data && untouched) change.profile = profile.data as Snapshot['profile']
 
   const purges: Purge[] = docs

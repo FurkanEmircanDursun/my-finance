@@ -4,7 +4,7 @@ import { Modal } from '../ui/Modal'
 import { Button, Chip } from '../ui/primitives'
 import { LedgerStatus } from '../ui/ledger'
 import { useStore } from '../store/AppStore'
-import { monthLabel } from '../core/date'
+import { monthLabel, monthOf, todayKey } from '../core/date'
 import { money2 } from '../core/money'
 import { buildLedgers } from '../analytics/ledger'
 import {
@@ -32,15 +32,15 @@ export function ScopeButton() {
 
   const title = month === 'all' ? 'Tüm dönemler' : monthLabel(month)
   const subtitle =
-    cards.length < 2 ? null : chosen.length === 0 ? 'Tüm kartlar' : chosen.length === 1 ? chosen[0] : `${chosen.length} kart`
+    cards.length < 2 ? null : chosen.length === 0 ? 'Tüm hesaplar' : chosen.length === 1 ? chosen[0] : `${chosen.length} kart`
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Ekstre seç: ${title}${subtitle ? `, ${subtitle}` : ''}`}
-        className="-ml-2 flex min-h-11 min-w-0 max-w-[70%] items-center gap-1.5 rounded-[var(--radius)] px-2 py-1 text-left transition-colors duration-200 hover:bg-hover"
+        aria-label={`Dönem seç: ${title}${subtitle ? `, ${subtitle}` : ''}`}
+        className="-ml-2 flex min-h-11 min-w-0 max-w-full items-center gap-1.5 rounded-[var(--radius)] px-2 py-1 text-left transition-colors duration-200 hover:bg-hover"
       >
         <span className="min-w-0">
           <span className="block truncate text-title font-semibold leading-tight text-ink">{title}</span>
@@ -58,9 +58,7 @@ function ScopeSheet({ open, onClose, cards }: { open: boolean; onClose: () => vo
   const { state, dispatch } = useStore()
   const { filters, statements, transactions } = state
 
-  const months: MonthKey[] = statements.length
-    ? availableStatementMonths(statements)
-    : availableMonths(transactions)
+  const months: MonthKey[] = [...new Set([monthOf(todayKey()), ...availableMonths(transactions), ...availableStatementMonths(statements)])].sort().reverse()
 
   const inScope = useMemo(() => statementsInScope(statements, filters), [statements, filters])
   const { ledgers, totals } = useMemo(() => buildLedgers(inScope, transactions), [inScope, transactions])
@@ -72,8 +70,8 @@ function ScopeSheet({ open, onClose, cards }: { open: boolean; onClose: () => vo
     <Modal
       open={open}
       onClose={onClose}
-      title="Ekstre seç"
-      description="Bir dönem ve bir kart seç; ekranın tamamı o ekstreye göre değişir."
+      title="Dönem ve hesap"
+      description="Aylık analiz işlem tarihine göre hesaplanır. Ekstre kontrolü belgenin tamamını kapsar."
       footer={
         <Button variant="primary" onClick={onClose}>
           Tamam
@@ -104,7 +102,7 @@ function ScopeSheet({ open, onClose, cards }: { open: boolean; onClose: () => vo
             </h3>
             <div className="flex flex-wrap gap-2">
               <Chip selected={filters.cards.length === 0} onClick={() => pickCard(null)}>
-                Tüm kartlar
+                Tüm hesaplar
               </Chip>
               {cards.map((card) => (
                 <Chip key={card} selected={filters.cards.includes(card)} onClick={() => pickCard(card)}>
@@ -117,7 +115,7 @@ function ScopeSheet({ open, onClose, cards }: { open: boolean; onClose: () => vo
 
         <section aria-labelledby="scope-result" className="rounded-[var(--radius-lg)] bg-sunken p-4">
           <h3 id="scope-result" className="mb-3 text-label font-semibold uppercase tracking-wide text-faint">
-            Seçilen ekstreler
+            Bu ay kesilen ekstreler (tam belge)
           </h3>
 
           {ledgers.length === 0 ? (

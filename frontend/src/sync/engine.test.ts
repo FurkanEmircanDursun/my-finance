@@ -127,6 +127,38 @@ function world() {
   return { cloud, clock, device }
 }
 
+describe('recovering a terminated snapshot listener', () => {
+  it('reattaches after an initial listener failure and keeps remote data', async () => {
+    const { device } = world()
+    const seeded = device('seed', { transactions: [tx('remote')] })
+    await seeded.connect()
+    seeded.engine.stop()
+    let attempts = 0
+    const a = device('retrying', { transactions: [tx('local')] }, {
+      retryMs: [60_000],
+      transport: (inner: MemoryDevice): SyncTransport => ({
+        commit: (uid, ops) => inner.commit(uid, ops),
+        listen: (uid, listener) => {
+          attempts++
+          if (attempts === 1) {
+            queueMicrotask(() => listener.onError(new Error('permission temporarily unavailable')))
+            return () => undefined
+          }
+          return inner.listen(uid, listener)
+        },
+      }),
+    })
+    await a.connect()
+    expect(a.status).toBe('error')
+    a.engine.syncNow()
+    await settle()
+    expect(attempts).toBe(2)
+    expect(a.ids).toEqual(['local', 'remote'])
+    expect(a.status).toBe('synced')
+    a.engine.stop()
+  })
+})
+
 /* ── Getting data up, and down ────────────────────────────────────────────── */
 
 describe('a first device', () => {
