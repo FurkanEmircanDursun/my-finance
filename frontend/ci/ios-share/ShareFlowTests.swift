@@ -27,18 +27,31 @@ final class ShareFlowTests: XCTestCase {
         var owner = host
         var activity = target(in: host)
         _ = host.collectionViews.firstMatch.waitForExistence(timeout: 10)
-        for _ in 0..<4 where !activity.waitForExistence(timeout: 1) {
-            if target(in: springboard).exists { owner = springboard; activity = target(in: springboard); break }
-            let more = host.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "More", "Daha Fazla")).firstMatch
-            if more.exists && more.isHittable { more.tap(); break }
-            for collection in host.collectionViews.allElementsBoundByIndex where collection.isHittable { collection.swipeLeft() }
+        if !activity.exists {
+            // The observed iOS 26 hierarchy exposes More and apps as cells.
+            let moreCell = host.cells.matching(NSPredicate(format: "label == %@", "More")).firstMatch
+            let moreButton = host.buttons["More"].firstMatch
+            if moreCell.exists { moreCell.tap() }
+            else if moreButton.exists { moreButton.tap() }
         }
-        if !activity.exists { activity = target(in: owner) }
-        if !activity.exists && target(in: springboard).exists { owner = springboard; activity = target(in: springboard) }
+        activity = target(in: host)
+        if !activity.waitForExistence(timeout: 3) {
+            for application in [host, springboard] {
+                let namedExtension = target(in: application)
+                if namedExtension.exists { owner = application; activity = namedExtension; break }
+                // The captured real OS sheet uses the containing app's short name.
+                // This is only a candidate: unique extension UI and successful
+                // native delivery remain mandatory assertions after selection.
+                let observedCell = application.cells.matching(NSPredicate(format: "label == %@", "Mizan")).firstMatch
+                if observedCell.exists { owner = application; activity = observedCell; break }
+            }
+        }
         evidence("Real system PDF Share Sheet", app: owner)
         if owner === host { evidence("System activity accessibility", app: springboard) }
-        XCTAssertTrue(activity.waitForExistence(timeout: 15), "Mizan’a Gönder must exist in the real OS activity list")
+        XCTAssertTrue(activity.waitForExistence(timeout: 15), "The real Mizan PDF activity must exist in the OS activity list")
         activity.tap()
+        let extensionTitle = owner.staticTexts["Mizan’a Gönder"]
+        XCTAssertTrue(extensionTitle.waitForExistence(timeout: 15), "The selected OS activity must open the actual Mizan Share Extension")
         let ready = owner.staticTexts["PDF’ler Mizan’a hazır. Mizan’ı açtığında içe aktarma başlayacak."]
         let appeared = ready.waitForExistence(timeout: 30)
         evidence("Actual Mizan Share Extension result", app: owner)
