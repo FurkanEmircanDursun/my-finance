@@ -5,6 +5,7 @@ import { analyticsConsent, analyticsError, ANALYTICS_UPDATED, setAnalyticsConsen
 import { disconnectCloudPush, getPushStatus, PUSH_UPDATED, requestCloudPush } from '../platform/push'
 import { useStore } from '../store/AppStore'
 import { Button } from '../ui/primitives'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 /** Device-specific privacy and delivery preferences, separate from financial settings. */
 export function CloudServicesSettings() {
@@ -29,7 +30,7 @@ export function CloudServicesSettings() {
           sync.lastSyncedAt !== null && sync.pending === 0 && sync.status !== 'decision' && sync.status !== 'error')
         setMessage('Bulut bildirimleri bağlandı. Saatler Türkiye saatine göre planlanır.')
       }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Bağlantı kurulamadı.') }
+    } catch (cause) { setError(firebaseErrorMessage(cause, 'notification')) }
     finally { setBusy(false); setStatus(getPushStatus()) }
   }
   return <div className="space-y-6">

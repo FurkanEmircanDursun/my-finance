@@ -11,6 +11,7 @@ const harness = vi.hoisted(() => ({
   terminate: vi.fn(async () => {}),
   destroy: vi.fn(async () => {}),
   createWorker: vi.fn(),
+  getTextContent: vi.fn(),
 }))
 
 vi.mock('pdfjs-dist/legacy/build/pdf.min.mjs', () => ({
@@ -19,7 +20,7 @@ vi.mock('pdfjs-dist/legacy/build/pdf.min.mjs', () => ({
     promise: Promise.resolve({
       numPages: 1,
       getPage: async () => ({
-        getTextContent: async () => ({ items: harness.items }),
+        getTextContent: harness.getTextContent,
         getViewport: () => ({ width: 100, height: 100 }),
         render: harness.render,
       }),
@@ -37,6 +38,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   harness.items = []
   harness.browserText = ''
+  harness.getTextContent.mockImplementation(async () => ({ items: harness.items }))
   harness.createWorker.mockResolvedValue({
     recognize: async () => ({ data: { text: harness.browserText } }),
     terminate: harness.terminate,
@@ -49,6 +51,14 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('PDF extraction followed by document validation', () => {
+  it('destroys the PDF document when text extraction fails', async () => {
+    const failure = new Error('Synthetic extraction failure')
+    harness.getTextContent.mockRejectedValueOnce(failure)
+    await expect(extractText(file(), options)).rejects.toBe(failure)
+    expect(harness.destroy).toHaveBeenCalledOnce()
+    expect(harness.createWorker).not.toHaveBeenCalled()
+  })
+
   it('rejects readable unrelated PDFs without launching either OCR engine or a bank parser', async () => {
     harness.items = [{ str: 'AKBANK İLE TEMEL PROGRAMLAMA EĞİTİMİ VE DERS PROGRAMI. Bu belge bir ders kitabıdır.', transform: [1, 0, 0, 10, 0, 700], width: 400 }]
     const parsers = ADAPTERS.map(adapter => vi.spyOn(adapter, 'parse'))

@@ -226,21 +226,51 @@ export function pdfPagesToText(pages: readonly TextGeom[][]): string {
   return out.join('\n')
 }
 
+interface PdfTextPage {
+  getTextContent(): Promise<{ items: unknown[] }>
+  streamTextContent(): ReadableStream<{ items: unknown[] }>
+}
+
+/** PDF.js uses stream async iteration internally; older native WebViews need its reader API. */
+export async function readPdfTextItems(page: PdfTextPage): Promise<unknown[]> {
+  if (typeof ReadableStream !== 'undefined' &&
+      typeof (ReadableStream.prototype as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
+    return (await page.getTextContent()).items
+  }
+  const reader = page.streamTextContent().getReader()
+  const items: unknown[] = []
+  let complete = false
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) { complete = true; return items }
+      items.push(...value.items)
+    }
+  } finally {
+    if (!complete) {
+      // An errored stream may also reject cancellation. Preserve the read error.
+      try { await reader.cancel() } catch { /* The reader still must release its lock. */ }
+    }
+    reader.releaseLock()
+  }
+}
+
 async function extractPdfPages(file: File, onProgress?: ProgressFn): Promise<TextGeom[][]> {
   const pdfjs = await loadPdfjs()
   const data = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise
 
-  const pages: TextGeom[][] = []
-  for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
-    onProgress?.(`PDF metin katmanı okunuyor · sayfa ${pageNo}/${doc.numPages}`)
-    const page = await doc.getPage(pageNo)
-    const content = await page.getTextContent()
-    pages.push(toTextGeom(content.items))
+  try {
+    const pages: TextGeom[][] = []
+    for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
+      onProgress?.(`PDF metin katmanı okunuyor · sayfa ${pageNo}/${doc.numPages}`)
+      const page = await doc.getPage(pageNo)
+      pages.push(toTextGeom(await readPdfTextItems(page)))
+    }
+    return pages
+  } finally {
+    await doc.destroy()
   }
-
-  await doc.destroy()
-  return pages
 }
 
 /**

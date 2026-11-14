@@ -1,5 +1,8 @@
 import { execFileSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readPdfTextItems } from './extract'
+
+afterEach(() => { vi.unstubAllGlobals() })
 
 /** A complete one-page PDF, generated here without personal statement data. */
 function syntheticPdf(): string {
@@ -67,4 +70,75 @@ describe('PDF.js compatibility in native WebViews missing Promise.withResolvers'
     `)
     expect(result).toBe('legacy-worker-resolved')
   }, 15000)
+
+  it('extracts real SDK text without stream async iteration using the app reader fallback', () => {
+    const result = isolatedSdk(`
+      import assert from 'node:assert/strict';
+      delete Promise.withResolvers;
+      delete ReadableStream.prototype[Symbol.asyncIterator];
+      const pdf = await import('pdfjs-dist/legacy/build/pdf.min.mjs');
+      assert.equal(typeof ReadableStream.prototype[Symbol.asyncIterator], 'undefined');
+      const readPdfTextItems = ${readPdfTextItems.toString()};
+      const document = await pdf.getDocument({
+        data: new Uint8Array(Buffer.from('${syntheticPdf()}', 'base64')),
+        isEvalSupported: false, useSystemFonts: true,
+      }).promise;
+      try {
+        const page = await document.getPage(1);
+        const items = await readPdfTextItems(page);
+        assert.equal(items.map(item => item.str).join(''), 'Synthetic PDF compatibility');
+        assert.equal(typeof ReadableStream.prototype[Symbol.asyncIterator], 'undefined');
+        console.log('legacy-reader-extracted');
+      } finally { await document.destroy(); }
+    `)
+    expect(result).toContain('legacy-reader-extracted')
+  }, 15000)
+})
+
+function readerPage() {
+  const reader = { read: vi.fn(), cancel: vi.fn(async () => {}), releaseLock: vi.fn() }
+  const page = {
+    getTextContent: vi.fn(async () => ({ items: ['standard'] })),
+    streamTextContent: vi.fn(() => ({ getReader: () => reader }) as unknown as ReadableStream<{ items: unknown[] }>),
+  }
+  return { reader, page }
+}
+
+describe('PDF text stream reader cleanup', () => {
+  it('preserves the normal getTextContent path when stream async iteration exists', async () => {
+    const { page } = readerPage()
+    await expect(readPdfTextItems(page)).resolves.toEqual(['standard'])
+    expect(page.getTextContent).toHaveBeenCalledOnce()
+    expect(page.streamTextContent).not.toHaveBeenCalled()
+  })
+
+  it('joins stream chunks in order and releases a normally completed reader', async () => {
+    vi.stubGlobal('ReadableStream', class {})
+    const { page, reader } = readerPage()
+    reader.read.mockResolvedValueOnce({ done: false, value: { items: ['first', 'second'] } })
+      .mockResolvedValueOnce({ done: false, value: { items: ['third'] } })
+      .mockResolvedValueOnce({ done: true })
+    await expect(readPdfTextItems(page)).resolves.toEqual(['first', 'second', 'third'])
+    expect(page.getTextContent).not.toHaveBeenCalled()
+    expect(reader.cancel).not.toHaveBeenCalled()
+    expect(reader.releaseLock).toHaveBeenCalledOnce()
+  })
+
+  it('cancels and unlocks after a stream read rejects', async () => {
+    vi.stubGlobal('ReadableStream', class {})
+    const { page, reader } = readerPage(), failure = new Error('Synthetic read failure')
+    reader.read.mockRejectedValueOnce(failure)
+    await expect(readPdfTextItems(page)).rejects.toBe(failure)
+    expect(reader.cancel).toHaveBeenCalledOnce()
+    expect(reader.releaseLock).toHaveBeenCalledOnce()
+  })
+
+  it('preserves the read failure and unlocks even if stream cancellation rejects', async () => {
+    vi.stubGlobal('ReadableStream', class {})
+    const { page, reader } = readerPage(), failure = new Error('Synthetic read failure')
+    reader.read.mockRejectedValueOnce(failure)
+    reader.cancel.mockRejectedValueOnce(new Error('Synthetic cancellation failure'))
+    await expect(readPdfTextItems(page)).rejects.toBe(failure)
+    expect(reader.releaseLock).toHaveBeenCalledOnce()
+  })
 })

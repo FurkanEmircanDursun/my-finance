@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 interface State {
   error: Error | null
@@ -6,8 +7,7 @@ interface State {
 
 /**
  * A parse or render failure must not leave the user staring at a blank page —
- * the previous build's boundary swallowed the message, so a broken statement
- * looked identical to a broken app.
+ * recovery instructions stay separate from internal SDK messages and paths.
  */
 export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   state: State = { error: null }
@@ -29,12 +29,11 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
         <div className="surface w-full max-w-md space-y-3 p-5">
           <h1 className="text-body font-semibold text-ink">Beklenmeyen bir hata oluştu</h1>
           <p className="text-label leading-relaxed text-muted">
-            Kayıtlı verileriniz silinmedi. Sayfayı yenilemek çoğu durumda yeterlidir; sorun sürerse Ayarlar
-            bölümünden JSON yedeği alıp verileri sıfırlayabilirsiniz.
+            Kayıtlarını temizlemeden sayfayı yenileyip yeniden dene. Sorun sürerse uygulamayı kapatıp yeniden aç.
           </p>
-          <pre className="max-h-40 overflow-auto rounded border border-line bg-sunken p-2.5 text-label text-muted">
-            {error.message}
-          </pre>
+          <p role="alert" className="rounded border border-line bg-sunken p-2.5 text-body text-muted">
+            {firebaseErrorMessage(error)}
+          </p>
           <button
             type="button"
             onClick={() => window.location.reload()}

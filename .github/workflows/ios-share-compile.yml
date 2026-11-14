@@ -54,3 +54,13 @@ jobs:
           -derivedDataPath ios/DerivedData
           CODE_SIGNING_ALLOWED=NO
           build
+      - name: Prove the actual iOS Share Sheet route
+        run: node ci/ios-share/run-share-proof.mjs
+      - name: Retain synthetic simulator proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: mizan-ios-share-ui-${{ github.run_id }}
+          path: ${{ runner.temp }}/MizanShareProofEvidence
+          if-no-files-found: warn
+          retention-days: 7
