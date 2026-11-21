@@ -14,10 +14,9 @@ import type { Reconciliation, StatementSummary, TxKind } from '../domain/types'
  *   expected charges = printed debt − previous balance + payments
  *
  * Whatever the parser counted as spending (purchases minus refunds, interest
- * included) has to equal that to the kuruş. When it does, every row was read,
- * every sign was right and nothing was counted that the bank does not count.
- * When it does not, the difference is the size of the mistake — which is how
- * a few bonus-column rows turned out to be thousands of lira of phantom spending.
+ * included) has to equal that to the kuruş. A match verifies the net total.
+ * A mismatch measures the net difference, including any loyalty figures
+ * accidentally read as spending.
  *
  * It is a check, never a correction: nothing here changes a row.
  */

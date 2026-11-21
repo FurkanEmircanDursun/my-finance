@@ -1,0 +1,46 @@
+{
+  "parameters": {
+    "min_required_version": {
+      "defaultValue": {
+        "value": "0.0.0"
+      },
+      "description": "Bu sürümün altındaki kurulumlar zorunlu güncelleme görür. Yükseltmeden önce yayınlanmış güncelleme bağlantısını doğrulayın.",
+      "valueType": "STRING"
+    },
+    "latest_version": {
+      "defaultValue": {
+        "value": "2.8.0"
+      },
+      "description": "Bu sürümün altındaki, minimumu karşılayan kurulumlara 24 saat ertelenebilen güncelleme önerilir.",
+      "valueType": "STRING"
+    },
+    "update_url": {
+      "defaultValue": {
+        "value": "https://my-finance-webapp-fd.web.app"
+      },
+      "description": "Web güncelleme adresi. Native için update_url_android ve update_url_ios alanlarını kullanın. Bu Hosting adresi native güncellemeyi tetiklemez.",
+      "valueType": "STRING"
+    },
+    "update_message": {
+      "defaultValue": {
+        "value": "Mizan’ın yeni sürümündeki iyileştirmelerle devam et."
+      },
+      "description": "Güncelleme ekranında düz metin olarak gösterilen, en fazla 500 karakterlik açıklama.",
+      "valueType": "STRING"
+    },
+    "update_url_android": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "Android güncelleme bağlantısı. Boşken Android güncelleme istemi gösterilmez; doğrulanmış mağaza/dağıtım adresi yayınlandığında buradan ayarlayın.",
+      "valueType": "STRING"
+    },
+    "update_url_ios": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "iOS güncelleme bağlantısı. Boşken iOS güncelleme istemi gösterilmez; doğrulanmış App Store/TestFlight adresi yayınlandığında buradan ayarlayın.",
+      "valueType": "STRING"
+    }
+  }
+}

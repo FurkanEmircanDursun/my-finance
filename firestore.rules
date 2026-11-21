@@ -2,47 +2,212 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Existing sync data: transactions, statements, rules and meta singletons.
-    // Sync writes include a nonnegative millisecond version _u; tombstones
-    // contain only _u and _d. Legacy documents can still be read and deleted.
-    // Device registration: token (20..4096 chars), enabled (bool), hour (0..23),
-    // timeZone (Europe/Istanbul), updatedAt (server timestamp). No financial data.
-    // Delivery receipts are server-owned and never writable by a client.
-    function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
-    }
+    // Assumed data model (domain/types.ts, sync/model.ts):
+    // users/{uid}/transactions/{id}: Transaction with optional installment,
+    // foreign/reward, statement/card references and bounded raw text.
+    // users/{uid}/statements/{id}: Statement with optional summary,
+    // reconciliation and ignored rows. Entity IDs match their document IDs.
+    // users/{uid}/rules/{id}: id, merchant, category, createdAt. Its document ID
+    // is merchant-derived; re-learning intentionally replaces id/createdAt.
+    // users/{uid}/meta/profile: amounts, budgets, goal and optional cards,
+    // archivedCards, assets, assetValuations (up to 240 monthly snapshots).
+    // users/{uid}/meta/prefs: theme, periodGrouping only. Device PIN/settings
+    // are never accepted in new cloud writes. Legacy settings/schema documents
+    // remain owner-readable/deletable for migration and account deletion.
+    // Every sync document has _u: nonnegative safe-integer milliseconds.
+    // Tombstones contain exactly _u and _d:true. Offline device clocks supply
+    // versions, so _u and historical dates cannot equal request.time.
+    // pushDevices: token, enabled, hour, timeZone, updatedAt: server timestamp.
+    // notificationDeliveries: server-only; Admin SDK access is governed by IAM.
+    // Compatibility boundary: nested profile/history/ignored-row arrays remain
+    // bounded lists. Rules do not validate every nested array member; ownership
+    // never depends on their content. See the security verification document.
+    // No parent /users/{uid} document is required by the sync transport.
 
-    function isValidSyncDocument(data) {
-      return data is map && data.keys().size() <= 40 &&
-        data._u is int && data._u >= 0 &&
-        (!('_d' in data) || (data._d == true && data.keys().hasOnly(['_u', '_d'])));
+    function isAuthenticated() { return request.auth != null; }
+    function isOwner(uid) { return isAuthenticated() && request.auth.uid == uid; }
+    function validString(value, min, max) {
+      return value is string && value.size() >= min && value.size() <= max;
     }
-
+    function optionalString(data, key, min, max) {
+      return !(key in data) || validString(data[key], min, max);
+    }
+    function safeInteger(value) {
+      return value is int && math.abs(value) <= 9007199254740991;
+    }
+    function nonNegativeInteger(value) { return safeInteger(value) && value >= 0; }
+    function milliseconds(value) {
+      return value is int && value >= 0 && value <= 253402300799999;
+    }
+    function day(value) {
+      // Format/range validation only; calendar semantics stay in the parser.
+      return value is string && value.size() == 10 &&
+        value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$');
+    }
+    function nullableDay(value) { return value == null || day(value); }
+    function nullableMoney(value) { return value == null || safeInteger(value); }
+    function month(value) {
+      return value is string && value.size() == 7 && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])$');
+    }
+    function category(value) {
+      return value in ['market', 'dining', 'subscription', 'ecommerce', 'bills',
+        'transport', 'health', 'education', 'entertainment', 'clothing', 'rent',
+        'home', 'travel', 'tax', 'insurance', 'fintech', 'cash', 'fees', 'rewards', 'other'];
+    }
+    function boundedList(value, max) { return value is list && value.size() <= max; }
+    function validVersion(data) { return data is map && milliseconds(data._u); }
+    function isValidTombstone(data) {
+      return ('_d' in data) && data._d == true && data.keys().hasOnly(['_u', '_d']) && validVersion(data);
+    }
+    function isLive(data) { return validVersion(data) && !('_d' in data); }
+    function isValidInstallment(data) {
+      return data == null || (data is map && data.keys().hasAll(['current', 'total']) &&
+        data.keys().hasOnly(['current', 'total', 'principal', 'remaining']) &&
+        data.current is int && data.total is int && data.current >= 1 &&
+        data.current <= data.total && data.total <= 1200 &&
+        (!('principal' in data) || nonNegativeInteger(data.principal)) &&
+        (!('remaining' in data) || (data.remaining is map &&
+          data.remaining.keys().hasAll(['count', 'amount']) &&
+          data.remaining.keys().hasOnly(['count', 'amount']) &&
+          data.remaining.count is int && data.remaining.count >= 0 &&
+          data.remaining.count <= 1200 && nonNegativeInteger(data.remaining.amount))));
+    }
+    function isValidForeign(data) {
+      return data is map && data.keys().hasAll(['amount', 'currency']) &&
+        data.keys().hasOnly(['amount', 'currency']) && nonNegativeInteger(data.amount) &&
+        data.currency is string && data.currency.size() == 3 && data.currency.matches('^[A-Z]{3}$');
+    }
+    function isValidTransaction(data, id) {
+      return isValidTombstone(data) || (isLive(data) &&
+        data.keys().hasAll(['id', 'date', 'description', 'merchant', 'amount', 'kind',
+          'category', 'categoryLocked', 'bank', 'accountLabel', 'installment', 'source', '_u']) &&
+        data.keys().hasOnly(['id', 'date', 'description', 'merchant', 'amount', 'kind',
+          'category', 'categoryLocked', 'bank', 'accountLabel', 'installment', 'source',
+          'cardId', 'billedOn', 'statementId', 'foreign', 'reward', 'raw', '_u']) &&
+        validString(data.id, 1, 256) && data.id == id && day(data.date) &&
+        validString(data.description, 1, 4096) && validString(data.merchant, 0, 4096) &&
+        nonNegativeInteger(data.amount) && data.kind in ['expense', 'refund', 'income', 'payment'] &&
+        category(data.category) && data.categoryLocked is bool &&
+        validString(data.bank, 0, 256) && validString(data.accountLabel, 0, 256) &&
+        data.source in ['statement', 'manual', 'csv'] && isValidInstallment(data.installment) &&
+        optionalString(data, 'cardId', 1, 256) && optionalString(data, 'statementId', 1, 256) &&
+        optionalString(data, 'raw', 0, 16384) && (!('billedOn' in data) || day(data.billedOn)) &&
+        (!('foreign' in data) || isValidForeign(data.foreign)) &&
+        (!('reward' in data) || nonNegativeInteger(data.reward)));
+    }
+    function isValidLoyalty(data) {
+      return data == null || (data is map &&
+        data.keys().hasAll(['programme', 'earned', 'spent', 'balance']) &&
+        data.keys().hasOnly(['programme', 'earned', 'spent', 'balance']) &&
+        validString(data.programme, 0, 256) && nullableMoney(data.earned) &&
+        nullableMoney(data.spent) && nullableMoney(data.balance));
+    }
+    function isValidSummary(data) {
+      return data is map && data.keys().size() == 11 &&
+        data.keys().hasOnly(['totalDebt', 'previousBalance', 'minPayment',
+          'creditLimit', 'availableLimit', 'cashAdvanceLimit', 'interestMonthly',
+          'previousCutDate', 'nextCutDate', 'nextDueDate', 'loyalty']) &&
+        nullableMoney(data.totalDebt) && nullableMoney(data.previousBalance) &&
+        nullableMoney(data.minPayment) && nullableMoney(data.creditLimit) &&
+        nullableMoney(data.availableLimit) && nullableMoney(data.cashAdvanceLimit) &&
+        (data.interestMonthly == null || (data.interestMonthly is number &&
+          data.interestMonthly >= 0 && data.interestMonthly <= 1000)) &&
+        nullableDay(data.previousCutDate) && nullableDay(data.nextCutDate) &&
+        nullableDay(data.nextDueDate) && isValidLoyalty(data.loyalty);
+    }
+    function isValidReconciliation(data) {
+      return data is map && data.keys().size() == 7 &&
+        data.keys().hasOnly(['status', 'printedDebt', 'previousBalance',
+          'payments', 'parsedCharges', 'expectedCharges', 'delta']) &&
+        data.status in ['match', 'mismatch', 'unverified'] && nullableMoney(data.printedDebt) &&
+        nullableMoney(data.previousBalance) && safeInteger(data.payments) &&
+        safeInteger(data.parsedCharges) && nullableMoney(data.expectedCharges) && nullableMoney(data.delta);
+    }
+    function isValidStatement(data, id) {
+      return isValidTombstone(data) || (isLive(data) &&
+        data.keys().hasAll(['id', 'label', 'fileName', 'bank', 'transactionCount',
+          'skippedCount', 'periodStart', 'periodEnd', 'dueDate', 'importedAt', 'engine', '_u']) &&
+        data.keys().hasOnly(['id', 'label', 'fileName', 'bank', 'transactionCount',
+          'skippedCount', 'periodStart', 'periodEnd', 'dueDate', 'importedAt', 'engine',
+          'accountLabel', 'cardId', 'summary', 'reconciliation', 'ignored', '_u']) &&
+        validString(data.id, 1, 256) && data.id == id && validString(data.label, 0, 1024) &&
+        validString(data.fileName, 0, 1024) && validString(data.bank, 0, 256) &&
+        nonNegativeInteger(data.transactionCount) && nonNegativeInteger(data.skippedCount) &&
+        nullableDay(data.periodStart) && nullableDay(data.periodEnd) && nullableDay(data.dueDate) &&
+        milliseconds(data.importedAt) && validString(data.engine, 0, 256) &&
+        optionalString(data, 'accountLabel', 0, 256) && optionalString(data, 'cardId', 1, 256) &&
+        (!('summary' in data) || isValidSummary(data.summary)) &&
+        (!('reconciliation' in data) || isValidReconciliation(data.reconciliation)) &&
+        (!('ignored' in data) || boundedList(data.ignored, 5000)));
+    }
+    function isValidCategoryRule(data) {
+      return isValidTombstone(data) || (isLive(data) &&
+        data.keys().hasAll(['id', 'merchant', 'category', 'createdAt', '_u']) &&
+        data.keys().hasOnly(['id', 'merchant', 'category', 'createdAt', '_u']) &&
+        validString(data.id, 1, 256) && validString(data.merchant, 0, 4096) &&
+        category(data.category) && milliseconds(data.createdAt));
+    }
+    function isValidGoal(data) {
+      return data == null || (data is map &&
+        data.keys().hasAll(['targetAmount', 'targetMonth', 'startMonth', 'startingAmount']) &&
+        data.keys().hasOnly(['targetAmount', 'targetMonth', 'startMonth', 'startingAmount']) &&
+        nonNegativeInteger(data.targetAmount) && nonNegativeInteger(data.startingAmount) &&
+        month(data.targetMonth) && month(data.startMonth));
+    }
+    function isValidProfile(data) {
+      return isValidTombstone(data) || (isLive(data) &&
+        data.keys().hasAll(['monthlyIncome', 'spendingLimit', 'currentBalance', 'budgets', 'goal', '_u']) &&
+        data.keys().hasOnly(['monthlyIncome', 'spendingLimit', 'currentBalance', 'budgets', 'goal',
+          'cards', 'archivedCards', 'assets', 'assetValuations', '_u']) &&
+        nonNegativeInteger(data.monthlyIncome) && nonNegativeInteger(data.spendingLimit) &&
+        safeInteger(data.currentBalance) && boundedList(data.budgets, 100) && isValidGoal(data.goal) &&
+        (!('cards' in data) || boundedList(data.cards, 1000)) &&
+        (!('archivedCards' in data) || boundedList(data.archivedCards, 1000)) &&
+        (!('assets' in data) || boundedList(data.assets, 10000)) &&
+        (!('assetValuations' in data) || boundedList(data.assetValuations, 240)));
+    }
+    function isValidPreferences(data) {
+      return isValidTombstone(data) || (isLive(data) &&
+        data.keys().hasAll(['theme', 'periodGrouping', '_u']) &&
+        data.keys().hasOnly(['theme', 'periodGrouping', '_u']) &&
+        data.theme in ['light', 'dark', 'system'] && data.periodGrouping in ['calendar', 'statement', null]);
+    }
     function isValidPushDevice(data) {
       return data.keys().hasAll(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
         data.keys().hasOnly(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
-        data.token is string && data.token.size() >= 20 && data.token.size() <= 4096 &&
-        data.enabled is bool && data.hour is int && data.hour >= 0 && data.hour <= 23 &&
+        validString(data.token, 20, 4096) && data.enabled is bool &&
+        data.hour is int && data.hour >= 0 && data.hour <= 23 &&
         data.timeZone == 'Europe/Istanbul' && data.updatedAt == request.time;
     }
 
-    // Explicit depth prevents the old recursive grant from also allowing users
-    // to forge notification receipts or future server-only subcollections.
-    match /users/{uid}/{kind}/{id} {
-      allow read, delete: if isOwner(uid) && kind in ['transactions', 'statements', 'rules', 'meta'];
-      allow create, update: if isOwner(uid) && kind in ['transactions', 'statements', 'rules', 'meta'] &&
-        isValidSyncDocument(request.resource.data);
+    // Complete owner collection queries used by onSnapshot/account deletion
+    // are intentional. No read depends on optional document fields.
+    match /users/{uid}/transactions/{id} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidTransaction(request.resource.data, id);
     }
-
+    match /users/{uid}/statements/{id} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidStatement(request.resource.data, id);
+    }
+    match /users/{uid}/rules/{id} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isValidCategoryRule(request.resource.data);
+    }
+    match /users/{uid}/meta/{id} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid) &&
+        ((id == 'profile' && isValidProfile(request.resource.data)) ||
+         (id == 'prefs' && isValidPreferences(request.resource.data)));
+    }
     match /users/{uid}/pushDevices/{installationId} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid) &&
         request.auth.token.firebase.sign_in_provider != 'anonymous' &&
         installationId.matches('^[a-f0-9]{32}$') && isValidPushDevice(request.resource.data);
     }
-
-    match /users/{uid}/notificationDeliveries/{id} {
-      allow read, write: if false;
-    }
+    // Unknown paths, parent user documents, deeper subcollections and server
+    // delivery receipts have no client grant.
+    match /{document=**} { allow read, write: if false; }
   }
 }

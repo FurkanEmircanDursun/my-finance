@@ -1,10 +1,11 @@
+import { MoneySetting, settingAmount, settingAmountText } from '../ui/MoneySetting'
 import { useEffect, useState, type ReactNode } from 'react'
 import { trackScreen } from '../platform/analytics'
-import { ChevronDown, CreditCard, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, CreditCard, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
-import { ConfirmDialog, Modal } from '../ui/Modal'
-import { money, toMinor, toMajor, count } from '../core/money'
+import { ConfirmDialog } from '../ui/Modal'
+import { money, count } from '../core/money'
 import { todayKey, monthOf, monthLabel, monthDiff } from '../core/date'
 import { hashPin, randomSalt, verifyPin, PIN_LENGTH } from '../core/pin'
 import type { SavingsGoal } from '../domain/types'
@@ -12,74 +13,33 @@ import { useStore } from '../store/AppStore'
 import { useSheets } from './sheets'
 import { NotificationSettings } from './NotificationSettings'
 import { AccountPanel } from './AccountPanel'
+import { DiagnosticsSettings } from './DiagnosticsSettings'
 import { CloudServicesSettings } from './CloudServicesSettings'
 
-/**
- * Ayarlar, as a sheet with four blocks instead of a page with ten sections.
- *
- * What went, and why:
- *
- *   Bulut bölümü      only renders when Firebase is actually configured. A
- *                     section whose entire content is "this is not set up"
- *                     is a row of noise on every install that never will be.
- *   Kategori kuralları the list was never managed by hand — a rule is created
- *                     by correcting a transaction. One button to forget them
- *                     all replaces a scrolling inventory.
- *   OCR servis adresi  moved under Gelişmiş with the theme and the period
- *                     grouping: real settings, but not ones anybody opens
- *                     this sheet to change.
- *   Kategori bütçeleri moved next to the categories they cap, in Harcamalar.
- */
-export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => { if (open) trackScreen('settings') }, [open])
-  const { state, dispatch, authUser, cloudAvailable } = useStore()
+/** Full-page preferences keep long-lived settings outside transient sheets. */
+export function SettingsPage({ onClose }: { onClose: () => void }) {
+  useEffect(() => { trackScreen('settings') }, [])
+  const { state, dispatch, authUser, cloudAvailable, clearLocalData } = useStore()
   const { openArchive, openAccount, openCards } = useSheets()
   const [resetOpen, setResetOpen] = useState(false)
 
   const { profile, settings, transactions, statements, rules } = state
 
-  const setProfileNumber = (key: 'monthlyIncome' | 'spendingLimit' | 'currentBalance', raw: string) =>
-    dispatch({
-      type: 'setProfile',
-      profile: { [key]: toMinor(Number.parseFloat(raw.replace(',', '.')) || 0) },
-    })
-
   return (
-    <Modal open={open} onClose={onClose} title="Ayarlar" variant="sheet">
-      <div className="space-y-10">
-        <AccountPanel onOpen={() => { onClose(); openAccount() }} />
-        <CloudServicesSettings />
+    <div className="settings-page"><header className="page-heading"><button className="page-back" onClick={onClose} aria-label="Önceki sayfaya dön"><ArrowLeft size={20} /></button><div><h1>Ayarlar</h1><p>Hesabın, tercihlerin ve verilerin.</p></div></header>
+      <div className="settings-grid">
+        <AccountPanel onOpen={openAccount} />
+        <div className="settings-block"><CloudServicesSettings /><DiagnosticsSettings /></div>
         <Block title="Kartlar ve hatırlatmalar">
-          <Button onClick={() => { onClose(); openCards() }}><CreditCard size={18} /> Kartlarım ({profile.cards?.length ?? 0})</Button>
+          <Button onClick={openCards}><CreditCard size={18} /> Kartlarım ({profile.cards?.length ?? 0})</Button>
           <NotificationSettings />
         </Block>
         {/* ── Para ────────────────────────────────────────────────────────── */}
         <Block title="Para">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Aylık net gelir (₺)">
-              <TextInput
-                inputMode="decimal"
-                placeholder="0"
-                value={profile.monthlyIncome ? String(toMajor(profile.monthlyIncome)) : ''}
-                onChange={(e) => setProfileNumber('monthlyIncome', e.target.value)}
-              />
-            </Field>
-            <Field label="Aylık harcama limiti (₺)">
-              <TextInput
-                inputMode="decimal"
-                placeholder="0"
-                value={profile.spendingLimit ? String(toMajor(profile.spendingLimit)) : ''}
-                onChange={(e) => setProfileNumber('spendingLimit', e.target.value)}
-              />
-            </Field>
-            <Field label="Bugünkü nakit (₺)" hint="Girilirse nakit akışı tahmini gerçek bakiye üzerinden yürür">
-              <TextInput
-                inputMode="decimal"
-                placeholder="0"
-                value={profile.currentBalance ? String(toMajor(profile.currentBalance)) : ''}
-                onChange={(e) => setProfileNumber('currentBalance', e.target.value)}
-              />
-            </Field>
+            <MoneySetting label="Aylık gelir planı (₺)" hint="Tahminlerde kullanılır; gelir kaydı oluşturmaz." value={profile.monthlyIncome} onCommit={monthlyIncome => dispatch({ type: 'setProfile', profile: { monthlyIncome } })} />
+            <MoneySetting label="Aylık harcama limiti (₺)" value={profile.spendingLimit} onCommit={spendingLimit => dispatch({ type: 'setProfile', profile: { spendingLimit } })} />
+            <MoneySetting label="Bugünkü nakit (₺)" hint="Nakit akışı tahmininin başlangıç tutarı." value={profile.currentBalance} onCommit={currentBalance => dispatch({ type: 'setProfile', profile: { currentBalance } })} />
           </div>
 
           <GoalBlock />
@@ -111,7 +71,6 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
                 this sheet only needs to point at it. */}
             <Button
               onClick={() => {
-                onClose()
                 openArchive()
               }}
             >
@@ -120,7 +79,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
             </Button>
             <Button variant="danger" onClick={() => setResetOpen(true)}>
               <Trash2 size={16} />
-              Her şeyi sil
+              Bu cihazdaki verileri sil
             </Button>
           </div>
         </Block>
@@ -195,18 +154,16 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
 
       <ConfirmDialog
         open={resetOpen}
-        title="Her şeyi sil"
-        message="Ekstreler, işlemler, kurallar ve profil ayarları kalıcı olarak silinir. Geri alınamaz — önce JSON yedeği al."
-        confirmLabel="Kalıcı olarak sil"
+        title="Bu cihazdaki verileri sil"
+        message="Bu cihazdaki ekstreler, işlemler, kurallar ve profil kaldırılır; açık hesaptan çıkış yapılır. Hesabındaki bulut verileri korunur. Eşitlenmemiş yerel kayıtlar geri alınamaz; önce JSON yedeği al."
+        confirmLabel="Yalnızca cihazı temizle"
         destructive
         onCancel={() => setResetOpen(false)}
         onConfirm={() => {
-          dispatch({ type: 'reset' })
-          setResetOpen(false)
-          onClose()
+          void clearLocalData().then(() => { setResetOpen(false); onClose() }).catch(() => { setResetOpen(false) })
         }}
       />
-    </Modal>
+    </div>
   )
 }
 
@@ -214,7 +171,7 @@ export function SettingsSheet({ open, onClose }: { open: boolean; onClose: () =>
 
 function Block({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
-    <section className="space-y-4">
+    <section className="settings-block space-y-4">
       <div>
         <h3 className="text-title font-semibold text-ink">{title}</h3>
         {note && <p className="mt-1 text-label text-faint">{note}</p>}
@@ -227,7 +184,7 @@ function Block({ title, note, children }: { title: string; note?: string; childr
 function Disclosure({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <section>
+    <section className="settings-block">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -302,15 +259,15 @@ function GoalForm({
 }) {
   const currentMonth = monthOf(todayKey())
 
-  const [targetAmount, setTargetAmount] = useState(initial ? String(toMajor(initial.targetAmount)) : '')
+  const [targetAmount, setTargetAmount] = useState(initial ? settingAmountText(initial.targetAmount) : '')
   const [targetMonth, setTargetMonth] = useState(initial?.targetMonth ?? '')
   const [startMonth, setStartMonth] = useState(initial?.startMonth ?? currentMonth)
   const [startingAmount, setStartingAmount] = useState(
-    initial?.startingAmount ? String(toMajor(initial.startingAmount)) : '',
+    initial?.startingAmount ? settingAmountText(initial.startingAmount) : '',
   )
 
-  const amount = toMinor(Number.parseFloat(targetAmount.replace(',', '.')) || 0)
-  const starting = toMinor(Number.parseFloat(startingAmount.replace(',', '.')) || 0)
+  const amount = settingAmount(targetAmount) ?? 0
+  const starting = settingAmount(startingAmount) ?? 0
   const monthsSpan = targetMonth && startMonth ? monthDiff(startMonth, targetMonth) : null
 
   const error = monthsSpan !== null && monthsSpan < 0 ? 'Hedef ayı başlangıçtan önce olamaz.' : null

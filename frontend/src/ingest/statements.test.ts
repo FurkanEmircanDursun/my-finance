@@ -148,6 +148,17 @@ describe('akbank, with column information', () => {
 /* ── The pipeline, and the check ──────────────────────────────────────────── */
 
 describe('reconciliation against the cover', () => {
+  it.each([
+    [AKBANK_COLUMNS, '8/09/2026 TUTARI OKUNAMAYAN İŞLEM', '31/09/2026 MARKET 50.00'],
+    [GARANTI_COLUMNS, '8 Eylül 2026 TUTARI OKUNAMAYAN İŞLEM', '31 Eylül 2026 MARKET 50,00'],
+  ])('reports malformed transaction rows even when the statement total balances', (text, missingAmount, invalidDate) => {
+    const baseline = parse(text)
+    const result = parse(`${text}\n${missingAmount}\n${invalidDate}`)
+    expect(result.reconciliation).toMatchObject({ status: 'match', delta: 0 })
+    expect(result.skipped).toBe(2)
+    expect(result.transactions).toEqual(baseline.transactions)
+  })
+
   it('balances a Garanti statement to the kuruş', () => {
     expect(parse(GARANTI_COLUMNS).reconciliation).toMatchObject({
       status: 'match', delta: 0, parsedCharges: toMinor(1280), expectedCharges: toMinor(1280),
@@ -180,7 +191,7 @@ describe('reconciliation against the cover', () => {
   })
 
   it('is unverified, not wrong, when the cover prints nothing to compare against', () => {
-    const bare = 'GARANTİ BBVA BONUS\n05 Eylül 2026 A 100,00\n06 Eylül 2026 B 100,00\n07 Eylül 2026 C 100,00'
+    const bare = 'GARANTİ BBVA BONUS HESAP ÖZETİ\nHesap Kesim Tarihi 28 Eylül 2026\nSon Ödeme Tarihi 08 Ekim 2026\n05 Eylül 2026 A 100,00\n06 Eylül 2026 B 100,00\n07 Eylül 2026 C 100,00'
     expect(parse(bare).reconciliation.status).toBe('unverified')
   })
 })

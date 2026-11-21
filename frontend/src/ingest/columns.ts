@@ -11,16 +11,26 @@ import type { TextGeom } from './extract'
  * lira of phantom spend on a real Garanti statement.
  *
  * The PDF knows the answer: numbers are right-aligned under their header, so
- * the right edge of a number says which column it sits in. This module reads
- * that edge, and wraps numbers in the loyalty column in `⟦…⟧` so the adapters —
- * which only ever see text — can tell them apart without guessing from the
- * wording of the description.
+ * the right edge of a number says which column it sits in. This module marks
+ * loyalty figures with ⟦…⟧ and an unambiguous billed value with ⟨…⟩, keeping
+ * both separate from account references printed in the description.
  */
 
 export const REWARD_OPEN = '⟦'
 export const REWARD_CLOSE = '⟧'
 
 const REWARD_TAG_RE = /⟦([^⟧]*)⟧/g
+const BILLED_TAG_RE = /^(.*?)\s*⟨([^⟩]+)⟩(.*)$/
+
+/** Recover the geometry-confirmed billed token and the text on either side. */
+export function splitBilledTag(body: string): { before: string; token: string; after: string } | null {
+  const match = BILLED_TAG_RE.exec(body)
+  return match ? { before: match[1].trim(), token: match[2], after: match[3].trim() } : null
+}
+
+export function stripBilledTag(line: string): string {
+  return line.replace(/[⟨⟩]/g, '')
+}
 
 /** Splits tagged loyalty figures out of a line, returning what remains. */
 export function splitRewardTags(line: string): { line: string; rewards: string[] } {
@@ -60,6 +70,7 @@ interface Word {
 
 /** A number as either bank prints it, with its sign marker and instalment tail. */
 const MONEY_WORD_RE = /^\d[\d.,]*[.,]\d{2}(?:\(-\)|[+-])?(?:x\d+)?$/
+const TRANSACTION_START_RE = /^(?:bosluk\s+)?\d{1,2}(?:\/\d{1,2}\/|\s+\p{L}+\s+)\d{4}\s+/iu
 
 /** How far a number's right edge may sit from its header's and still belong to it. */
 const COLUMN_TOLERANCE = 14
@@ -168,7 +179,7 @@ export function findColumnLayout(rows: TextGeom[][], decode: (text: string) => s
 }
 
 /**
- * Wraps every number in the loyalty column in `⟦…⟧`.
+ * Annotates positioned money values before the text is flattened.
  *
  * Works on a copy of the items. `decode` is applied to read the text (EBCDIC
  * statements arrive as mojibake that only a decoder can turn back into digits)
@@ -176,22 +187,31 @@ export function findColumnLayout(rows: TextGeom[][], decode: (text: string) => s
  * EBCDIC decoder later passes through untouched — they are outside its byte
  * range.
  */
-export function tagRewardColumn(
+export function tagStatementColumns(
   rows: TextGeom[][],
   layout: ColumnLayout,
   decode: (text: string) => string,
 ): void {
   for (const row of rows) {
-    for (const word of rowWords(row, decode)) {
+    const words = rowWords(row, decode)
+    const billed: Word[] = []
+    for (const word of words) {
       if (word.y >= layout.headerY) continue
       if (!MONEY_WORD_RE.test(word.text)) continue
 
       const toReward = Math.abs(word.right - layout.rewardRight)
       const toAmount = Math.abs(word.right - layout.amountRight)
-      if (toReward > COLUMN_TOLERANCE || toReward >= toAmount) continue
-
-      word.first.text = REWARD_OPEN + word.first.text
-      word.last.text = word.last.text + REWARD_CLOSE
+      if (toReward <= COLUMN_TOLERANCE && toReward < toAmount) {
+        word.first.text = REWARD_OPEN + word.first.text
+        word.last.text = word.last.text + REWARD_CLOSE
+      } else if (toAmount <= COLUMN_TOLERANCE && toAmount < toReward && !/x\d+$/.test(word.text)) {
+        billed.push(word)
+      }
+    }
+    // Annotate only an unambiguous amount on a transaction-shaped row.
+    if (billed.length === 1 && TRANSACTION_START_RE.test(words.map(word => word.text).join(' '))) {
+      billed[0].first.text = '⟨' + billed[0].first.text
+      billed[0].last.text += '⟩'
     }
   }
 }

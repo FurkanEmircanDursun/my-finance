@@ -44,7 +44,7 @@ export interface StatementLedger {
   printedDebt: Money | null
   /** printed debt − previous balance + payments: what the bank must have booked. */
   expectedCharges: Money | null
-  /** charges − expectedCharges. Zero means every line was read and counted right. */
+  /** charges − expectedCharges. Zero confirms the net total. */
   delta: Money | null
   status: Reconciliation['status']
   sections: LedgerSection[]

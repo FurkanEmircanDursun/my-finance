@@ -1,6 +1,7 @@
 import { parseEnAmount, type Money } from '../../core/money'
 import { addDays, parseSlashDate, type DayKey } from '../../core/date'
-import { splitRewardTags } from '../columns'
+import { fold } from '../../core/text'
+import { splitBilledTag, splitRewardTags, stripBilledTag } from '../columns'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
 import {
   PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, readForeignAmount, resolvePeriodStart, stripForeignNote,
@@ -28,10 +29,12 @@ import {
  * the row is read, and a row left with no charge at all is a chip-para award.
  */
 
-const LINE_RE = /^(\d{2}\/\d{2}\/\d{4})\s+(.+)$/
+const LINE_RE = /^(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(.*))?$/
 const PRINCIPAL_RE = /\(([\d,.]+)\s*TL[^)]*\)/
 const INSTALLMENT_RE = /(?:^|\s)(\d{1,2})\/(\d{1,2})\s*\.?\s*taksit/i
-const AMOUNT_TOKEN_RE = /^[\d,]+\.\d{2}(?:\(-\))?(?:x\d+)?$|^[\d,]+(?:\(-\))?(?:x\d+)?$/
+const AMOUNT_TOKEN_RE = /^\d+(?:,\d{3})*\.\d{2}(?:\(-\))?$/
+const REMAINING_TOKEN_RE = /^(\d+(?:,\d{3})*\.\d{2})x(\d+)$/
+const MASKED_CHIP_TRANSFER_RE = /^CHIP\s*-?\s*PARA\s+TRANSFER\s*:\s*(?:\*{4}\s*){3}\d{4}$/i
 
 // "Bir Sonraki Son Ödeme Tarihi" names the *next* cycle; only the bare form is this statement's.
 const DUE_DATE_RE = /(?<!Sonraki\s+)Son\s+Ödeme\s+Tarihi[\s:]*([\d]{2}[./][\d]{2}[./][\d]{4})/i
@@ -49,13 +52,9 @@ const PERIOD_RE =
   /Ekstre\s+D[öo]nemi[\s:]*(\d{2}\/\d{2}\/\d{4})\s*[-‐-―]\s*(\d{2}\/\d{2}\/\d{4})/i
 const CARD_RE = /\b(Axess|Wings|Free Card|Fish|Neo)\b/i
 
-function looksLikeAmount(token: string): boolean {
-  return AMOUNT_TOKEN_RE.test(token) && /\d/.test(token)
-}
-
 function readAmount(token: string): { value: Money; credit: boolean } {
   const credit = token.includes('(-)')
-  const body = token.replace(/\(-\)/g, '').replace(/x\d+$/i, '')
+  const body = token.replace(/\(-\)/g, '')
   return { value: Math.abs(parseEnAmount(body)), credit }
 }
 
@@ -136,17 +135,24 @@ function parse(text: string): AdapterOutput {
       continue
     }
 
-    // Peel trailing numeric columns off the right.
-    const parts = match[2].trim().split(/\s+/)
-    const trailing: string[] = []
-    while (parts.length && looksLikeAmount(parts[parts.length - 1])) {
-      trailing.unshift(parts.pop()!)
+    // Billed amounts always include cents. Whole numbers are often customer
+    // references in the description. A remainder alone cannot be billed.
+    const body = match[2] ?? ''
+    const billed = splitBilledTag(body)
+    const parts = (billed?.before ?? body).trim().split(/\s+/).filter(Boolean)
+    const trailing = billed ? [billed.token, ...billed.after.split(/\s+/)] : []
+    if (!billed) {
+      while (parts.length && (AMOUNT_TOKEN_RE.test(parts[parts.length - 1]) || REMAINING_TOKEN_RE.test(parts[parts.length - 1]))) {
+        trailing.unshift(parts.pop()!)
+      }
     }
 
-    if (!trailing.length) {
+    if (!trailing.length || !AMOUNT_TOKEN_RE.test(trailing[0])) {
       // Only a chip-para figure on the row: an award, not a charge.
       if (rewards.length && parts.length) {
         ignore(date, parts.join(' '), Math.abs(parseEnAmount(rewards[0])), 'reward-earned', line)
+      } else if (!trailing.length && MASKED_CHIP_TRANSFER_RE.test(fold(body))) {
+        ignore(date, body, 0, 'campaign', line)
       } else {
         skipped++
       }
@@ -180,7 +186,7 @@ function parse(text: string): AdapterOutput {
     // it from `total − current`, which cannot see an early payoff or a re-plan.
     if (installment) {
       for (const token of trailing.slice(1)) {
-        const left = /^([\d,]+\.\d{2})x(\d+)$/.exec(token)
+        const left = REMAINING_TOKEN_RE.exec(token)
         if (left) {
           installment.remaining = { count: Number(left[2]), amount: parseEnAmount(left[1]) }
           break
@@ -204,11 +210,11 @@ function parse(text: string): AdapterOutput {
     }
 
     let kind: TxKind = credit ? 'refund' : 'expense'
-    if (PAYMENT_PATTERNS.test(description)) kind = 'payment'
+    if (PAYMENT_PATTERNS.test(fold(description))) kind = 'payment'
 
-    // Loyalty-only lines move no real money. The column tells us when we can
-    // see it; the wording is the fallback for text that has no columns (.txt).
-    if (REWARD_ONLY_PATTERNS.test(description)) {
+    // Wording helps identify awards in text without column tags. Signed
+    // credits in the billed column reduce the debt, including campaign credits.
+    if (!billed && !credit && REWARD_ONLY_PATTERNS.test(description)) {
       ignore(date, description, amount, 'campaign', line)
       continue
     }
@@ -221,7 +227,7 @@ function parse(text: string): AdapterOutput {
     const reward = rewards.length && !rewards[0].includes('(-)') ? Math.abs(parseEnAmount(rewards[0])) : 0
 
     rows.push({
-      date, description, amount, kind, installment, raw: line,
+      date, description, amount, kind, installment, raw: stripBilledTag(line),
       ...(foreign ? { foreign } : {}),
       ...(reward > 0 ? { reward } : {}),
     })

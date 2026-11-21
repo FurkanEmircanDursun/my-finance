@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildPageLines, groupRows, type TextGeom } from './extract'
 import { findColumnLayout, splitRewardTags } from './columns'
 import { decodeEbcdic } from '../core/ebcdic'
+import { akbankAdapter } from './banks/akbank'
+import { garantiAdapter } from './banks/garanti'
 
 /**
  * Geometry taken from the shape of two real statements: right-aligned numbers
@@ -59,19 +61,19 @@ describe('column layout', () => {
   })
 })
 
-describe('tagging the loyalty column', () => {
+describe('tagging the transaction columns', () => {
   const lines = buildPageLines(garantiPage())
 
   it('wraps a bonus-only figure so it cannot pass for a purchase', () => {
     expect(lines).toContain('05 Eylül 2026 OTOMATİK FATURA BONUS ⟦3.000,00⟧')
   })
 
-  it('wraps the bonus beside a purchase and leaves the billed amount bare', () => {
-    expect(lines).toContain('09 Eylül 2026 UBER EATS YEMEK ⟦0,08⟧ 261,00')
+  it('marks bonus and billed values separately', () => {
+    expect(lines).toContain('09 Eylül 2026 UBER EATS YEMEK ⟦0,08⟧ ⟨261,00⟩')
   })
 
-  it('leaves a number in the billed column alone', () => {
-    expect(lines).toContain('08 Eylül 2026 ÖDEMENİZ İÇİN TEŞEKKÜR EDERİZ 500,00+')
+  it('keeps the sign on a payment in the billed column', () => {
+    expect(lines).toContain('08 Eylül 2026 ÖDEMENİZ İÇİN TEŞEKKÜR EDERİZ ⟨500,00+⟩')
   })
 
   it('does not touch anything above the table', () => {
@@ -81,6 +83,18 @@ describe('tagging the loyalty column', () => {
   it('splits tags back out for an adapter', () => {
     expect(splitRewardTags('UBER ⟦0,08⟧ 261,00')).toEqual({ line: 'UBER 261,00', rewards: ['0,08'] })
     expect(splitRewardTags('PLAIN 100,00')).toEqual({ line: 'PLAIN 100,00', rewards: [] })
+  })
+
+  it('keeps a decimal reference in the description when the billed column is present', () => {
+    const page = [
+      ...garantiPage(),
+      run('10 Eylül 2026', 105, 42, 471),
+      run('MARKET', 170, 35, 471),
+      run('123,45', 330, 21, 471),
+      run('250,00', 531, 21, 471),
+    ]
+    const result = garantiAdapter.parse(buildPageLines(page).join('\n'))
+    expect(result.rows[result.rows.length - 1]).toMatchObject({ description: 'MARKET 123,45', amount: 25_000 })
   })
 })
 
@@ -121,7 +135,30 @@ describe('an EBCDIC page', () => {
     expect(lines.find((l) => l.includes('Kampanya'))).toBe('21/09/2026 Kampanya ⟦120.00⟧')
   })
 
-  it('keeps the charge column and tags only the chip-para copy of a credit', () => {
-    expect(lines.find((l) => l.includes('Ödeme'))).toBe('24/09/2026 Chip-Para ile Ödeme 120.00(-) ⟦120.00(-)⟧')
+  it('keeps the billed and loyalty copies of a credit separate', () => {
+    expect(lines.find((l) => l.includes('Ödeme'))).toBe('24/09/2026 Chip-Para ile Ödeme ⟨120.00(-)⟩ ⟦120.00(-)⟧')
   })
+
+  it('reads the billed column and remainder when the description ends in a decimal reference', () => {
+    const extra = [
+      run(enc('25/09/2026 Ornek Kampanyasi 123.45 (750.00 TL) 3/1.taksit'), 56, 344, 450, 9.6),
+      run(enc('250.00'), 431, 26, 450, 9.6),
+      run(enc('250.00x2'), 470, 40, 450, 9.6),
+      run(enc('26/09/2026 GAZ ABONE'), 56, 104, 438, 9.6),
+      run(enc('987.65'), 375, 26, 438, 9.6),
+      run(enc('25.00'), 432, 25, 438, 9.6),
+    ]
+    const result = akbankAdapter.parse(buildPageLines([...page, ...extra], decodeEbcdic).map(decodeEbcdic).join('\n'))
+    expect(result.rows.slice(-2)).toMatchObject([
+      { description: 'Ornek Kampanyasi 123.45', amount: 25_000, installment: { remaining: { count: 2, amount: 25_000 } } },
+      { description: 'GAZ ABONE 987.65', amount: 2_500 },
+    ])
+  })
+})
+
+it('groups adjacent baselines the same way regardless of PDF glyph order', () => {
+  const page = [run('top', 90, 12, 100), run('top-left', 20, 30, 96), run('bottom', 10, 20, 92)]
+  const expected = [['top-left', 'top'], ['bottom']]
+  expect(groupRows(page).map(row => row.map(item => item.text))).toEqual(expected)
+  expect(groupRows([...page].reverse()).map(row => row.map(item => item.text))).toEqual(expected)
 })

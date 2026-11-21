@@ -1,3 +1,4 @@
+import { UserFacingError } from '../core/errors'
 import { LocalNotifications, type LocalNotificationSchema, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
 import { defaultReminders, isReminderId, planReminders, type ReminderPreferences } from '../domain/reminders'
 import type { CreditCard } from '../domain/types'
@@ -119,11 +120,11 @@ export function syncReminders(cards: CreditCard[], preferences = defaultReminder
     const notifications: LocalNotificationSchema[] = future.filter((item) => !retained.has(item.id)).map((item) => ({
       id: item.id, title: item.title, body: item.body,
       schedule: { at: item.at, allowWhileIdle: true },
-      // An expense reminder needs a morning, not exact-alarm privileges.
+      // A day-end reminder needs no exact-alarm privilege or extra permission.
       isExactNotification: false,
       channelId: CHANNEL_ID,
       smallIcon: 'ic_stat_finance',
-      iconColor: '#556044',
+      iconColor: '#7161d8',
       autoCancel: true,
       group: 'finance-reminders',
       extra: { cardId: item.cardId, reminderKind: item.kind, reminderAt: item.at.toISOString() },
@@ -136,9 +137,9 @@ export function syncReminders(cards: CreditCard[], preferences = defaultReminder
 }
 
 export async function sendTestReminder(): Promise<void> {
-  if (!isAndroid()) throw new Error('Bildirim testi Android uygulamasında kullanılabilir.')
+  if (!isAndroid()) throw new UserFacingError('Bildirim testi Android uygulamasında kullanılabilir.')
   if ((await LocalNotifications.checkPermissions()).display !== 'granted') {
-    throw new Error('Önce bildirimlere izin ver.')
+    throw new UserFacingError('Önce bildirimlere izin ver.')
   }
   await createChannel()
   await LocalNotifications.schedule({ notifications: [{
@@ -147,7 +148,7 @@ export async function sendTestReminder(): Promise<void> {
     body: 'Ekstre ve aylık kayıt günlerinde buradan haber vereceğiz.',
     channelId: CHANNEL_ID,
     smallIcon: 'ic_stat_finance',
-    iconColor: '#556044',
+    iconColor: '#7161d8',
     isExactNotification: false,
     autoCancel: true,
     extra: { reminderKind: 'test' },

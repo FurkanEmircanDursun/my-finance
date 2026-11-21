@@ -1,4 +1,5 @@
 import { hash } from '../core/hash'
+import { UserFacingError } from '../core/errors'
 import type { CardBank, CreditCard, ParseResult, Transaction } from './types'
 
 export function cardBankLabel(bank: CardBank): string {
@@ -51,7 +52,7 @@ export function cardMatchesBank(card: CreditCard, bank: string): boolean {
 
 /** Scope parser identities to a physical card, so identical purchases on two cards survive. */
 export function assignResultCard(result: ParseResult, card: CreditCard): ParseResult {
-  if (!cardMatchesBank(card, result.bank)) throw new Error(`Bu dosya ${cardBankLabel(card.bank)} kartına ait değil. Doğru kartı seçip tekrar dene.`)
+  if (!cardMatchesBank(card, result.bank)) throw new UserFacingError(`Bu dosya ${cardBankLabel(card.bank)} kartına ait değil. Doğru kartı seçip tekrar dene.`)
   const accountLabel = cardDisplayName(card)
   return {
     ...result,

@@ -53,6 +53,7 @@ frontend/android/app/google-services.json
 frontend/android/app/build/
 frontend/android/build/
 frontend/android/.gradle/
+frontend/android/.kotlin/
 frontend/android/capacitor-cordova-android-plugins/
 frontend/android/local.properties
 /artifacts/
@@ -65,3 +66,4 @@ data/statement-audit-*.md
 # Local browser validation artifacts
 /.playwright-cli/
 /output/
+/tmp/

@@ -41,6 +41,11 @@ export function makeDayKey(year: number, month1: number, day: number): DayKey {
   return `${year}-${pad(month1)}-${pad(day)}`
 }
 
+function calendarDay(year: number, month: number, day: number): DayKey | null {
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(`${year}-${pad(month)}`)) return null
+  return makeDayKey(year, month, day)
+}
+
 /** "05/07/2026" -> "2026-07-05". Returns null when the shape does not match. */
 export function parseSlashDate(raw: string): DayKey | null {
   const m = /^(\d{1,2})[./](\d{1,2})[./](\d{4})$/.exec(raw.trim())
@@ -48,19 +53,17 @@ export function parseSlashDate(raw: string): DayKey | null {
   const day = Number(m[1])
   const month = Number(m[2])
   const year = Number(m[3])
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null
-  return makeDayKey(year, month, day)
+  return calendarDay(year, month, day)
 }
 
 /** "08 Ağustos 2026" -> "2026-08-08". Returns null when the shape does not match. */
 export function parseTurkishLongDate(raw: string): DayKey | null {
   const parts = raw.trim().split(/\s+/)
-  if (parts.length < 3) return null
+  if (parts.length !== 3 || !/^\d{1,2}$/.test(parts[0]) || !/^\d{4}$/.test(parts[2])) return null
   const day = Number(parts[0])
   const month = TR_MONTHS[foldTr(parts[1])]
   const year = Number(parts[2])
-  if (!month || !Number.isFinite(day) || !Number.isFinite(year)) return null
-  return makeDayKey(year, month, day)
+  return month ? calendarDay(year, month, day) : null
 }
 
 /** Accepts the formats this app can produce, plus ISO. */

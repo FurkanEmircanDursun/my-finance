@@ -1,3 +1,5 @@
+import type { AssetHolding } from './assets'
+import type { AssetValuationSnapshot } from './assetsHistory'
 import type { Money } from '../core/money'
 import { monthOf, type DayKey, type MonthKey } from '../core/date'
 import type { CategoryId } from './categories'
@@ -152,8 +154,7 @@ export interface StatementSummary {
  *   debt = previous balance − payments + charges
  *   ⇒ charges the bank expects = printed debt − previous balance + payments
  *
- * `delta` is parsed − expected, in kuruş. Zero means every row was read, every
- * sign was right and nothing was counted that the bank does not count.
+ * `delta` is parsed − expected, in kuruş. Zero confirms the net total.
  */
 export interface Reconciliation {
   status: 'match' | 'mismatch' | 'unverified'
@@ -262,6 +263,10 @@ export interface CreditCard {
 }
 
 export interface Profile {
+  /** Optional so older backups and clients remain readable. */
+  assets?: AssetHolding[]
+  /** Genuine observed totals; older profiles do not contain a valuation history. */
+  assetValuations?: AssetValuationSnapshot[]
   /** Optional for compatibility with older backups and synced profiles. */
   cards?: CreditCard[]
   /** Removed configurations retained so re-adding a card preserves import identity. */
@@ -372,6 +377,7 @@ export interface ImportOutcome {
   ok: boolean
   added: number
   duplicates: number
+  removed?: number
   error?: string
   statement?: Statement
 }

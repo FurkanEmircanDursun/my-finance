@@ -1,24 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search, Trash2 } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Empty, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
-import { money, money2, count } from '../core/money'
-import { fullDayLabel } from '../core/date'
+import { money, count } from '../core/money'
 import { fold } from '../core/text'
 import { EntrySheet } from '../app/EntrySheet'
-import { CATEGORIES, categoryColor, categoryLabel, type CategoryId } from '../domain/categories'
-import { spendAmount, type Transaction, type TxKind } from '../domain/types'
+import { CATEGORIES, categoryColor, type CategoryId } from '../domain/categories'
+import { spendAmount, type Transaction } from '../domain/types'
 import { useStore } from '../store/AppStore'
+import { TransactionItem } from '../ui/TransactionItem'
+import { useTransactionDelete } from '../ui/useTransactionDelete'
 
 const PAGE_SIZE = 60
-
-const KIND_LABEL: Record<TxKind, string> = {
-  expense: 'Harcama',
-  refund: 'İade',
-  income: 'Gelir',
-  payment: 'Borç ödeme',
-}
 
 /**
  * The transaction list, as a drill-down rather than a tab.
@@ -130,6 +124,7 @@ function TransactionRow({
 }) {
   const { dispatch } = useStore()
   const [onlyThis, setOnlyThis] = useState(false)
+  const remove = useTransactionDelete()
 
   const assign = (category: CategoryId) => {
     dispatch({ type: 'setCategory', transactionIds: [tx.id], category, learn: !onlyThis })
@@ -138,35 +133,7 @@ function TransactionRow({
 
   return (
     <li className="border-b border-line last:border-b-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex min-h-[56px] w-full items-center gap-3 rounded-[var(--radius)] px-2 py-3 text-left transition-colors duration-200 hover:bg-hover"
-      >
-        <span
-          className="h-2 w-2 shrink-0 rounded-full"
-          style={{ background: categoryColor(tx.category) }}
-          aria-hidden
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-body text-ink">{tx.description}</span>
-          <span className="mt-0.5 block truncate text-label text-faint">
-            {fullDayLabel(tx.date)} · {categoryLabel(tx.category)}
-            {tx.installment ? ` · taksit ${tx.installment.current}/${tx.installment.total}` : ''}
-            {tx.kind !== 'expense' ? ` · ${KIND_LABEL[tx.kind]}` : ''}
-          </span>
-        </span>
-        <span
-          className={clsx(
-            'num shrink-0 text-body font-semibold',
-            tx.kind === 'expense' ? 'text-ink' : 'text-positive',
-          )}
-        >
-          {tx.kind === 'expense' ? '' : '+'}
-          {money2(tx.amount)}
-        </span>
-      </button>
+      <TransactionItem transaction={tx} onOpen={onToggle} expanded={open} onDelete={() => { remove(tx); onDone() }} />
 
       {open && (
         <div className="rise-in px-2 pb-4">
@@ -201,17 +168,7 @@ function TransactionRow({
               Sadece bu işlem
             </label>
 
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => {
-                dispatch({ type: 'deleteTransactions', ids: [tx.id] })
-                onDone()
-              }}
-            >
-              <Trash2 size={14} />
-              Sil
-            </Button>
+
           </div>
 
           {!onlyThis && (

@@ -21,6 +21,13 @@ describe('date parsing', () => {
     expect(parseTurkishLongDate('Ağustos 2026')).toBeNull()
     expect(parseSlashDate('35/13/2026')).toBeNull()
   })
+
+  it('rejects impossible dates in both bank formats and accepts leap day', () => {
+    expect(parseSlashDate('29/02/2026')).toBeNull()
+    expect(parseTurkishLongDate('31 Nisan 2026')).toBeNull()
+    expect(parseTurkishLongDate('00 Eylül 2026')).toBeNull()
+    expect(parseSlashDate('29/02/2024')).toBe('2024-02-29')
+  })
 })
 
 describe('date arithmetic', () => {

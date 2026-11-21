@@ -20,8 +20,8 @@ export function CardEditor({ initial, onSave, onCancel, submitLabel, existingCar
   const [bank, setBank] = useState<CardBank>(initial?.bank ?? 'akbank')
   const [name, setName] = useState(initial?.name ?? 'Akbank Axess')
   const [last4, setLast4] = useState(initial?.last4 ?? '')
-  const [statementDay, setStatementDay] = useState(String(initial?.statementDay ?? ''))
-  const [entryDay, setEntryDay] = useState(String(initial?.entryDay ?? ''))
+  const [statementDay, setStatementDay] = useState(initial?.statementDay ? String(initial.statementDay) : '')
+  const [entryDay, setEntryDay] = useState(initial?.entryDay ? String(initial.entryDay) : '')
   const [remindersEnabled, setRemindersEnabled] = useState(initial?.remindersEnabled !== false)
   const [error, setError] = useState('')
 

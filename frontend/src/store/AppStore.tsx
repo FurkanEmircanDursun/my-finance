@@ -1,7 +1,7 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode,
 } from 'react'
-import { dbGet, dbSet } from './db'
+import { dbFinancialGenerationIsCurrent, dbReadFinancialState, dbResetFinancialState, dbWriteFinancialValue, DeviceDataChangedError } from './db'
 import { initialState, reducer, STATE_VERSION, toSnapshot, type Action, type AppState } from './state'
 import { migratePersisted, type Persisted } from './migrate'
 import {
@@ -15,8 +15,14 @@ import type { SyncEngine } from '../sync/engine'
 import { initialSyncState, type SyncState } from '../sync/status'
 import type { Analysis } from '../analytics/types'
 import type { Transaction } from '../domain/types'
+import { hasFinancialData } from '../sync/model'
+import { leaveSession } from './sessionBoundary'
+import { announceDeviceDataChange, watchDeviceDataChange } from './deviceDataSignal'
+import { UserFacingError } from '../core/errors'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 const PERSIST_KEY = 'state'
+const DEVICE_SAVE_ERROR = 'Son değişiklikler bu cihazda kaydedilemedi. Kayıtların bu oturumda duruyor; JSON yedeği alıp yeniden dene.'
 
 export type { SyncState, SyncStatus } from '../sync/status'
 
@@ -46,6 +52,12 @@ interface StoreValue {
   resolveSync: (choice: 'merge' | 'replace') => void
   /** Stops syncing, deletes this account's cloud copy, and (optionally) the account itself. */
   eraseCloud: (options: { deleteAccount: boolean }) => Promise<void>
+  logout: (options?: { clearLocal?: boolean }) => Promise<void>
+  clearLocalData: (options?: { clearLock?: boolean }) => Promise<void>
+  sessionBusy: boolean
+  sessionError: string | null
+  /** Remount financial drafts and Undo when their account/data identity changes. */
+  dataEpoch: number
   /** Re-reads the Firebase user after an action that upgrades it in place (see `refreshAuthUser`). */
   refreshAuthUser: () => void
 }
@@ -73,6 +85,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [sync, setSync] = useState<SyncState>(initialSyncState)
   // Bumped to start the sync engine afresh, e.g. after a failed erase stopped it.
   const [engineEpoch, setEngineEpoch] = useState(0)
+  const authUserRef = useRef<AuthUser | null>(null)
+  const sessionEpoch = useRef(0)
+  const sessionPaused = useRef(false)
+  const operationRunning = useRef(false)
+  const [sessionBusy, setSessionBusy] = useState(false)
+  const [sessionOperationError, setSessionError] = useState<string | null>(null)
+  const [deviceSaveError, setDeviceSaveError] = useState<string | null>(null)
+  const sessionError = [sessionOperationError, deviceSaveError].filter(Boolean).join(' ') || null
+  const persistAttempt = useRef(0)
+  const [dataEpoch, setDataEpoch] = useState(0)
 
   /**
    * The newest state, *including actions dispatched a moment ago*.
@@ -86,6 +108,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const stateRef = useRef(state)
   const dispatch = useCallback((action: Action) => {
+    if (action.type === 'clearData' || action.type === 'reset' || (action.type === 'restore' && action.mode === 'replace')) setDataEpoch(n => n + 1)
     stateRef.current = reducer(stateRef.current, action)
     rawDispatch(action)
   }, [])
@@ -93,14 +116,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // ── Load once ───────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-    dbGet<unknown>(PERSIST_KEY).then((stored) => {
+    dbReadFinancialState<unknown>().then((stored) => {
       if (cancelled) return
 
       // A schema bump migrates what is stored; it never discards it. Only a
-      // snapshot too old (or too foreign) to read is refused, and that case
-      // starts empty rather than half-loaded.
+      // snapshot too old (or too foreign) to read is refused. It remains on
+      // disk; an empty replacement must never overwrite unreadable records.
       const migrated = migratePersisted(stored)
       if (!migrated) {
+        if (stored !== undefined && stored !== null) {
+          setSessionError('Cihaz kayıtları bu sürümde okunamıyor. Verilerin korunuyor; güncel sürümle yeniden dene.')
+          return
+        }
         dispatch({ type: 'hydrate', payload: {} })
         return
       }
@@ -117,6 +144,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           notices: notes,
         },
       })
+    }).catch(() => {
+      if (!cancelled) setSessionError('Cihaz kayıtları okunamadı. Diğer Mizan sekmelerini kapatıp yeniden yükle. Verilerin üzerine yazılmadı.')
     })
     return () => {
       cancelled = true
@@ -126,9 +155,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Persist durable changes as soon as React commits them. Waiting for a debounce
   // let a quick Undo followed by reload restore the older, already-saved record:
   // browsers can abort IndexedDB work first started during pagehide.
+  const persistSnapshot = useCallback((snapshot: AppState) => {
+    const attempt = ++persistAttempt.current
+    void dbWriteFinancialValue(PERSIST_KEY, toPersisted(snapshot)).then(saved => {
+      if (attempt === persistAttempt.current) setDeviceSaveError(saved ? null : DEVICE_SAVE_ERROR)
+    }).catch(error => {
+      if (error instanceof DeviceDataChangedError) announceDeviceDataChange()
+      else if (attempt === persistAttempt.current) setDeviceSaveError(DEVICE_SAVE_ERROR)
+    })
+  }, [])
   useEffect(() => {
-    if (!state.hydrated) return
-    void dbSet(PERSIST_KEY, toPersisted(state))
+    if (!state.hydrated || sessionPaused.current) return
+    persistSnapshot(state)
   }, [state.hydrated, state.transactions, state.statements, state.rules, state.profile, state.settings])
 
   // Best-effort lifecycle flush also covers a dispatch before its React effect.
@@ -136,8 +174,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const flush = () => {
       const current = stateRef.current
-      if (!current.hydrated) return
-      void dbSet(PERSIST_KEY, toPersisted(current))
+      if (!current.hydrated || sessionPaused.current) return
+      persistSnapshot(current)
     }
     const onHide = () => {
       if (document.visibilityState === 'hidden') flush()
@@ -149,6 +187,64 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', flush)
     }
   }, [])
+
+  // Other tabs share the durable copy, but not React memory or Undo callbacks.
+  // The generation guard blocks stale writes even before this signal arrives.
+  useEffect(() => {
+    let checking = false
+    let disposed = false
+    const unwatch = watchDeviceDataChange(() => {
+      if (checking || disposed || operationRunning.current || !stateRef.current.hydrated) return
+      checking = true
+      void (async () => {
+        if ((await dbFinancialGenerationIsCurrent() && !sessionPaused.current) || disposed) return
+        operationRunning.current = true
+        sessionPaused.current = true
+        sessionEpoch.current++
+        setSessionBusy(true)
+        const engine = engineRef.current
+        engineRef.current = null
+        setSync(initialSyncState)
+        let refreshed = false
+        try {
+          await engine?.stopAndDrain()
+          if (cloudAvailable) {
+            const auth = await import('../firebase/auth')
+            const current = auth.getCurrentAuthUser()
+            await auth.signOutSession(current?.uid)
+            await (await import('../firebase/db')).clearFirebaseDeviceCache()
+          }
+          const stored = await dbReadFinancialState<unknown>()
+          const migrated = migratePersisted(stored)
+          if (stored !== undefined && stored !== null && !migrated) throw new UserFacingError('Cihaz kayıtları bu sürümde okunamıyor. Verilerin korunuyor; güncel sürümle yeniden dene.')
+          const data = migrated?.state
+          dispatch({ type: 'hydrate', payload: {
+            ...stateRef.current, transactions: data?.transactions ?? [], statements: data?.statements ?? [], rules: data?.rules ?? [],
+            profile: { ...initialState.profile, ...data?.profile }, settings: { ...initialState.settings, ...data?.settings },
+            filters: initialState.filters, lastImport: [], notices: migrated?.notes ?? [],
+          } })
+          setDataEpoch(n => n + 1)
+          setSessionError(null)
+          refreshed = true
+        } catch (error) {
+          // The durable generation already changed. Never expose the previous
+          // account's rows again even if SDK cache cleanup needs a retry.
+          dispatch({ type: 'clearData' })
+          setSessionError(firebaseErrorMessage(error, 'session'))
+        } finally {
+          operationRunning.current = false
+          sessionPaused.current = !refreshed
+          // Keep a failed stale tab inert until focus/reload retries. Reopening
+          // its engine here could fetch the old account back into a cleared UI.
+          setSessionBusy(!refreshed)
+          if (refreshed) setEngineEpoch(n => n + 1)
+        }
+      })().catch(() => {
+        if (!disposed) setSessionError('Cihaz verileri kontrol edilemedi. Sayfayı yenileyip yeniden dene; kayıtların üzerine yazılmadı.')
+      }).finally(() => { checking = false })
+    })
+    return () => { disposed = true; unwatch() }
+  }, [dispatch])
 
   // ── Open on the newest period ───────────────────────────────────────────────
   // "Tüm dönemler" as a landing state makes the headline a sum across however
@@ -200,6 +296,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // session or leave the account area loading forever.
       unsubscribe = onAuthChange((user) => {
         if (cancelled) return
+        if (authUserRef.current?.uid !== user?.uid) {
+          if (authUserRef.current) setDataEpoch(n => n + 1)
+          sessionEpoch.current++
+          engineRef.current?.stop()
+          engineRef.current = null
+          setSync(initialSyncState)
+        }
+        authUserRef.current = user
         setAuthUser(user)
         setAuthReady(true)
       }, (error) => {
@@ -227,12 +331,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // ── Cloud sync, while signed in ─────────────────────────────────────────────
   const uid = authUser?.uid ?? null
   useEffect(() => {
-    if (!state.hydrated || !uid) {
+    if (!state.hydrated || !uid || sessionPaused.current) {
       setSync(initialSyncState)
       return
     }
 
     let cancelled = false
+    const generation = sessionEpoch.current
     let engine: SyncEngine | null = null
     setSync(initialSyncState)
 
@@ -248,23 +353,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         import.meta.env.DEV && import.meta.env.VITE_SYNC_TRANSPORT === 'memory'
           ? (await import('../sync/devTransport')).devTransport()
           : (await import('../sync/firestoreTransport')).firestoreTransport
-      if (cancelled) return
+      if (cancelled || generation !== sessionEpoch.current || sessionPaused.current) return
 
       engine = new Engine({
         uid,
         transport,
         storage: indexedDbStorage,
         getSnapshot: () => toSnapshot(stateRef.current),
-        apply: (change) => dispatch({ type: 'remote', change }),
-        replaceLocal: () => dispatch({ type: 'clearData' }),
-        hasLocalData: () => stateRef.current.transactions.length > 0 || stateRef.current.statements.length > 0 || (stateRef.current.profile.cards?.length ?? 0) > 0 || (stateRef.current.profile.archivedCards?.length ?? 0) > 0,
-        onState: setSync,
+        apply: (change) => { if (!cancelled && generation === sessionEpoch.current && !sessionPaused.current) dispatch({ type: 'remote', change }) },
+        replaceLocal: () => { if (!cancelled && generation === sessionEpoch.current && !sessionPaused.current) dispatch({ type: 'clearData' }) },
+        hasLocalData: () => hasFinancialData(toSnapshot(stateRef.current)),
+        onState: (next) => { if (!cancelled && generation === sessionEpoch.current && !sessionPaused.current) setSync(next) },
       })
       engineRef.current = engine
       await engine.start()
     })().catch((error: unknown) => {
-      if (cancelled) return
-      setSync({ ...initialSyncState, status: 'error', error: error instanceof Error ? error.message : 'Senkronizasyon başlatılamadı.' })
+      if (cancelled || generation !== sessionEpoch.current || sessionPaused.current) return
+      setSync({ ...initialSyncState, status: 'error', error: firebaseErrorMessage(error, 'sync') })
     })
 
     return () => {
@@ -291,42 +396,119 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    */
   const refreshAuthUser = useCallback(() => {
     import('../firebase/auth').then(({ getCurrentAuthUser }) => {
-      setAuthUser(getCurrentAuthUser())
+      const user = getCurrentAuthUser()
+      if (authUserRef.current?.uid !== user?.uid) {
+        if (authUserRef.current) setDataEpoch(n => n + 1)
+        sessionEpoch.current++
+        engineRef.current?.stop()
+        engineRef.current = null
+      }
+      authUserRef.current = user
+      setAuthUser(user)
       setAuthError(null)
     })
   }, [])
 
   const retryAuth = useCallback(() => setAuthEpoch((n) => n + 1), [])
 
+  const leaveAccount = useCallback(async (clearLocal: boolean, clearLock = false) => {
+    if (operationRunning.current) throw new UserFacingError('Bir hesap işlemi devam ediyor. Tamamlanmasını bekle.')
+    operationRunning.current = true
+    setSessionBusy(true)
+    setSessionError(null)
+    try {
+      const auth = cloudAvailable ? await import('../firebase/auth') : null
+      const expectedUid = auth?.getCurrentAuthUser()?.uid ?? null
+      await leaveSession({
+        suspend: async (checkpoint) => {
+          sessionPaused.current = true
+          sessionEpoch.current++
+          const engine = engineRef.current
+          engineRef.current = null
+          setSync(initialSyncState)
+          engine?.stop()
+          if (checkpoint && !await dbWriteFinancialValue(PERSIST_KEY, toPersisted(stateRef.current))) {
+            throw new UserFacingError('Cihaz kayıtları saklanamadı. Çıkış yapılmadı; yeniden dene veya önce yedek al.')
+          }
+          await engine?.stopAndDrain(checkpoint)
+        },
+        signOut: async () => {
+          if (expectedUid) await auth!.signOutSession(expectedUid)
+          else if (auth?.getCurrentAuthUser()) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
+          else await auth?.signOutSession()
+          await (await import('../platform/sharedPdf')).discardSharedPdfs()
+        },
+        clearDevice: async () => {
+          if (cloudAvailable) await (await import('../firebase/db')).clearFirebaseDeviceCache()
+          const cleared = reducer(stateRef.current, { type: 'reset' })
+          if (clearLock) cleared.settings = { ...cleared.settings, lockPinHash: null, lockPinSalt: null }
+          // The old account ledger must disappear in the SAME durable commit
+          // as its local rows, otherwise the next login would upload deletions.
+          await dbResetFinancialState(toPersisted(cleared))
+          dispatch({ type: 'hydrate', payload: cleared })
+          announceDeviceDataChange()
+        },
+        resume: () => {
+          sessionPaused.current = false
+          setEngineEpoch(n => n + 1)
+        },
+      }, clearLocal)
+    } catch (error) {
+      setSessionError(firebaseErrorMessage(error, 'session'))
+      if (error instanceof DeviceDataChangedError) announceDeviceDataChange()
+      throw error
+    } finally {
+      operationRunning.current = false
+      setSessionBusy(false)
+    }
+  }, [dispatch])
+  const logout = useCallback((options: { clearLocal?: boolean } = {}) => leaveAccount(options.clearLocal === true), [leaveAccount])
+  const clearLocalData = useCallback((options: { clearLock?: boolean } = {}) => leaveAccount(true, options.clearLock === true), [leaveAccount])
+
   const syncNow = useCallback(() => engineRef.current?.syncNow(), [])
   const resolveSync = useCallback((choice: 'merge' | 'replace') => engineRef.current?.resolve(choice), [])
 
   const eraseCloud = useCallback(
     async ({ deleteAccount }: { deleteAccount: boolean }) => {
-      if (!uid) return
+      if (!uid) throw new UserFacingError('Hesap işlemi için önce giriş yap.')
+      if (operationRunning.current) throw new UserFacingError('Bir hesap işlemi devam ediyor. Tamamlanmasını bekle.')
+      operationRunning.current = true
+      setSessionBusy(true)
+      setSessionError(null)
+      sessionPaused.current = true
+      sessionEpoch.current++
       // Stop first: a running engine would put back everything just deleted.
-      engineRef.current?.stop()
+      const engine = engineRef.current
+      engine?.stop()
       engineRef.current = null
       setSync(initialSyncState)
 
       try {
+        await engine?.stopAndDrain()
         const [{ wipeCloudData }, auth, storage] = await Promise.all([
           import('../sync/cloudAdmin'),
           import('../firebase/auth'),
           import('../sync/storage'),
         ])
+        if (auth.getCurrentAuthUser()?.uid !== uid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
+        await (await import('../platform/sharedPdf')).discardSharedPdfs()
         await wipeCloudData(uid)
         // The ledger described a cloud that no longer exists.
         await storage.indexedDbStorage.saveLedger(uid, {})
 
-        if (deleteAccount) await auth.deleteCurrentAccount()
-        else await auth.signOutSession()
+        if (deleteAccount) await auth.deleteCurrentAccount(uid)
+        else await auth.signOutSession(uid)
       } catch (error) {
         // Still signed in, so sync must carry on: otherwise one dropped
         // connection would quietly end it until the next reload. Whatever the
         // wipe did get through is simply sent again.
-        setEngineEpoch((n) => n + 1)
+        setSessionError(firebaseErrorMessage(error, 'session'))
         throw error
+      } finally {
+        sessionPaused.current = false
+        operationRunning.current = false
+        setSessionBusy(false)
+        setEngineEpoch((n) => n + 1)
       }
     },
     [uid],
@@ -390,9 +572,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreValue>(
     () => ({
       state, dispatch, visible, analysis, overall, cloudAvailable, authUser, authReady, authError, retryAuth, sync,
-      syncNow, resolveSync, eraseCloud, refreshAuthUser,
+      syncNow, resolveSync, eraseCloud, refreshAuthUser, logout, clearLocalData, sessionBusy, sessionError, dataEpoch,
     }),
-    [state, dispatch, visible, analysis, overall, authUser, authReady, authError, retryAuth, sync, syncNow, resolveSync, eraseCloud, refreshAuthUser],
+    [state, dispatch, visible, analysis, overall, authUser, authReady, authError, retryAuth, sync, syncNow, resolveSync, eraseCloud, refreshAuthUser, logout, clearLocalData, sessionBusy, sessionError, dataEpoch],
   )
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

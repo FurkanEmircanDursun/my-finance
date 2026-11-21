@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Statements are parsed on the device. There is no Storage upload/download
+    // feature, including for signed-in owners. Admin access is governed by IAM.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

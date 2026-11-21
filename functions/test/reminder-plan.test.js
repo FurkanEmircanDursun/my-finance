@@ -17,6 +17,13 @@ test('leap February clamps to the 29th', () => {
 test('Istanbul date survives UTC midnight and uses 24 hour clock', () => {
   assert.deepEqual(istanbulDate(new Date('2026-11-06T21:00:00Z')), { year: 2026, month: 11, day: 7, hour: 0 })
 })
+
+test('day-end preference delivers at 20:00 Istanbul while retaining custom morning schedules', () => {
+  const evening = { ...device, hour: 20 }
+  assert.equal(dueReminders({ cards: [card] }, evening, new Date('2027-02-28T17:00:00Z')).length, 1)
+  assert.equal(dueReminders({ cards: [card] }, evening, new Date('2027-02-28T06:00:00Z')).length, 0)
+  assert.equal(dueReminders({ cards: [card] }, device, at).length, 1)
+})
 test('disabled devices, cards, wrong hours and deleted profiles never deliver', () => {
   assert.equal(dueReminders({ cards: [card] }, { ...device, enabled: false }, at).length, 0)
   assert.equal(dueReminders({ cards: [{ ...card, remindersEnabled: false }] }, device, at).length, 0)

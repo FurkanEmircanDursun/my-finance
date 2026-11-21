@@ -235,6 +235,24 @@ Focus is visible as a 2px accent outline with 4px offset. Selected categories us
 
 `WorkspaceChrome` owns the rail and toolbar presentation. Rail selection uses a tinted active row, stronger text, an active dot, and `aria-current`. The toolbar keeps period, privacy, and account controls available. Google sign-in and synchronization state remain accessible; loading, offline, pending decision, error, and synchronized states must retain their actual meanings.
 
+The four primary destinations are Overview, Analysis, Assets, and Future. The mobile bar keeps a central record action. Spending remains an independent detail route, available from Analysis and the desktop rail. Cards and Settings have full page routes, with a direct Cards action on the overview and a persistent Settings action in the toolbar. A card detail is a separate page scoped to its physical card identity and selected calendar month. Changing pages scrolls to the top and focuses the main content.
+
+The period control selects a year and then one of twelve months, including months with no records. The selected period supplies a new entry's initial date; an explicit edited date takes priority. Settings and Assets hide the irrelevant monthly filter. Monetary settings accept Turkish grouping and decimal separators without changing the field during typing.
+
+### Records, cards, and recovery
+
+Each transaction has an independent trailing delete button, outside the row's detail action. Persistent feedback renders inside the topmost dialog's layout and keyboard focus boundary when a dialog is open; otherwise it sits above navigation. It must never cover the submit button. Undo restores the original transaction identity, dates, card, and statement linkage.
+
+Missing statements use a warning role and explicit wording, with immediate Add and Remove Card actions. Removing a card retains financial history and can be undone. New physical cards never inherit an archived card identity based on a matching name or last four digits. The importer offers saved and unsaved card identities plus an explicit new-card choice.
+
+### Assets and update policy
+
+Analysis uses one continuous page with an independent historical range, an open metric ledger, paired trend and category panels, current holdings, observed asset history, habits, and numerical tables. Missing months remain graph gaps. Every chart has an adjacent list or table; horizontal table scroll does not trigger tab swipes. Portfolio observations and manually entered past totals stay visibly distinct from investment return. Destructive session operations hide financial interaction while pending, and old drafts and Undo state are discarded after device or identity replacement.
+
+Assets use the same raised reading surfaces and iris actions. Quantity, price source, quote time, and estimated TL value have separate hierarchy. Allocation is a labelled proportional ribbon. A missing quote remains unknown rather than becoming zero; cached or daily reference prices state their limits. Holdings never create income or spending records.
+
+Required updates replace the application surface and offer no dismissal. Suggested updates preserve the workspace and offer a 24-hour Later action. Native update prompts require a validated platform destination from Remote Config; unset future store links cannot lock out installed users.
+
 ### Budget allocation and charts
 
 `BudgetRibbon` displays usable headroom or overspend, the actual limit, percentage used, and an accessible progressbar. It is scoped only to one month with all accounts and no active category or search filter. With no limit it gives a clear setup action; with filtered or all-period data it explains the required scope. The overview's spending chart is visible in the work area, with daily/cumulative modes, a tooltip, and an accessible data table. Privacy hides money and blurs the graph.

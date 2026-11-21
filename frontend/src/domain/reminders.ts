@@ -5,7 +5,7 @@ export interface ReminderPreferences {
   hour: number
 }
 
-export const defaultReminders: ReminderPreferences = { enabled: false, hour: 9 }
+export const defaultReminders: ReminderPreferences = { enabled: false, hour: 20 }
 export const REMINDER_ID_START = 1_200_000_000
 const REMINDER_ID_COUNT = 100_000_000
 
@@ -43,7 +43,7 @@ export function planReminders(
 ): PlannedReminder[] {
   if (!preferences.enabled) return []
   const hour = Number.isInteger(preferences.hour) && preferences.hour >= 0 && preferences.hour <= 23
-    ? preferences.hour : 9
+    ? preferences.hour : defaultReminders.hour
   const planned: PlannedReminder[] = []
   const usedIds = new Set<number>()
   const byCardAndTime = new Map<string, PlannedReminder>()
@@ -64,15 +64,14 @@ export function planReminders(
         let id = reminderId(`${card.id}:${kind}:${at.getFullYear()}-${at.getMonth()}`)
         while (usedIds.has(id)) id = REMINDER_ID_START + ((id - REMINDER_ID_START + 1) % REMINDER_ID_COUNT)
         usedIds.add(id)
-        const name = card.name.trim() || (card.bank === 'akbank' ? 'Akbank' : 'Garanti BBVA')
         const item: PlannedReminder = {
           id, at, cardId: card.id, kind,
           title: kind === 'entry' ? 'Aylık kayıt zamanı' : 'Ekstre günü',
           body: kind === 'statement'
-            ? `${name} için ekstre kesim günün. Ekstren hazır olduğunda uygulamaya ekleyebilirsin.`
+            ? 'Ekstre kesim günün geldi. Ekstren hazır olduğunda uygulamaya ekleyebilirsin.'
             : kind === 'combined'
-              ? `${name} için ekstre ve kayıt günün. Ekstreni ekleyip aylık kayıtlarını tamamla.`
-              : `${name} için aylık veri giriş günün. Ekstreni ve gelir-gider kayıtlarını tamamla.`,
+              ? 'Ekstre ve kayıt günün geldi. Ekstreni ekleyip aylık kayıtlarını tamamla.'
+              : 'Aylık veri giriş günün geldi. Ekstreni ve gelir-gider kayıtlarını tamamla.',
         }
         const key = `${card.id}:${at.getTime()}`
         const existing = byCardAndTime.get(key)
@@ -80,7 +79,7 @@ export function planReminders(
           // Different configured days can both clamp to February's final day.
           existing.kind = 'combined'
           existing.title = 'Ekstre günü'
-          existing.body = `${name} için ekstre ve kayıt günün. Ekstreni ekleyip aylık kayıtlarını tamamla.`
+          existing.body = 'Ekstre ve kayıt günün geldi. Ekstreni ekleyip aylık kayıtlarını tamamla.'
         } else {
           byCardAndTime.set(key, item)
           planned.push(item)

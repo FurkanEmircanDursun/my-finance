@@ -54,6 +54,28 @@ describe('akbank adapter', () => {
     expect(tax?.amount).toBe(215357)
   })
 
+  it('reads billed amounts beside subscriber references and keeps signed campaign credits', () => {
+    const result = akbankAdapter.parse(`
+05/07/2026 GAZ ABONE 998877 130.00
+06/07/2026 ğNTERNET Şb-Ödemeniz için Te ekkürler 500.00(-)
+09/07/2026 Axess Restoran Kampanyası ⟦75.00⟧
+10/07/2026 Axess Toplu Ulaşım Kampanyası 75.00(-)
+11/07/2026 CHIPPARA TRANSFER:**** **** **** 1234 ⟦150.00⟧
+12/07/2026 ÖRNEK MAĞAZA (300.00 TL) 3/1.taksit 100.00x2
+    `)
+
+    expect(result.rows).toMatchObject([
+      { description: 'GAZ ABONE 998877', kind: 'expense', amount: 13_000 },
+      { kind: 'payment', amount: 50_000 },
+      { kind: 'refund', amount: 7_500 },
+    ])
+    expect(result.ignored).toMatchObject([
+      { reason: 'reward-earned', amount: 7_500 },
+      { reason: 'reward-earned', amount: 15_000 },
+    ])
+    expect(result.skipped).toBe(1)
+  })
+
   it('marks refunds and card payments by kind rather than sign', () => {
     const refund = output.rows.find((r) => r.description.includes('IADE'))
     expect(refund?.kind).toBe('refund')

@@ -1,12 +1,13 @@
 import { detectAdapter } from './banks'
 import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
-import { findColumnLayout, tagRewardColumn } from './columns'
+import { findColumnLayout, tagStatementColumns } from './columns'
+import { hasReadableText, isPdfFile } from './validation'
 
 /**
  * Turns a dropped file into plain text.
  *
  * Escalation ladder, cheapest first — each step only runs when the previous one
- * produced text no adapter recognises:
+ * produced no usable text (document validation happens before transaction parsing):
  *   1. UTF-8 read            (.txt, .csv)
  *   2. PDF.js text layer     (digitally generated statements)
  *   3. EBCDIC decode         (Akbank mainframe PDFs — instant and lossless)
@@ -51,8 +52,11 @@ let pdfjsPromise: Promise<any> | null = null
 async function loadPdfjs(): Promise<any> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
-      const lib = await import('pdfjs-dist/build/pdf.min.mjs' as string)
-      const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url' as string)).default
+      // Native WebViews can lack newer APIs such as Promise.withResolvers.
+      // Both realms need PDF.js's bundled compatibility code: a legacy main
+      // bundle paired with a modern worker still fails during PDF extraction.
+      const lib = await import('pdfjs-dist/legacy/build/pdf.min.mjs' as string)
+      const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url' as string)).default
       lib.GlobalWorkerOptions.workerSrc = workerUrl
       return lib
     })()
@@ -97,9 +101,9 @@ export function groupRows(items: TextGeom[]): TextGeom[][] {
   const heights = items.map((i) => i.h).sort((a, b) => a - b)
   const rowTolerance = Math.max(2, heights[heights.length >> 1] * 0.6)
 
-  const sorted = [...items].sort((a, b) =>
-    Math.abs(a.y - b.y) <= rowTolerance ? a.x - b.x : b.y - a.y,
-  )
+  // Sort baselines and columns separately. A fuzzy pairwise comparator is
+  // non-transitive and may mix two lines when PDF glyphs arrive out of order.
+  const sorted = [...items].sort((a, b) => b.y - a.y || a.x - b.x)
 
   const rows: TextGeom[][] = []
   let row: TextGeom[] = []
@@ -110,12 +114,12 @@ export function groupRows(items: TextGeom[]): TextGeom[][] {
       row.push(item)
       baseline ??= item.y
     } else {
-      rows.push(row)
+      rows.push(row.sort((a, b) => a.x - b.x || b.y - a.y))
       row = [item]
       baseline = item.y
     }
   }
-  if (row.length) rows.push(row)
+  if (row.length) rows.push(row.sort((a, b) => a.x - b.x || b.y - a.y))
 
   return rows
 }
@@ -167,8 +171,8 @@ export function buildLines(items: TextGeom[]): string[] {
 }
 
 /**
- * `buildLines` for a real page: reads the table's column header, and wraps
- * every number in the loyalty column in `⟦…⟧` first (see `columns.ts`).
+ * `buildLines` for a real page, with annotations for the billed and loyalty
+ * columns where the page layout identifies them (see `columns.ts`).
  *
  * `decode` is how to read the page's text — the identity, or the EBCDIC
  * decoder for Akbank's mainframe PDFs. It is used only to *recognise* headers
@@ -177,7 +181,7 @@ export function buildLines(items: TextGeom[]): string[] {
 export function buildPageLines(items: TextGeom[], decode: (text: string) => string = (t) => t): string[] {
   const rows = groupRows(items.map((item) => ({ ...item })))
   const layout = findColumnLayout(rows, decode)
-  if (layout) tagRewardColumn(rows, layout, decode)
+  if (layout) tagStatementColumns(rows, layout, decode)
 
   const lines: string[] = []
   for (const row of rows) {
@@ -222,27 +226,58 @@ export function pdfPagesToText(pages: readonly TextGeom[][]): string {
   return out.join('\n')
 }
 
+interface PdfTextPage {
+  getTextContent(): Promise<{ items: unknown[] }>
+  streamTextContent(): ReadableStream<{ items: unknown[] }>
+}
+
+/** PDF.js uses stream async iteration internally; older native WebViews need its reader API. */
+export async function readPdfTextItems(page: PdfTextPage): Promise<unknown[]> {
+  if (typeof ReadableStream !== 'undefined' &&
+      typeof (ReadableStream.prototype as unknown as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
+    return (await page.getTextContent()).items
+  }
+  const reader = page.streamTextContent().getReader()
+  const items: unknown[] = []
+  let complete = false
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) { complete = true; return items }
+      items.push(...value.items)
+    }
+  } finally {
+    if (!complete) {
+      // An errored stream may also reject cancellation. Preserve the read error.
+      try { await reader.cancel() } catch { /* The reader still must release its lock. */ }
+    }
+    reader.releaseLock()
+  }
+}
+
 async function extractPdfPages(file: File, onProgress?: ProgressFn): Promise<TextGeom[][]> {
   const pdfjs = await loadPdfjs()
   const data = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise
 
-  const pages: TextGeom[][] = []
-  for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
-    onProgress?.(`PDF metin katmanı okunuyor · sayfa ${pageNo}/${doc.numPages}`)
-    const page = await doc.getPage(pageNo)
-    const content = await page.getTextContent()
-    pages.push(toTextGeom(content.items))
+  try {
+    const pages: TextGeom[][] = []
+    for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
+      onProgress?.(`PDF metin katmanı okunuyor · sayfa ${pageNo}/${doc.numPages}`)
+      const page = await doc.getPage(pageNo)
+      pages.push(toTextGeom(await readPdfTextItems(page)))
+    }
+    return pages
+  } finally {
+    await doc.destroy()
   }
-
-  await doc.destroy()
-  return pages
 }
 
 /**
  * Steps 2 and 3 of the ladder: the text layer as it stands, then — when no
- * adapter recognises it — decoded as EBCDIC. Null means neither worked and the
- * caller should reach for OCR.
+ * adapter recognises it — decoded as EBCDIC. Readable unrelated documents also
+ * return their text so validation can reject them without running OCR. Null
+ * means neither worked and the caller should reach for OCR.
  */
 export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): ExtractResult | null {
   if (isRecognised(layerText)) return { text: layerText, engine: 'pdf-text' }
@@ -252,8 +287,10 @@ export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): 
   if (looksLikeEbcdic(layerText)) {
     onProgress?.('Ana bilgisayar kodlaması çözülüyor…')
     const decoded = decodeEbcdic(layerText)
-    if (isRecognised(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
+    if (isRecognised(decoded) || hasReadableText(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
   }
+
+  if (hasReadableText(layerText)) return { text: layerText, engine: 'pdf-text' }
 
   return null
 }
@@ -321,7 +358,7 @@ async function ocrInBrowser(file: File, onProgress?: ProgressFn): Promise<string
 
 export async function extractText(file: File, options: ExtractOptions): Promise<ExtractResult> {
   const { onProgress } = options
-  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+  const isPdf = isPdfFile(file)
 
   if (!isPdf) {
     onProgress?.(`${file.name} okunuyor…`)
@@ -334,7 +371,7 @@ export async function extractText(file: File, options: ExtractOptions): Promise<
 
   if (options.useLocalOcr) {
     const serviceText = await ocrViaService(file, options.ocrEndpoint, onProgress)
-    if (serviceText && isRecognised(serviceText)) return { text: serviceText, engine: 'ocr-service' }
+    if (serviceText && (isRecognised(serviceText) || hasReadableText(serviceText))) return { text: serviceText, engine: 'ocr-service' }
   }
 
   const browserText = await ocrInBrowser(file, onProgress)

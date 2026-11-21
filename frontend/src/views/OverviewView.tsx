@@ -1,13 +1,12 @@
 import { useState } from 'react'
-import { ArrowDownLeft, ArrowUpRight, ArrowRight, Banknote, Check, ChevronDown, CreditCard, Plus, ShieldCheck, Upload, Wallet, X } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ArrowRight, Check, ChevronDown, CreditCard, Plus, ShieldCheck, Upload, Wallet, X } from 'lucide-react'
 import { useSheets } from '../app/sheets'
-import { categoryLabel } from '../domain/categories'
 import { cardDisplayName } from '../domain/cards'
-import { effectiveDate } from '../domain/types'
 import { money2 } from '../core/money'
-import { dayLabel } from '../core/date'
 import { SpendingPulse } from '../ui/SpendingPulse'
 import { MoneyValue } from '../ui/MoneyValue'
+import { TransactionItem } from '../ui/TransactionItem'
+import { useTransactionDelete } from '../ui/useTransactionDelete'
 import { BudgetRibbon } from '../ui/BudgetRibbon'
 import { Modal } from '../ui/Modal'
 import { FindingsSheet } from './FindingsSheet'
@@ -16,6 +15,7 @@ import type { ViewId } from '../app/navigation'
 
 export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
   const sheets = useSheets()
+  const remove = useTransactionDelete()
   const { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, period, recent, unknown, mismatches, upcoming, methods } = useOverviewModel()
   const [detail, setDetail] = useState<'categories' | 'sources' | 'findings' | 'demo-records' | null>(null)
   const startReal = () => { setDemo(false); setDetail(null); sheets.openEntry() }
@@ -31,7 +31,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
     <div className="mizan-dashboard">
       <header className="dashboard-title">
         <div><h1>Ayın dengesi.</h1><p>{demo ? 'Örnek bir ay. Mizan’ı deneyimle.' : 'Paranın nereye gittiğini bil. Önünü daha net gör.'}</p></div>
-        <button className="quiet-button" onClick={sheets.openImport}><Upload size={16} /> Ekstre ekle</button>
+        <div className="dashboard-header-actions"><button className="quiet-button" onClick={sheets.openCards}><CreditCard size={16} /> Kartlarım</button><button className="quiet-button" onClick={() => sheets.openImport()}><Upload size={16} /> Ekstre ekle</button></div>
       </header>
       {demo && <div className="demo-banner" role="status">
         <p><strong>Örnek bütçeyi keşfediyorsun.</strong> Bu veriler hesabına kaydedilmez.</p>
@@ -53,7 +53,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         <BudgetRibbon limit={limit} spend={spend} scoped={scopedBudget} onEdit={sheets.openBudgets} />
       </div>
       <div className="mizan-work-grid">
-        <section className="mizan-panel mizan-chart-panel"><SpendingPulse daily={rows.some(tx => tx.kind === 'expense' || tx.kind === 'refund') ? current.daily : []} /><div className="pulse-footer"><span>Yalnızca kaydedilen hareketler.</span><button className="text-button" onClick={() => demo ? setDetail('categories') : onNavigate('spending')}>Analizi aç <ArrowUpRight size={15} /></button></div></section>
+        <section className="mizan-panel mizan-chart-panel"><SpendingPulse daily={rows.some(tx => tx.kind === 'expense' || tx.kind === 'refund') ? current.daily : []} /><div className="pulse-footer"><span>Yalnızca kaydedilen hareketler.</span><button className="text-button" onClick={() => demo ? setDetail('categories') : onNavigate('analysis')}>Analizi aç <ArrowUpRight size={15} /></button></div></section>
         <section className="mizan-panel mizan-categories">
           <div className="mizan-panel-heading"><h2>Harcama dağılımı</h2><button className="text-button" onClick={() => setDetail('categories')} aria-label="Tüm harcama kategorilerini gör"><ArrowUpRight size={19} /></button></div>
           {current.categories.length ? <>
@@ -63,11 +63,7 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         </section>
         <section className="mizan-panel mizan-recent">
           <div className="mizan-panel-heading"><h2>Son hareketler</h2><button className="text-button" onClick={showTransactions}>Tümünü gör <ArrowRight size={15} /></button></div>
-          {recent.length ? recent.map(tx => <button className="compact-transaction" key={tx.id} onClick={showTransactions}>
-            <span className={`compact-tx-icon ${tx.kind === 'income' || tx.kind === 'refund' ? 'income' : ''}`}>{tx.kind === 'income' || tx.kind === 'refund' ? <ArrowDownLeft size={18} /> : tx.source === 'manual' ? <Banknote size={18} /> : <CreditCard size={18} />}</span>
-            <span><strong>{tx.description}</strong><small>{dayLabel(effectiveDate(tx))} · {tx.kind === 'income' ? 'Gelir' : categoryLabel(tx.category)}</small></span>
-            <strong className={`num ${tx.kind === 'income' || tx.kind === 'refund' ? 'text-positive' : ''}`}>{tx.kind === 'income' || tx.kind === 'refund' ? '+' : '−'}{money2(tx.amount)}</strong>
-          </button>) : <div className="mizan-empty-records"><span className="empty-record-icon"><Wallet size={24} strokeWidth={1.5} /></span><div><h3>Küçük bir kayıt, net bir başlangıç.</h3><p>Kahve, market veya kira. İlk hareketini ekle.</p></div><button className="mizan-icon-button" onClick={startReal} aria-label="İlk kaydını ekle"><Plus size={21} /></button></div>}
+          {recent.length ? <ul>{recent.map(tx => <li key={tx.id}><TransactionItem transaction={tx} onOpen={showTransactions} onDelete={demo ? undefined : () => remove(tx)} /></li>)}</ul> : <div className="mizan-empty-records"><span className="empty-record-icon"><Wallet size={24} strokeWidth={1.5} /></span><div><h3>Küçük bir kayıt, net bir başlangıç.</h3><p>Kahve, market veya kira. İlk hareketini ekle.</p></div><button className="mizan-icon-button" onClick={startReal} aria-label="İlk kaydını ekle"><Plus size={21} /></button></div>}
         </section>
         <section className="mizan-panel mizan-cards">
           <div className="mizan-panel-heading"><h2>Kart takvimin</h2><button className="text-button" onClick={sheets.openCards}>{upcoming.length ? 'Yönet' : 'Kart ekle'} <Plus size={15} /></button></div>

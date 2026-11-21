@@ -266,6 +266,24 @@
   .recharts-surface:focus {
     outline: none;
   }
+
+}
+
+/* Keep vendor selectors outside Tailwind layers: Recharts creates them at runtime.
+   SVG outlines use bounding boxes; trace the actual pie slice instead. */
+.recharts-pie:focus,
+.recharts-pie-sector:focus,
+.recharts-sector:focus {
+  outline: none;
+}
+
+.recharts-pie:focus-visible > .recharts-pie-sector:first-of-type .recharts-sector,
+.recharts-pie-sector:focus > .recharts-sector,
+.recharts-pie-sector:focus-within .recharts-sector,
+.recharts-sector:focus {
+  stroke: var(--accent);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 @layer utilities {

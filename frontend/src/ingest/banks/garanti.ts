@@ -1,14 +1,13 @@
 import { parseTrAmount, type Money } from '../../core/money'
-import { addDays, parseTurkishLongDate, type DayKey } from '../../core/date'
+import { addDays, parseSlashDate, parseTurkishLongDate, type DayKey } from '../../core/date'
 import { fold } from '../../core/text'
 import type { CategoryId } from '../../domain/categories'
-import { splitRewardTags } from '../columns'
+import { REWARD_OPEN, splitBilledTag, splitRewardTags, stripBilledTag } from '../columns'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
 import { LOYALTY_SUFFIX_PATTERN, PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, resolvePeriodStart } from './types'
 import {
   emptySummary, type IgnoredReason, type IgnoredRow, type Installment, type StatementSummary, type TxKind,
 } from '../../domain/types'
-import { REWARD_OPEN } from '../columns'
 
 /**
  * Garanti BBVA / Bonus statement lines, as they arrive from the PDF text layer:
@@ -24,8 +23,8 @@ import { REWARD_OPEN } from '../columns'
  *
  * Which number is which. The statement has two numeric columns, "Bonus (TL)"
  * and "Tutar (TL)", and a row can fill either or both. From a PDF the column
- * reader (`ingest/columns.ts`) wraps the bonus figure in `⟦…⟧`, so the rest is
- * the billed amount — no guessing. A row left with *only* a bonus figure is a
+ * reader (`ingest/columns.ts`) marks the bonus figure and the billed amount
+ * separately. A row left with *only* a bonus figure is a
  * loyalty entry ("OTOMATİK FATURA BONUS 3.000,00" is 3.000 bonus points, not a
  * ₺3.000 purchase). Text with no column information (a portal `.txt` export)
  * falls back to the old rule: when two numbers close the line, the first is
@@ -44,7 +43,7 @@ import { REWARD_OPEN } from '../columns'
  *    previous section's category bleeds onto rows that were never in it.
  */
 
-const LINE_RE = /(?:^|\s)(\d{2}\s+[A-Za-zğüşıöçĞÜŞİÖÇ]+\s+\d{4})\s+(.+)$/
+const LINE_RE = /^(\d{1,2}\s+[A-Za-zğüşıöçĞÜŞİÖÇ]+\s+\d{4})(?:\s+(.*))?$/
 const NUMBER_RE = /^\d{1,3}(?:\.\d{3})*,\d{2}[+-]?$|^\d+,\d{2}[+-]?$/
 const INSTALLMENT_RE = /(?:TAKSIT|TAKSİT)?\s*(?:^|\s)(\d{1,2})\/(\d{1,2})(?:\s*\.?\s*taksit)?(?=\s|$)/i
 /** "Google makromusic for 899,99 TL 899,99" — the price is echoed twice. */
@@ -146,10 +145,7 @@ function detect(text: string): number {
 }
 
 function parseHeaderDate(raw: string): DayKey | null {
-  const long = parseTurkishLongDate(raw)
-  if (long) return long
-  const m = /^(\d{2})[./](\d{2})[./](\d{4})$/.exec(raw.trim())
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : null
+  return parseTurkishLongDate(raw) ?? parseSlashDate(raw)
 }
 
 /**
@@ -248,13 +244,17 @@ function parse(text: string): AdapterOutput {
       continue
     }
 
-    const body = match[2].trim()
+    const body = match[2]?.trim() ?? ''
+    const billed = splitBilledTag(body)
     const columnAware = rewards.length > 0
     let description = ''
     let amountToken = ''
 
-    const echoed = ECHOED_PRICE_RE.exec(body)
-    if (echoed) {
+    const echoed = ECHOED_PRICE_RE.exec(billed ? `${billed.before} ${billed.token}` : body)
+    if (billed && NUMBER_RE.test(billed.token)) {
+      description = echoed?.[1].trim() ?? billed.before
+      amountToken = billed.token
+    } else if (echoed && NUMBER_RE.test(echoed[2])) {
       description = echoed[1].trim()
       amountToken = echoed[2]
     } else {
@@ -269,7 +269,7 @@ function parse(text: string): AdapterOutput {
       } else if (parts.length >= 2 && NUMBER_RE.test(last)) {
         amountToken = last
         description = parts.slice(0, -1).join(' ')
-      } else if (columnAware && parts.length >= 1 && !NUMBER_RE.test(last)) {
+      } else if (columnAware && body && !NUMBER_RE.test(last)) {
         // Nothing but a bonus figure on the row: a loyalty entry, not a charge.
         const reason: IgnoredReason = rewards[0].endsWith('-') ? 'reward-spent' : 'reward-earned'
         ignored.push({
@@ -281,8 +281,7 @@ function parse(text: string): AdapterOutput {
         })
         continue
       } else {
-        // Prose that happens to contain a date, e.g. the "next statement date"
-        // paragraph. Not a transaction and not a parse failure.
+        skipped++
         continue
       }
     }
@@ -309,7 +308,7 @@ function parse(text: string): AdapterOutput {
 
     const { value: amount, credit } = readAmount(amountToken)
 
-    if (REWARD_ONLY_PATTERNS.test(description) || (!trustColumns && LOYALTY_SUFFIX_PATTERN.test(description))) {
+    if (!billed && (REWARD_ONLY_PATTERNS.test(description) || (!trustColumns && LOYALTY_SUFFIX_PATTERN.test(description)))) {
       ignored.push({
         date,
         description,
@@ -332,7 +331,7 @@ function parse(text: string): AdapterOutput {
     const reward = rewards.length && !rewards[0].endsWith('-') ? Math.abs(parseTrAmount(rewards[0])) : 0
 
     rows.push({
-      date, description, amount, kind, installment, raw: line, categoryHint: hint,
+      date, description, amount, kind, installment, raw: stripBilledTag(line), categoryHint: hint,
       ...(reward > 0 ? { reward } : {}),
     })
   }

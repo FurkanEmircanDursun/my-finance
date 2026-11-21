@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { useStore } from '../store/AppStore'
 import { money } from '../core/money'
 import { monthLabel, monthOf, todayKey, yearOf } from '../core/date'
-import { CATEGORIES, categoryLabel, type CategoryId } from '../domain/categories'
+import { CATEGORIES, type CategoryId } from '../domain/categories'
 import { buildLedgerSeries, buildMonthLedgers, monthsOfYear } from '../domain/ledger'
 import { entryAmount } from '../domain/entry'
 import type { MonthKey } from '../core/date'
+import type { Transaction } from '../domain/types'
+import { TransactionItem } from '../ui/TransactionItem'
+import { useTransactionDelete } from '../ui/useTransactionDelete'
+import { useFeedback } from '../ui/Feedback'
 
 /**
  * Salary, rent, cash — the money a card statement cannot see.
@@ -26,14 +30,15 @@ export function IncomeSheet({ open, onClose }: { open: boolean; onClose: () => v
   const { state } = useStore()
   const today = todayKey()
   const thisMonth = monthOf(today)
-  const [year, setYear] = useState(yearOf(today))
-  const [editing, setEditing] = useState<MonthKey | null>(thisMonth)
+  const selectedMonth = state.filters.month === 'all' ? thisMonth : state.filters.month
+  const [year, setYear] = useState(() => yearOf(selectedMonth))
+  const [editing, setEditing] = useState<MonthKey | null>(selectedMonth)
 
   const years = useMemo(() => {
-    const set = new Set<number>([yearOf(today)])
+    const set = new Set<number>([yearOf(today), yearOf(selectedMonth)])
     for (const tx of state.transactions) set.add(yearOf(tx.date))
     return [...set].sort((a, b) => b - a)
-  }, [state.transactions, today])
+  }, [state.transactions, today, selectedMonth])
 
   const months = useMemo(() => monthsOfYear(year, thisMonth), [year, thisMonth])
   const ledgers = useMemo(
@@ -55,7 +60,7 @@ export function IncomeSheet({ open, onClose }: { open: boolean; onClose: () => v
         <div className="mb-4">
           <Segmented
             value={String(year)}
-            onChange={(next) => setYear(Number(next))}
+            onChange={(next) => { setYear(Number(next)); setEditing(null) }}
             options={years.map((y) => ({ value: String(y), label: String(y) }))}
           />
         </div>
@@ -127,9 +132,11 @@ function MonthEntries({
 }: {
   month: MonthKey
   laterMonths: MonthKey[]
-  entries: Array<{ id: string; description: string; amount: number; kind: string; category: CategoryId }>
+  entries: Transaction[]
 }) {
   const { dispatch } = useStore()
+  const remove = useTransactionDelete()
+  const feedback = useFeedback()
   const [kind, setKind] = useState<'income' | 'expense'>('income')
   const [label, setLabel] = useState('')
   const [amount, setAmount] = useState('')
@@ -151,10 +158,9 @@ function MonthEntries({
       kind,
       category: kind === 'income' ? ('other' as CategoryId) : category,
     }
-    dispatch({
-      type: 'addManualBatch',
-      transactions: buildLedgerSeries(draft, repeat ? [month, ...laterMonths] : [month]),
-    })
+    const transactions = buildLedgerSeries(draft, repeat ? [month, ...laterMonths] : [month])
+    dispatch({ type: 'addManualBatch', transactions })
+    feedback({ message: `${transactions.length} kayıt eklendi.`, undo: () => dispatch({ type: 'deleteTransactions', ids: transactions.map(tx => tx.id) }) })
     setLabel('')
     setAmount('')
     setCategory('other')
@@ -166,26 +172,8 @@ function MonthEntries({
       {entries.length > 0 && (
         <ul className="space-y-1">
           {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center gap-2.5 rounded-[var(--radius)] bg-sunken px-3 py-2">
-              <span className="min-w-0 flex-1 truncate text-body text-ink">{entry.description}</span>
-              {entry.kind !== 'income' && <Badge>{categoryLabel(entry.category)}</Badge>}
-              <span
-                className={clsx(
-                  'num text-body font-semibold',
-                  entry.kind === 'income' ? 'text-positive' : 'text-ink',
-                )}
-              >
-                {entry.kind === 'income' ? '+' : '−'}
-                {money(entry.amount)}
-              </span>
-              <button
-                type="button"
-                aria-label={`${entry.description} kaydını sil`}
-                onClick={() => dispatch({ type: 'deleteTransactions', ids: [entry.id] })}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-faint hover:bg-hover hover:text-negative"
-              >
-                <Trash2 size={14} />
-              </button>
+            <li key={entry.id}>
+              <TransactionItem transaction={entry} onDelete={() => remove(entry)} />
             </li>
           ))}
         </ul>

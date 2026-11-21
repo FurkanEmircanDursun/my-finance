@@ -46,7 +46,7 @@ export function SpendingView() {
   )
 
   if (!meta.transactionCount) {
-    return <div>{heading}<Empty title="Bu dönemde henüz işlem yok" description={state.transactions.length ? 'Başka bir ay seçebilir veya bu döneme yeni bir kayıt ekleyebilirsin.' : 'İlk giderini ekle ya da Akbank veya Garanti ekstreni yükle. Harcamaların burada kategorilere ayrılır.'} action={<div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={openEntry}><Plus size={16} /> Gider ekle</Button><Button onClick={openImport}><Upload size={16} /> Ekstre yükle</Button></div>} /></div>
+    return <div>{heading}<Empty title="Bu dönemde henüz işlem yok" description={state.transactions.length ? 'Başka bir ay seçebilir veya bu döneme yeni bir kayıt ekleyebilirsin.' : 'İlk giderini ekle ya da Akbank veya Garanti ekstreni yükle. Harcamaların burada kategorilere ayrılır.'} action={<div className="flex flex-wrap justify-center gap-2"><Button variant="primary" onClick={openEntry}><Plus size={16} /> Gider ekle</Button><Button onClick={() => openImport()}><Upload size={16} /> Ekstre yükle</Button></div>} /></div>
   }
 
   return (

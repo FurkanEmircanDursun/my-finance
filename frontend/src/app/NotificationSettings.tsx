@@ -8,6 +8,7 @@ import {
 import { useStore } from '../store/AppStore'
 import { Button, Field } from '../ui/primitives'
 import { getPushStatus, PUSH_UPDATED } from '../platform/push'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 export function NotificationSettings() {
   const { state, dispatch } = useStore()
@@ -55,7 +56,7 @@ export function NotificationSettings() {
       await sendTestReminder()
       setMessage('Test bildirimi gönderildi. Telefonunun bildirim panelini kontrol et.')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Test bildirimi gönderilemedi.')
+      setError(firebaseErrorMessage(cause, 'notification'))
     } finally { setBusy(false) }
   }
 
@@ -90,12 +91,16 @@ export function NotificationSettings() {
             {active && !cloudActive && <Button disabled={busy} onClick={() => { void test() }}>Test bildirimi gönder</Button>}
           </div>
           {active && (
-            <Field label="Hatırlatma saati" hint={cloudActive ? 'Türkiye saatine göre. Ağ ve cihaz kısıtlamaları teslimi geciktirebilir.' : 'Telefonunun yerel saatine göre. Pil tasarrufu teslimi geciktirebilir.'}>
+            <Field label="Hatırlatma saati" hint={cloudActive ? 'Türkiye saatine göre. Gün sonu önerimiz 20:00; ağ ve cihaz kısıtlamaları teslimi geciktirebilir.' : 'Telefonunun yerel saatine göre. Gün sonu önerimiz 20:00; pil tasarrufu teslimi geciktirebilir.'}>
               <select className="finance-select" value={preferences.hour} onChange={(event) => {
                 dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, hour: Number(event.target.value) } } })
               }}>
                 {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>)}
               </select>
+              <Button size="sm" className="mt-2" disabled={preferences.hour === 20} onClick={() => {
+                dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, hour: 20 } } })
+                setMessage('Hatırlatma saatin gün sonu 20:00 olarak ayarlandı.')
+              }}>Gün sonu · 20:00</Button>
             </Field>
           )}
           {active && !state.profile.cards?.length && <p className="text-label text-muted">İlk kartını eklediğinde tarihleri otomatik planlayacağız.</p>}

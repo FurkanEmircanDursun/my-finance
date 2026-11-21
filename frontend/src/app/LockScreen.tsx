@@ -13,6 +13,7 @@ export function LockScreen({
   salt,
   onUnlock,
   onForgotPin,
+  resetError,
 }: {
   hash: string
   salt: string
@@ -25,7 +26,8 @@ export function LockScreen({
    * against that; it would only add a way to lock someone out of their own
    * finances over four forgotten digits.
    */
-  onForgotPin: () => void
+  onForgotPin: () => void | Promise<void>
+  resetError?: string | null
 }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState(false)
@@ -74,6 +76,8 @@ export function LockScreen({
           {error ? 'PIN yanlış, tekrar deneyin' : 'Devam etmek için PIN girin'}
         </p>
       </div>
+
+      {resetError && <p className="max-w-xs text-center text-label text-negative" role="alert">{resetError}</p>}
 
       <div className={`flex gap-3 ${error ? 'animate-pulse' : ''}`}>
         {Array.from({ length: PIN_LENGTH }).map((_, i) => (
@@ -132,7 +136,7 @@ export function LockScreen({
           <div className="flex justify-center gap-2">
             <button
               type="button"
-              onClick={onForgotPin}
+              onClick={() => { void Promise.resolve(onForgotPin()).catch(() => { /* The store preserves the lock and exposes the recovery error. */ }) }}
               className="rounded border border-negative bg-negative-soft px-2.5 py-1.5 text-label font-semibold text-negative"
             >
               Verileri sil, kilidi kaldır

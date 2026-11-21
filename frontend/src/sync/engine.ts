@@ -1,6 +1,6 @@
 import {
   acknowledge, applyChange, applyRemote, diffLocal, docIdOf, emptyChange, isEmptyChange, keyOf,
-  pendingWrites, KINDS,
+  pendingWrites, KINDS, isDefaultProfile,
   type Kind, type Ledger, type RemoteChange, type RemoteDoc, type Snapshot, type Write,
 } from './model'
 import type { CommitOp, Purge, RemoteSnapshot, SyncTransport } from './transport'
@@ -8,6 +8,7 @@ import type { SyncStorage } from './storage'
 import { migratePersisted } from '../store/migrate'
 import { defaultProfile, defaultSettings } from '../store/defaults'
 import { initialSyncState, type SyncState } from './status'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 export { initialSyncState, type SyncState, type SyncStatus } from './status'
 
@@ -91,6 +92,16 @@ export class SyncEngine {
     }
   }
 
+  /** Detach now, then finish local bookkeeping without waiting on network commits. */
+  async stopAndDrain(checkpoint = false): Promise<void> {
+    this.stop()
+    await this.chain
+    if (checkpoint && this.firstDone) {
+      this.ledger = diffLocal(this.ledger, this.o.getSnapshot(), this.clock()).ledger
+      await this.save()
+    }
+  }
+
   getState(): SyncState {
     return this.state
   }
@@ -159,7 +170,7 @@ export class SyncEngine {
   // ── The queue ───────────────────────────────────────────────────────────────
 
   private enqueue(task: () => Promise<void>): void {
-    this.chain = this.chain.then(task).catch((error) => this.fail(error))
+    this.chain = this.chain.then(() => this.stopped ? undefined : task()).catch((error) => this.fail(error))
   }
 
   private setState(patch: Partial<SyncState>): void {
@@ -186,12 +197,20 @@ export class SyncEngine {
 
     if (first) {
       const owner = await this.o.storage.getOwner()
+      if (this.stopped) return
       // A device that held one account's money and is now signed in to another's
       // must not quietly pour one into the other.
-      if (owner && owner !== this.o.uid && this.o.hasLocalData() && Object.keys(this.ledger).length === 0) {
+      if (owner && owner !== this.o.uid && this.o.hasLocalData()) {
         this.held = snapshot
         this.setState({ status: 'decision' })
         return
+      }
+      // An empty device with an old, fully acknowledged ledger is not an
+      // instruction to delete an account. This also recovers legacy local resets.
+      if (!this.o.hasLocalData()) {
+        // Keep only deletions that were explicitly stamped before this session.
+        // A stale pending LIVE write is not proof that an absent row was deleted.
+        this.ledger = Object.fromEntries(Object.entries(this.ledger).filter(([, entry]) => entry.p && entry.d))
       }
     }
 
@@ -199,6 +218,7 @@ export class SyncEngine {
   }
 
   private async reconcile(remote: RemoteSnapshot, first: boolean, base: Snapshot | null): Promise<void> {
+    if (this.stopped) return
     const now = this.clock()
     let local = base ?? this.o.getSnapshot()
 
@@ -231,9 +251,11 @@ export class SyncEngine {
 
     const writes = mergeWrites([...diff.writes, ...applied.writes, ...pendingWrites(this.ledger, local)])
     await this.save()
+    if (this.stopped) return
 
     this.firstDone = true
     if (first) await this.o.storage.setOwner(this.o.uid)
+    if (this.stopped) return
 
     this.send(writes, purges)
 
@@ -250,11 +272,13 @@ export class SyncEngine {
     const diff = diffLocal(this.ledger, local, this.clock())
     this.ledger = diff.ledger
     await this.save()
+    if (this.stopped) return
     this.send(mergeWrites([...diff.writes, ...pendingWrites(this.ledger, local)]), [])
   }
 
   /** Sends without waiting: the acknowledgement comes back through the queue. */
   private send(writes: Write[], purges: Purge[]): void {
+    if (this.stopped) return
     const fresh = writes.filter((w) => !this.inflight.has(inflightKey(w)))
     if (fresh.length === 0 && purges.length === 0) return
 
@@ -269,7 +293,11 @@ export class SyncEngine {
 
     void (async () => {
       try {
-        for (const batch of batches) await this.o.transport.commit(this.o.uid, batch)
+        for (const batch of batches) {
+          if (this.stopped) return
+          await this.o.transport.commit(this.o.uid, batch)
+        }
+        if (this.stopped) return
         this.enqueue(async () => {
           for (const w of fresh) this.inflight.delete(inflightKey(w))
           this.ledger = acknowledge(this.ledger, fresh)
@@ -294,7 +322,7 @@ export class SyncEngine {
 
   private fail(error: unknown): void {
     if (this.stopped) return
-    const message = error instanceof Error ? error.message : 'Senkronizasyon başarısız.'
+    const message = firebaseErrorMessage(error, 'sync')
     this.setState({ status: this.online ? 'error' : 'offline', error: message, pending: this.pendingCount() })
 
     if (this.retryTimer) clearTimeout(this.retryTimer)
@@ -368,9 +396,7 @@ function adoptLegacy(docs: RemoteDoc[], local: Snapshot): { change: RemoteChange
 
   // A profile the account had, on a device that has none of its own.
   const profile = docs.find((d) => d.kind === 'profile' && !d.deleted)
-  const untouched =
-    local.profile.monthlyIncome === 0 && local.profile.goal === null && local.profile.budgets.length === 0 &&
-    (local.profile.cards?.length ?? 0) === 0 && (local.profile.archivedCards?.length ?? 0) === 0
+  const untouched = isDefaultProfile(local.profile)
   if (profile?.data && untouched) change.profile = profile.data as Snapshot['profile']
 
   const purges: Purge[] = docs

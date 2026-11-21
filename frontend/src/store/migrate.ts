@@ -1,3 +1,5 @@
+import { normalizeAssetHoldings } from '../domain/assets'
+import { normalizeAssetValuations } from '../domain/assetsHistory'
 import { normalizeMerchant } from '../core/text'
 import { classify } from '../ingest/categorize'
 import { idFor, identityKey } from '../ingest/identity'
@@ -133,7 +135,7 @@ export function migratePersisted(stored: unknown): MigrationResult | null {
   const version = typeof loose.version === 'number' ? loose.version : 0
 
   // Versions this build has never heard of are not something to guess at.
-  if (version < 2) return null
+  if (!Number.isInteger(version) || version < 2 || version > STATE_VERSION) return null
 
   const notes: string[] = []
   let transactions = loose.transactions ?? []
@@ -161,7 +163,7 @@ export function migratePersisted(stored: unknown): MigrationResult | null {
       transactions,
       statements: loose.statements ?? [],
       rules,
-      profile: { ...loose.profile, cards: sanitizeCards(loose.profile?.cards), archivedCards: sanitizeCards(loose.profile?.archivedCards) } as Profile,
+      profile: { ...loose.profile, assets: normalizeAssetHoldings(loose.profile?.assets), assetValuations: normalizeAssetValuations(loose.profile?.assetValuations), cards: sanitizeCards(loose.profile?.cards), archivedCards: sanitizeCards(loose.profile?.archivedCards) } as Profile,
       settings: loose.settings as Settings,
     },
   }

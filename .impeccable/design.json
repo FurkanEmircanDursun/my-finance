@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-14T01:40:33+03:00",
+  "generatedAt": "2026-11-14T15:17:36.4139681+03:00",
   "title": "Design System: Mizan",
   "extensions": {
     "source": "DESIGN.md",
@@ -933,7 +933,7 @@
       "kind": "nav",
       "refersTo": "navigation-active",
       "description": "Ink rail and explicit active location.",
-      "html": "<nav class=\"ds-nav\" aria-label=\"Ana gezinme\"><button aria-current=\"page\">Özet<span></span></button><button>Harcamalar</button><button>Gelecek</button></nav>",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Ana gezinme\"><button aria-current=\"page\">Özet<span></span></button><button>Analiz</button><button>Varlıklarım</button><button>Gelecek</button></nav>",
       "css": ".ds-nav{display:grid;gap:7px;background:var(--rail,#202335);padding:16px;border-radius:12px;font-family:'DM Sans Variable',system-ui,sans-serif}.ds-nav button{display:flex;align-items:center;min-height:45px;padding:0 13px;border:0;border-radius:9px;background:transparent;color:#c5c6dc;font:450 13px/1.5 'DM Sans Variable',system-ui,sans-serif;cursor:pointer}.ds-nav button:hover{background:#2c2f45;color:#fff}.ds-nav button[aria-current=page]{background:#39354f;color:#eee8ff;font-weight:550}.ds-nav button span{width:5px;height:5px;border-radius:50%;background:#b9aaff;margin-left:auto}.ds-nav button:focus-visible{outline:2px solid #b9aaff;outline-offset:4px}@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}"
     },
     {

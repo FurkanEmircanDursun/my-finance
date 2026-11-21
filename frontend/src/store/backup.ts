@@ -1,3 +1,5 @@
+import { normalizeAssetHoldings } from '../domain/assets'
+import { mergeAssetValuations } from '../domain/assetsHistory'
 import { monthLabel, monthOf, type DayKey, type MonthKey } from '../core/date'
 import { displayMerchant } from '../core/text'
 import type { Money } from '../core/money'
@@ -327,6 +329,7 @@ export function backupFileName(period: MonthKey | 'all', today: DayKey): string 
 export type RestoreMode = 'merge' | 'replace'
 
 export interface BackupPreview {
+  assets: number
   transactions: number
   statements: number
   rules: number
@@ -458,6 +461,7 @@ export function parseBackup(text: string): BackupParseResult {
       data,
       notes: migrated.notes,
       preview: {
+        assets: normalizeAssetHoldings(data.profile.assets).length,
         transactions: data.transactions.length,
         statements: data.statements.length,
         rules: data.rules.length,
@@ -473,7 +477,7 @@ export function parseBackup(text: string): BackupParseResult {
 }
 
 const hasProfile = (p: Profile) =>
-  p.monthlyIncome > 0 || p.spendingLimit > 0 || p.currentBalance > 0 || p.goal !== null || p.budgets.length > 0
+  p.monthlyIncome > 0 || p.spendingLimit > 0 || p.currentBalance > 0 || p.goal !== null || p.budgets.length > 0 || (p.assets?.length ?? 0) > 0 || (p.assetValuations?.length ?? 0) > 0
 
 export interface RestoreResult {
   transactions: Transaction[]
@@ -537,13 +541,18 @@ export function applyBackup(
   const archivedById = new Map(sanitizeCards(backup.profile.archivedCards).map((card) => [card.id, card]))
   for (const card of sanitizeCards(current.profile.archivedCards)) archivedById.set(card.id, card)
   const archivedCards = [...archivedById.values()].filter((card) => !activeIds.has(card.id))
+  // Keep current holdings on ID collisions; merge never rolls back an edit.
+  const assetsById = new Map(normalizeAssetHoldings(backup.profile.assets).map(asset => [asset.id, asset]))
+  for (const asset of normalizeAssetHoldings(current.profile.assets)) assetsById.set(asset.id, asset)
+  const assets = [...assetsById.values()]
+  const assetValuations = mergeAssetValuations(backup.profile.assetValuations, current.profile.assetValuations)
 
   return {
     transactions: [...current.transactions, ...newTx].sort(sortDesc),
     statements: [...current.statements, ...newSt],
     rules: [...current.rules, ...newRules],
     // A profile already filled in on this device is not overwritten by a file's.
-    profile: { ...(hasProfile(current.profile) ? current.profile : { ...defaultProfile, ...backup.profile }), cards, archivedCards },
+    profile: { ...(hasProfile(current.profile) ? current.profile : { ...defaultProfile, ...backup.profile }), cards, archivedCards, assets, assetValuations },
     settings: current.settings,
     added: { transactions: newTx.length, statements: newSt.length, rules: newRules.length },
   }

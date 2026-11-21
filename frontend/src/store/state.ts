@@ -60,7 +60,7 @@ const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a
 
 export type Action =
   | { type: 'hydrate'; payload: Partial<AppState> }
-  | { type: 'import'; transactions: Transaction[]; statements: Statement[]; outcomes: ImportOutcome[] }
+  | { type: 'import'; transactions: Transaction[]; statements: Statement[]; outcomes: ImportOutcome[]; refreshedStatementIds?: string[] }
   | { type: 'setCategory'; transactionIds: string[]; category: CategoryId; learn: boolean }
   | { type: 'addManual'; transaction: Transaction }
   | { type: 'addManualBatch'; transactions: Transaction[] }
@@ -95,11 +95,15 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, ...action.payload, hydrated: true }
 
     case 'import': {
-      const existing = new Set(state.transactions.map((t) => t.id))
-      const added = action.transactions.filter((t) => !existing.has(t.id))
-      const merged = [...state.transactions, ...added].sort((a, b) =>
-        a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
-      )
+      const refreshed = new Set(action.refreshedStatementIds)
+      const priorRows = new Map(state.transactions.map((tx) => [tx.id, tx]))
+      const kept = state.transactions.filter((tx) => !tx.statementId || !refreshed.has(tx.statementId))
+      const existing = new Set(kept.map((tx) => tx.id))
+      const added = action.transactions.filter((tx) => !existing.has(tx.id)).map((tx) => {
+        const prior = priorRows.get(tx.id)
+        return prior?.categoryLocked ? { ...tx, category: prior.category, categoryLocked: true } : tx
+      })
+      const merged = [...kept, ...added].sort(newestFirst)
       // A statement that arrives with an id already held replaces that record:
       // that is how a re-import refreshes the summary and reconciliation of a
       // statement imported by an older build.
@@ -193,17 +197,15 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, profile: { ...state.profile, ...action.profile } }
 
     case 'upsertCard': {
-      let card = sanitizeCards([action.card])[0]
+      const card = sanitizeCards([action.card])[0]
       if (!card) return state
       const cards = state.profile.cards ?? []
       const archivedCards = state.profile.archivedCards ?? []
-      const archived = archivedCards.find((item) => item.id === card.id || (item.bank === card.bank &&
-        ((card.last4 && item.last4 === card.last4) || cardDisplayName(item).toLocaleLowerCase('tr-TR') === cardDisplayName(card).toLocaleLowerCase('tr-TR'))))
-      if (archived) card = { ...card, id: archived.id }
+      const archived = archivedCards.find((item) => item.id === card.id)
       const old = cards.find((item) => item.id === card.id)
-      if (old && old.bank !== card.bank) return state
-      const label = cardDisplayName(card)
       const previous = old ?? archived
+      if (previous && previous.bank !== card.bank) return state
+      const label = cardDisplayName(card)
       if (cards.some((item) => item.id !== card.id && cardDisplayName(item).toLocaleLowerCase('tr-TR') === label.toLocaleLowerCase('tr-TR'))) return state
       return {
         ...state,

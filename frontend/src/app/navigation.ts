@@ -1,63 +1,49 @@
-import { CalendarClock, LayoutDashboard, PieChart } from 'lucide-react'
+import { CalendarClock, LayoutDashboard, BarChart3, Gem } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type ViewId = 'overview' | 'spending' | 'future'
-
+export type ViewId = 'overview' | 'analysis' | 'spending' | 'future' | 'assets' | 'cards' | 'card-detail' | 'settings'
+export interface AppRoute { view: ViewId; cardId?: string }
 export interface NavItem {
   id: ViewId
   label: string
   icon: ComponentType<{ size?: number | string; className?: string }>
 }
 
-/**
- * Three tabs, one per tense.
- *
- *   Özet       what is true right now
- *   Harcamalar what already happened, and where it went
- *   Gelecek    what is already committed
- *
- * The build before this one had nine destinations, six of them in the tab
- * strip. Five of those nine were not places at all:
- *
- *   Bulgular  rendered the same insight rows the overview already showed
- *   Ekstreler was an action ("import a statement"), so it is now the `+` button
- *             and a drop target on every screen
- *   Düzenli   was one table, and belongs beside the categories it explains
- *   Gelir–Gider was data entry for a setting, so it opens as a sheet
- *   İşlemler  is a destination you arrive at from a category or a merchant,
- *             never something you set out for — so it is a drill-down sheet
- *   Ayarlar   is a sheet, as settings almost always should be
- *
- * A first screen that offers nine doors is a menu. This one is an answer.
- */
+/** Four everyday destinations; cards and settings have their own full pages. */
 export const NAV: NavItem[] = [
   { id: 'overview', label: 'Özet', icon: LayoutDashboard },
-  { id: 'spending', label: 'Harcamalar', icon: PieChart },
+  { id: 'analysis', label: 'Analiz', icon: BarChart3 },
+  { id: 'assets', label: 'Varlıklarım', icon: Gem },
   { id: 'future', label: 'Gelecek', icon: CalendarClock },
 ]
-
-/**
- * Old view ids still arrive from two places: a bookmarked `#/recurring` hash,
- * and the `action.view` deep links the analytics layer attaches to insights.
- * Both are mapped to wherever that content now lives rather than being dropped
- * on the floor, so no insight loses its "take me there" link.
- */
+const VIEWS = new Set<ViewId>([...NAV.map(item => item.id), 'spending', 'cards', 'card-detail', 'settings'])
 const LEGACY: Record<string, ViewId> = {
-  insights: 'overview',
-  ledger: 'overview',
-  import: 'overview',
-  settings: 'overview',
-  recurring: 'spending',
-  transactions: 'spending',
-  commitments: 'future',
+  insights: 'overview', ledger: 'overview', import: 'overview',
+  recurring: 'spending', transactions: 'spending', commitments: 'future',
 }
-
-export function isViewId(value: string): value is ViewId {
-  return NAV.some((item) => item.id === value)
+export function isViewId(value: string): value is ViewId { return VIEWS.has(value as ViewId) }
+export function parseRoute(hash: string): AppRoute {
+  const [name, encodedId] = hash.replace(/^#?\/?/, '').split('/')
+  if (name === 'cards' && encodedId) {
+    try { return { view: 'card-detail', cardId: decodeURIComponent(encodedId) } }
+    catch { return { view: 'cards' } }
+  }
+  return { view: isViewId(name) && name !== 'card-detail' ? name : LEGACY[name] ?? 'overview' }
 }
-
-/** Resolves any id — current, legacy or nonsense — to a tab that exists. */
-export function resolveView(value: string): ViewId {
-  if (isViewId(value)) return value
-  return LEGACY[value] ?? 'overview'
+export function resolveView(value: string): ViewId { return parseRoute(value).view }
+export function routeHash(view: ViewId, cardId?: string): string {
+  return view === 'card-detail' && cardId ? `#/cards/${encodeURIComponent(cardId)}` : `#/${view === 'card-detail' ? 'cards' : view}`
+}
+export function navigateTo(view: ViewId, cardId?: string): void {
+  const hash = routeHash(view, cardId)
+  if (window.location.hash === hash) return
+  window.history.pushState({ mizanPreviousHash: window.location.hash || '#/overview' }, '', hash)
+  window.dispatchEvent(new HashChangeEvent('hashchange'))
+}
+export function goBack(fallback: ViewId = 'overview'): void {
+  if (window.history.state?.mizanPreviousHash) window.history.back()
+  else {
+    window.history.replaceState(null, '', routeHash(fallback))
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+  }
 }
