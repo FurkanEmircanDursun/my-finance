@@ -1,0 +1,138 @@
+.mizan-modal-native,
+.mizan-modal-fallback {
+  --modal-width: 32rem;
+  --modal-height: calc(var(--modal-visible-height, 100vh) - var(--safe-top, 0px) - 16px);
+  --modal-scrim: rgb(11 23 32 / 48%);
+  position: fixed;
+  right: 0;
+  bottom: var(--modal-viewport-bottom, 0px);
+  left: 0;
+  overscroll-behavior: contain;
+}
+
+.mizan-modal-native[data-modal-size="sm"],
+.mizan-modal-fallback[data-modal-size="sm"] { --modal-width: 25rem; }
+
+.mizan-modal-native[data-modal-size="lg"],
+.mizan-modal-fallback[data-modal-size="lg"] { --modal-width: 48rem; }
+
+.mizan-modal-native[data-modal-size="sheet"],
+.mizan-modal-fallback[data-modal-size="sheet"] { --modal-width: 38rem; }
+
+.mizan-modal-native {
+  top: auto;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px 20px 0 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  box-shadow: var(--shadow-overlay);
+}
+
+.mizan-modal-native::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgb(11 23 32 / 48%);
+}
+
+.mizan-modal-fallback {
+  z-index: 50;
+  top: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--modal-scrim);
+}
+
+.mizan-modal-fallback > .mizan-modal-panel { box-shadow: var(--shadow-overlay); }
+
+.mizan-modal-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: var(--modal-height);
+  overflow: hidden;
+  border-radius: 20px 20px 0 0;
+  padding-bottom: var(--safe-bottom, 0px);
+  padding-right: var(--safe-right, 0px);
+  padding-left: var(--safe-left, 0px);
+  background: var(--bg-raised);
+  color: var(--text);
+  overscroll-behavior: contain;
+}
+
+.mizan-modal-drag { flex: none; touch-action: none; }
+
+.mizan-modal-handle {
+  width: 2.25rem;
+  height: 4px;
+  margin: 10px auto 0;
+  border-radius: 8px;
+  background: var(--line-strong);
+}
+
+.mizan-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.mizan-modal-close { margin: -8px -6px -6px 0; min-width: 44px; min-height: 44px; }
+
+.mizan-modal-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 20px 24px;
+  scroll-padding: 12px 0;
+}
+
+.mizan-modal-footer {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 640px) {
+  .mizan-modal-native,
+  .mizan-modal-fallback { --modal-height: calc(var(--modal-visible-height, 100vh) - 48px); }
+  .mizan-modal-native { top: 0; width: min(var(--modal-width), calc(100% - 48px)); margin: auto; }
+  .mizan-modal-fallback { align-items: center; padding: 24px; }
+  .mizan-modal-fallback > .mizan-modal-panel { width: var(--modal-width); }
+  .mizan-modal-native,
+  .mizan-modal-panel { border-radius: var(--radius-lg); }
+  .mizan-modal-panel { padding: 0; }
+  .mizan-modal-drag { touch-action: auto; }
+  .mizan-modal-handle { display: none; }
+  .mizan-modal-header { padding: 22px 24px 16px; }
+  .mizan-modal-body { padding: 0 24px 24px; }
+  .mizan-modal-footer { padding-right: 24px; padding-left: 24px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mizan-modal-native[open],
+  .mizan-modal-fallback > .mizan-modal-panel {
+    animation: mizan-modal-in var(--motion-sheet, 220ms) var(--ease-out-quick, ease-out);
+  }
+  .mizan-modal-panel { transition: transform var(--motion-reveal, 180ms) var(--ease-out-quick, ease-out); }
+  .mizan-modal-panel[data-dragging] { transition: none; }
+  .mizan-modal-close { transition: background-color var(--motion-press, 120ms), color var(--motion-press, 120ms); }
+}
+
+@keyframes mizan-modal-in {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}

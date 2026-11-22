@@ -5,6 +5,7 @@ import { applyFilters } from '../store/selectors'
 import { effectiveDate, spendAmount } from '../domain/types'
 import { demoTransactions } from '../domain/demo'
 import { nextCardDate } from '../domain/cards'
+import { statementMonth } from '../domain/cardLifecycle'
 import { defaultProfile } from '../store/defaults'
 import { analyze } from '../analytics/engine'
 import { buildLedgers } from '../analytics/ledger'
@@ -34,8 +35,9 @@ export function useOverviewModel() {
   const recent = useMemo(() => [...rows].filter(tx => tx.kind !== 'payment')
     .sort((a, b) => effectiveDate(b).localeCompare(effectiveDate(a))).slice(0, 4), [rows])
   const unknown = rows.filter(tx => tx.kind === 'expense' && tx.category === 'other')
-  const mismatches = useMemo(() => buildLedgers(state.statements, state.transactions).ledgers
-    .filter(ledger => ledger.status === 'mismatch'), [state.statements, state.transactions])
+  const statementLedgers = useMemo(() => buildLedgers(state.statements.filter(statement =>
+    state.filters.month === 'all' || statementMonth(statement) === state.filters.month,
+  ), state.transactions), [state.statements, state.transactions, state.filters.month])
   const upcoming = (state.profile.cards ?? [])
     .map(card => ({ card, date: nextCardDate(card.statementDay) }))
     .sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2)
@@ -44,5 +46,5 @@ export function useOverviewModel() {
     { label: 'Kira ve aidat', value: rows.filter(tx => tx.source === 'manual' && tx.category === 'rent').reduce((sum, tx) => sum + spendAmount(tx), 0) },
     { label: 'Diğer kart dışı giderler', value: rows.filter(tx => tx.source === 'manual' && tx.category !== 'rent').reduce((sum, tx) => sum + spendAmount(tx), 0) },
   ]
-  return { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, used, period, recent, unknown, mismatches, upcoming, methods }
+  return { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, used, period, recent, unknown, statementLedgers, upcoming, methods }
 }

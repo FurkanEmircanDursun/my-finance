@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { ArrowDownLeft, Plus, Search } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Empty, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
-import { money, count } from '../core/money'
+import { money2, count } from '../core/money'
 import { fold } from '../core/text'
 import { EntrySheet } from '../app/EntrySheet'
 import { CATEGORIES, categoryColor, type CategoryId } from '../domain/categories'
 import { spendAmount, type Transaction } from '../domain/types'
 import { useStore } from '../store/AppStore'
+import { applyFilters } from '../store/selectors'
+import { useSheets } from '../app/sheets'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
 
@@ -39,10 +41,37 @@ export function TransactionsSheet({
   title: string
   transactions: Transaction[]
 }) {
+  const [adding, setAdding] = useState(false)
+  return <Modal open={open} onClose={onClose} title={title} variant="sheet">
+    <TransactionList transactions={transactions} onAdd={() => setAdding(true)} />
+    <ManualTransactionModal open={adding} onClose={() => setAdding(false)} />
+  </Modal>
+}
+
+export function TransactionsView() {
+  const { state } = useStore()
+  const { openIncome, openIncomeEntry } = useSheets()
+  const transactions = useMemo(() => applyFilters(
+    state.transactions, { ...state.filters, includeNonSpend: true },
+    { periodGrouping: state.settings.periodGrouping, statements: state.statements },
+  ), [state.transactions, state.filters, state.settings.periodGrouping, state.statements])
+
+  return <div className="transactions-page">
+    <header className="dashboard-title"><div><h1>İşlemler</h1></div>
+      <button type="button" className="quiet-button" onClick={openIncome}><ArrowDownLeft size={17} /> Sabit gelir ve giderler</button>
+    </header>
+    <TransactionList transactions={transactions} onIncome={openIncomeEntry} />
+  </div>
+}
+
+function TransactionList({ transactions, onAdd, onIncome }: {
+  transactions: Transaction[]
+  onAdd?: () => void
+  onIncome?: () => void
+}) {
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
 
   const rows = useMemo(() => {
     const folded = query.trim() ? fold(query.trim()) : ''
@@ -55,13 +84,7 @@ export function TransactionsSheet({
   const total = rows.reduce((sum, tx) => sum + spendAmount(tx), 0)
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      description={`${money(total)} · ${count(rows.length)} işlem`}
-      variant="sheet"
-    >
+    <div className="transaction-list">
       <div className="mb-4 flex items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
@@ -74,16 +97,15 @@ export function TransactionsSheet({
             className="pl-9"
           />
         </div>
-        <Button onClick={() => setAdding(true)} className="shrink-0">
-          <Plus size={16} />
-          Ekle
-        </Button>
+        {onAdd && <Button onClick={onAdd} className="shrink-0"><Plus size={16} /> Ekle</Button>}
+        {onIncome && <Button onClick={onIncome} className="shrink-0"><ArrowDownLeft size={16} /> Gelir ekle</Button>}
       </div>
+      <p className="transaction-result" aria-live="polite">{count(rows.length)} işlem · Net harcama <span className="num">{money2(total)}</span></p>
 
       {rows.length === 0 ? (
-        <Empty title="Kayıt yok" />
+        <Empty compact title="İşlem bulunamadı" description={query ? "Başka bir sözcükle ara." : "Başka bir ay seçebilir veya işlem ekleyebilirsin."} />
       ) : (
-        <ul className="-mx-2">
+        <ul className="transaction-list-rows">
           {rows.slice(0, limit).map((tx) => (
             <TransactionRow
               key={tx.id}
@@ -104,8 +126,7 @@ export function TransactionsSheet({
         </div>
       )}
 
-      <ManualTransactionModal open={adding} onClose={() => setAdding(false)} />
-    </Modal>
+    </div>
   )
 }
 

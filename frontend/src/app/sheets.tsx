@@ -37,9 +37,6 @@ import { useSharedPdfImport } from '../hooks/useSharedPdfImport'
 const AccountSheet = lazy(() =>
   import('./AccountSheet').then((m) => ({ default: m.AccountSheet })),
 )
-const StatementSheet = lazy(() =>
-  import('./StatementSheet').then((m) => ({ default: m.StatementSheet })),
-)
 const RewardsSheet = lazy(() =>
   import('./RewardsSheet').then((m) => ({ default: m.RewardsSheet })),
 )
@@ -105,11 +102,10 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
-  const [statementId, setStatementId] = useState<string | null>(null)
   const [rewardsOpen, setRewardsOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
   const sharedImport = useSharedPdfImport()
-  const sharedReady = !importOpen && !entryOpen && !accountOpen && !incomeOpen && !budgetsOpen && !archiveOpen && !statementId && !rewardsOpen && !txQuery
+  const sharedReady = !importOpen && !entryOpen && !accountOpen && !incomeOpen && !budgetsOpen && !archiveOpen && !rewardsOpen && !txQuery
 
   const openImport = useCallback((cardId?: string) => { stopExplore(); setImportCardId(cardId); setImportOpen(true) }, [stopExplore])
   const openSettings = useCallback(() => { stopExplore(); navigateTo('settings') }, [stopExplore])
@@ -119,7 +115,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const openCards = useCallback(() => { stopExplore(); navigateTo('cards') }, [stopExplore])
   const openCardDetail = useCallback((cardId: string) => { stopExplore(); navigateTo('card-detail', cardId) }, [stopExplore])
   const openArchive = useCallback(() => { stopExplore(); setArchiveOpen(true) }, [stopExplore])
-  const openStatement = useCallback((id: string) => { stopExplore(); setStatementId(id) }, [stopExplore])
+  const openStatement = useCallback((id: string) => { stopExplore(); navigateTo('statement', id) }, [stopExplore])
   const openRewards = useCallback(() => { stopExplore(); setRewardsOpen(true) }, [stopExplore])
   const openTransactions = useCallback(
     (query?: TransactionQuery) => { stopExplore(); setTxQuery(query ?? {}) },
@@ -212,13 +208,6 @@ export function SheetProvider({ children }: { children: ReactNode }) {
               setArchiveOpen(false)
               window.location.hash = '/overview'
             }}
-          />
-        )}
-        {statementId !== null && (
-          <StatementSheet
-            open
-            onClose={() => setStatementId(null)}
-            statementId={statementId}
           />
         )}
         {rewardsOpen && (

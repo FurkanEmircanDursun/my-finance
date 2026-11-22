@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRoute, resolveView, routeHash } from './navigation'
+import { navigationSection, parseRoute, resolveView, routeHash } from './navigation'
 
 describe('page routes', () => {
   it('keeps settings and cards as independent full-page destinations', () => {
@@ -17,5 +17,13 @@ describe('page routes', () => {
     expect(parseRoute('#/cards/%ZZ')).toEqual({ view: 'cards' })
     expect(resolveView('commitments')).toBe('future')
     expect(resolveView('unknown')).toBe('overview')
+  })
+  it('opens a statement in the cards section and guards malformed deep links', () => {
+    const statementId = 'st / dönem#1'
+    expect(parseRoute(routeHash('statement', statementId))).toEqual({ view: 'statement', statementId })
+    expect(parseRoute('#/statements/%ZZ')).toEqual({ view: 'cards' })
+    expect(navigationSection('statement')).toBe('cards')
+    expect(navigationSection('assets')).toBe('analysis')
+    expect(parseRoute('#/transactions')).toEqual({ view: 'transactions' })
   })
 })

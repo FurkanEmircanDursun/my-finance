@@ -21,8 +21,6 @@
 .period-shortcuts { display: flex; justify-content: space-between; gap: 12px; width: 100%; }
 .workspace-toolbar .toolbar-settings { display: grid; min-width: 40px; }
 .workspace-content:focus { outline: none; }
-.mizan-bottom-nav button { min-width: 0; }
-.mizan-bottom-nav button>span { font-size: 11px; }
 @media (max-width: 900px) { .settings-grid { grid-template-columns: minmax(0,1fr); gap: 18px; } }
 @media (max-width: 639px) {
   .settings-block { padding: 21px; }
@@ -35,14 +33,4 @@
   .toolbar-actions>.toolbar-icon { width: 32px; min-width: 32px; }
   .period-trigger { gap: 5px; font-size: 13px; }
   .period-trigger>svg:first-child { display: none; }
-}
-
-.dashboard-header-actions { display: flex; gap: 9px; }
-.dashboard-header-actions>.quiet-button { min-height: 42px; font-size: 12px; }
-.toolbar-context { font-size: 15px; font-weight: 550; }
-.sidebar-secondary button[aria-current='page'],.sidebar-bottom>button[aria-current='page'] { background: #39354f; color: #eee8ff; }
-@media (max-width: 639px) {
- .dashboard-title:has(.dashboard-header-actions) { flex-wrap: wrap; }
- .dashboard-header-actions { width: 100%; margin-top: 2px; }
- .dashboard-header-actions>.quiet-button { flex: 1; min-height: 44px; }
 }

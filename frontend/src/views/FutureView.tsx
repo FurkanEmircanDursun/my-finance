@@ -45,7 +45,7 @@ export function FutureView() {
   )
   const heading = (
     <header className="dashboard-title">
-      <div><h1>Gelecek</h1><p>Yaklaşan ödemeler. Daha rahat bir plan.</p></div>
+      <div><h1>Gelecek</h1><p>Yaklaşan ödemeler, taksitler ve hedefler.</p></div>
       <button type="button" className="quiet-button" onClick={openSettings}>Planı düzenle</button>
     </header>
   )

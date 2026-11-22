@@ -1,44 +1,68 @@
-import { Archive, CreditCard, Eye, EyeOff, List, PieChart, Plus, Settings2, ShieldCheck, Upload, Wallet } from 'lucide-react'
+import { Eye, EyeOff, Plus, Settings2 } from 'lucide-react'
+import { Fragment, type MouseEvent } from 'react'
 import { Brand, BrandMark } from '../ui/Brand'
+import { hapticTap } from '../platform/haptics'
 import { AccountPanel } from './AccountPanel'
 import { ScopeButton } from './ScopeButton'
 import { useSheets } from './sheets'
-import { NAV, type ViewId } from './navigation'
+import { NAV, navigationSection, routeHash, type NavItem, type ViewId } from './navigation'
 
-export function WorkspaceRail({ view, onSelect }: { view: ViewId; onSelect: (view: ViewId) => void }) {
-  const sheets = useSheets()
-  return <aside className="desktop-sidebar">
-    <a href="#/overview" className="brand" aria-label="Mizan ana sayfa"><Brand size={35} /></a>
-    <p className="sidebar-caption">Hayatınla aynı dengede.</p>
-    <button className="primary-button sidebar-add" onClick={sheets.openEntry}><Plus size={18} /> Kayıt ekle</button>
-    <nav aria-label="Ana gezinme" className="sidebar-nav">
-      {NAV.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onSelect(id)} aria-current={view === id ? 'page' : undefined}><Icon size={19} />{label}<span className="nav-active-dot" /></button>)}
-      <button onClick={() => sheets.openTransactions()}><List size={19} /> Tüm işlemler</button>
+type Navigate = (view: ViewId) => void
+
+function follow(event: MouseEvent<HTMLAnchorElement>, view: ViewId, onSelect: Navigate) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  onSelect(view)
+}
+
+function NavLink({ item, view, onSelect }: { item: NavItem; view: ViewId; onSelect: Navigate }) {
+  const { id, label, icon: Icon } = item
+  return <a href={routeHash(id)} onClick={event => follow(event, id, onSelect)}
+    aria-current={view === id ? 'page' : navigationSection(view) === id ? 'location' : undefined}>
+    <Icon size={19} aria-hidden="true" /><span>{label}</span>
+  </a>
+}
+
+export function WorkspaceRail({ view, onSelect }: { view: ViewId; onSelect: Navigate }) {
+  return <aside className="workspace-rail">
+    <a href={routeHash('overview')} onClick={event => follow(event, 'overview', onSelect)} className="workspace-brand" aria-label="Mizan ana sayfa"><Brand size={31} /></a>
+    <nav aria-label="Ana gezinme" className="workspace-nav">
+      {NAV.map(item => <NavLink key={item.id} item={item} view={view} onSelect={onSelect} />)}
     </nav>
-    <div className="sidebar-secondary">
-      <button onClick={() => onSelect('spending')} aria-current={view === 'spending' ? 'page' : undefined}><PieChart size={18} /> Harcamalar</button>
-      <button onClick={sheets.openCards} aria-current={view === 'cards' || view === 'card-detail' ? 'page' : undefined}><CreditCard size={18} /> Kartlarım</button>
-      <button onClick={sheets.openIncome}><Wallet size={18} /> Gelir ve sabit giderler</button>
-      <button onClick={() => sheets.openImport()}><Upload size={18} /> Ekstre yükle</button>
-      <button onClick={sheets.openArchive}><Archive size={18} /> Ekstreler ve yedekler</button>
-    </div>
-    <div className="sidebar-bottom">
-      <div className="sidebar-local-note"><ShieldCheck size={17} /><span>Önce senin cihazın.<small>Hesap bağlamak isteğe bağlı.</small></span></div>
-      <AccountPanel onOpen={sheets.openAccount} compact />
-      <button onClick={sheets.openSettings} aria-current={view === 'settings' ? 'page' : undefined}><Settings2 size={18} /> Ayarlar</button>
-    </div>
+    <nav aria-label="Uygulama tercihleri" className="workspace-nav workspace-rail-settings">
+      <NavLink item={{ id: 'settings', label: 'Ayarlar', icon: Settings2 }} view={view} onSelect={onSelect} />
+    </nav>
   </aside>
 }
 
 export function WorkspaceToolbar({ view, privateMode, onTogglePrivate }: { view: ViewId; privateMode: boolean; onTogglePrivate: () => void }) {
   const sheets = useSheets()
-  return <header className="workspace-toolbar" style={{ paddingTop: 'var(--safe-top)' }}>
-    <a href="#/overview" className="mobile-brand" aria-label="Mizan ana sayfa"><BrandMark size={30} /></a>
-    <div className="toolbar-period">{view === 'assets' || view === 'settings' || view === 'analysis' ? <span className="toolbar-context">{view === 'assets' ? 'Varlıklarım' : view === 'analysis' ? 'Finansal analiz' : 'Tercihler'}</span> : <><ScopeButton /><span className="calendar-label">Aylık görünüm</span></>}</div>
+  const showPeriod = view === 'overview' || view === 'transactions' || view === 'cards' || view === 'card-detail' || view === 'spending'
+  return <header className="workspace-toolbar">
+    <div className="workspace-toolbar-context">
+      <a href={routeHash('overview')} className="mobile-brand" aria-label="Mizan ana sayfa"><BrandMark size={28} /></a>
+      {showPeriod && <ScopeButton />}
+    </div>
     <div className="toolbar-actions">
-      <button type="button" onClick={onTogglePrivate} aria-label={privateMode ? 'Tutarları göster' : 'Tutarları gizle'} aria-pressed={privateMode} className="toolbar-icon">{privateMode ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+      <button type="button" className="toolbar-icon" onClick={onTogglePrivate} aria-label={privateMode ? 'Tutarları göster' : 'Tutarları gizle'} aria-pressed={privateMode}>
+        {privateMode ? <EyeOff size={19} /> : <Eye size={19} />}
+      </button>
       <AccountPanel onOpen={sheets.openAccount} compact />
-      <button type="button" onClick={sheets.openSettings} aria-label="Ayarlar" className="toolbar-icon toolbar-settings"><Settings2 size={18} /></button>
+      <button type="button" onClick={sheets.openSettings} aria-label="Ayarlar" className="toolbar-icon toolbar-settings"><Settings2 size={19} /></button>
+      <button type="button" className="primary-button workspace-add" onClick={() => { hapticTap(); sheets.openEntry() }}>
+        <Plus size={18} aria-hidden="true" /> İşlem ekle
+      </button>
     </div>
   </header>
+}
+
+export function BottomNav({ view, onSelect, onAdd }: { view: ViewId; onSelect: Navigate; onAdd: () => void }) {
+  return <nav className="workspace-bottom-nav" aria-label="Mobil gezinme">
+    {NAV.map((item, index) => <Fragment key={item.id}>
+      {index === 2 && <button type="button" className="workspace-mobile-add" aria-label="İşlem ekle" onClick={() => { hapticTap(); onAdd() }}>
+        <Plus size={23} aria-hidden="true" />
+      </button>}
+      <NavLink item={item} view={view} onSelect={onSelect} />
+    </Fragment>)}
+  </nav>
 }

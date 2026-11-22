@@ -18,42 +18,46 @@
   :root {
     color-scheme: light;
 
-    --bg: #f5f5fa;
-    --bg-raised: #ffffff;
-    --bg-sunken: #eeeef6;
-    --bg-hover: #ecebf7;
-    --bg-active: #e4e4ef;
+    --bg: #f6f5f0;
+    --bg-raised: #fffefa;
+    --bg-sunken: #eeeee7;
+    --bg-hover: #e9ede5;
+    --bg-active: #dce3d9;
 
-    --line: #e4e4ef;
-    --line-strong: #c5c5d6;
+    --line: #dce3d9;
+    --line-strong: #929e94;
 
-    --text: #202335;
-    --text-muted: #62657b;
-    --text-faint: #6c6f83;
-    --text-inverse: #ffffff;
+    --text: #202925;
+    --text-muted: #4c5c52;
+    --text-faint: #536359;
+    --text-inverse: #fffefa;
 
-    --accent: #7161d8;
-    --accent-hover: #5d4dc3;
-    --accent-soft: #eeebfc;
-    --accent-text: #5b49b5;
+    --accent: #155a4d;
+    --accent-hover: #104639;
+    --accent-soft: #e4eee8;
+    --accent-text: #155244;
 
-    --positive: #1f7a4d;
-    --positive-soft: #e6f4ec;
-    --negative: #b23b3b;
-    --negative-soft: #fbeced;
-    --warning: #8f5f0d;
-    --warning-soft: #fdf3e2;
+    --positive: #286345;
+    --positive-soft: #e9f2e9;
+    --negative: #a03236;
+    --negative-soft: #faeaea;
+    --warning: #7d4f10;
+    --warning-soft: #fbf0dc;
 
-    --grid: #e9e9f3;
+    --grid: #e2e7de;
 
     --radius: 12px;
     --radius-lg: 16px;
 
     --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.22), 0 2px 8px -2px rgb(0 0 0 / 0.08);
 
-    /* One curve, one duration. Everything that moves uses these. */
+    /* Interaction timing. Changes commit as soon as the action runs. */
     --ease: cubic-bezier(0.2, 0, 0, 1);
-    --duration: 200ms;
+    --duration: 180ms;
+    --motion-press: 120ms;
+    --motion-reveal: 160ms;
+    --motion-sheet: 220ms;
+    --ease-out-quick: cubic-bezier(.23, 1, .32, 1);
 
     /*
      * Safe areas, named once.
@@ -75,33 +79,33 @@
     :root:not([data-theme='light']) {
       color-scheme: dark;
 
-      --bg: #171925;
-      --bg-raised: #202333;
-      --bg-sunken: #1b1e2c;
-      --bg-hover: #2a2d40;
-      --bg-active: #34374b;
+      --bg: #171f1b;
+      --bg-raised: #202b25;
+      --bg-sunken: #26322b;
+      --bg-hover: #2b3830;
+      --bg-active: #35483d;
 
-      --line: #36394e;
-      --line-strong: #535770;
+      --line: #3b4b42;
+      --line-strong: #72867a;
 
-      --text: #f3f3fb;
-      --text-muted: #c0c1d6;
-      --text-faint: #a6a8c3;
-      --text-inverse: #171925;
+      --text: #f1f4ed;
+      --text-muted: #c0cec3;
+      --text-faint: #a7baad;
+      --text-inverse: #171f1b;
 
-      --accent: #b5a8ff;
-      --accent-hover: #c5bbff;
-      --accent-soft: #302b4e;
-      --accent-text: #c9beff;
+      --accent: #a4d8c1;
+      --accent-hover: #b5e7d1;
+      --accent-soft: #293d34;
+      --accent-text: #c4e8d6;
 
-      --positive: #4bbd85;
-      --positive-soft: #12291e;
-      --negative: #e2716f;
-      --negative-soft: #2c1717;
-      --warning: #d9a441;
-      --warning-soft: #2b2010;
+      --positive: #9fdabb;
+      --positive-soft: #243b30;
+      --negative: #f29797;
+      --negative-soft: #442b2a;
+      --warning: #f3c379;
+      --warning-soft: #3b3123;
 
-      --grid: #2a2d40;
+      --grid: #2b3830;
 
       --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
     }
@@ -110,33 +114,33 @@
   :root[data-theme='dark'] {
     color-scheme: dark;
 
-    --bg: #171925;
-    --bg-raised: #202333;
-    --bg-sunken: #1b1e2c;
-    --bg-hover: #2a2d40;
-    --bg-active: #34374b;
+    --bg: #171f1b;
+    --bg-raised: #202b25;
+    --bg-sunken: #26322b;
+    --bg-hover: #2b3830;
+    --bg-active: #35483d;
 
-    --line: #36394e;
-    --line-strong: #535770;
+    --line: #3b4b42;
+    --line-strong: #72867a;
 
-    --text: #f3f3fb;
-    --text-muted: #c0c1d6;
-    --text-faint: #a6a8c3;
-    --text-inverse: #171925;
+    --text: #f1f4ed;
+    --text-muted: #c0cec3;
+    --text-faint: #a7baad;
+    --text-inverse: #171f1b;
 
-    --accent: #b5a8ff;
-    --accent-hover: #c5bbff;
-    --accent-soft: #302b4e;
-    --accent-text: #c9beff;
+    --accent: #a4d8c1;
+    --accent-hover: #b5e7d1;
+    --accent-soft: #293d34;
+    --accent-text: #c4e8d6;
 
-    --positive: #4bbd85;
-    --positive-soft: #12291e;
-    --negative: #e2716f;
-    --negative-soft: #2c1717;
-    --warning: #d9a441;
-    --warning-soft: #2b2010;
+    --positive: #9fdabb;
+    --positive-soft: #243b30;
+    --negative: #f29797;
+    --negative-soft: #442b2a;
+    --warning: #f3c379;
+    --warning-soft: #3b3123;
 
-    --grid: #2a2d40;
+    --grid: #2b3830;
 
     --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
   }
@@ -312,35 +316,6 @@
    * the tabs are laid out side by side, which is the whole reason swiping
    * between them is guessable in the first place.
    */
-  .slide-from-right {
-    animation: slide-from-right var(--duration) var(--ease) both;
-  }
-
-  .slide-from-left {
-    animation: slide-from-left var(--duration) var(--ease) both;
-  }
-}
-
-@keyframes slide-from-right {
-  from {
-    opacity: 0;
-    transform: translateX(16px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes slide-from-left {
-  from {
-    opacity: 0;
-    transform: translateX(-16px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 @keyframes fade-in {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { AlertCircle, FileText, Loader2, Lock, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowRight, FileText, Lock, Upload, X } from 'lucide-react'
 import { Button } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { ReconciliationBadge } from '../ui/statements'
@@ -15,13 +15,7 @@ import { SaveImportedCardOffer } from './SaveImportedCardOffer'
 import '../styles/cards.css'
 
 /**
- * Importing a statement is an action, not a place, so it no longer has a tab.
- * The same panel serves the two moments it is needed: the very first run, where
- * it is the whole screen, and every time afterwards, where it is a sheet.
- *
- * The list of already-imported statements moved to Ayarlar → Veri. It is
- * housekeeping, and housekeeping does not belong on the path of the thing
- * someone actually came to do.
+ * The picker serves local selection, a card-specific retry and native PDF sharing.
  */
 
 const ACCEPT = {
@@ -29,11 +23,18 @@ const ACCEPT = {
   'text/plain': ['.txt'],
   'text/csv': ['.csv'],
 }
+const NEW_CARD = '__new__'
 
-function usePicker(onFinished?: (outcomes: ImportOutcome[]) => void, initialCardId?: string, initialFiles: File[] = [], autoStart = false) {
+type OnFinished = (outcomes: ImportOutcome[], cardId: string) => void
+
+function usePicker(onFinished?: OnFinished, initialCardId?: string, initialFiles: File[] = [], autoStart = false) {
   const { state } = useStore()
   const choices = importCardChoices(state.profile.cards ?? [], state.statements)
-  const [cardId, setCardId] = useState(initialCardId && choices.some(choice => choice.card.id === initialCardId) ? initialCardId : choices.length === 1 ? choices[0].card.id : '')
+  const [cardId, setCardId] = useState(() => {
+    if (initialCardId === NEW_CARD || initialCardId === '') return initialCardId
+    if (initialCardId && choices.some(choice => choice.card.id === initialCardId)) return initialCardId
+    return choices.length === 1 ? choices[0].card.id : ''
+  })
   const { run, progress } = useImport()
   const [queue, setQueue] = useState<File[]>(initialFiles)
   const [rejected, setRejected] = useState(false)
@@ -47,13 +48,13 @@ function usePicker(onFinished?: (outcomes: ImportOutcome[]) => void, initialCard
     })
   }, [])
 
-  const dropzone = useDropzone({ onDrop, accept: ACCEPT, multiple: true, disabled: progress.running })
+  const dropzone = useDropzone({ onDrop, accept: ACCEPT, multiple: true, disabled: progress.running, noClick: true, noKeyboard: true })
 
   const start = useCallback(async () => {
     if (progress.running) return
-    const outcomes = await run(queue, cardId === '__new__' ? undefined : cardId || undefined, cardId === '__new__')
+    const outcomes = await run(queue, cardId === NEW_CARD ? undefined : cardId || undefined, cardId === NEW_CARD)
     setQueue([])
-    if (outcomes) onFinished?.(outcomes)
+    if (outcomes) onFinished?.(outcomes, cardId)
   }, [run, queue, cardId, onFinished, progress.running])
   useEffect(() => {
     if (!autoStart || autoStarted.current || !queue.length) return
@@ -74,7 +75,7 @@ function Picker({
   initialFiles,
   autoStart,
 }: {
-  onFinished?: (outcomes: ImportOutcome[]) => void
+  onFinished?: OnFinished
   primaryLabel: string
   initialCardId?: string
   initialFiles?: File[]
@@ -90,37 +91,20 @@ function Picker({
         <select value={cardId} onChange={(event) => setCardId(event.target.value)} disabled={progress.running} className="h-11 w-full rounded-[var(--radius)] border border-line bg-raised px-3 text-body text-ink">
           <option value="">Kart seç (genel CSV için boş bırak)</option>
           {choices.map(({ card, saved, fileName }, index) => <option key={card.id} value={card.id}>{cardDisplayName(card)}{!saved && ` · Ekstre ${index + 1}: ${fileName} (kart kaydedilmedi)`}</option>)}
-          <option value="__new__">Yeni / farklı kart</option>
+          <option value={NEW_CARD}>Yeni / farklı kart</option>
         </select>
         <span className="mt-1.5 block text-label text-muted">Aynı bankadaki kartlarını ayırmak için ilgili kartı seç. Farklı kartların dosyalarını ayrı aktar.</span>
       </label>}
-      <div
-        {...getRootProps()}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-4 rounded-[var(--radius-lg)] border border-dashed px-6 py-14 text-center transition-colors duration-200 ${
-          isDragActive ? 'border-accent bg-accent-soft' : 'border-line-strong hover:border-accent'
-        } ${progress.running ? 'pointer-events-none opacity-60' : ''}`}
-      >
-        <input {...getInputProps()} />
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sunken text-muted">
-          {progress.running ? <Loader2 size={20} className="animate-spin" /> : <Upload size={20} />}
-        </div>
-
-        {progress.running ? (
-          <div>
-            <p className="text-title font-semibold text-ink">{progress.fileName}</p>
-            <p className="mt-1 text-body text-muted">{progress.message}</p>
-            <p className="mt-1 text-label text-faint">
-              {progress.done + 1} / {progress.total}
-            </p>
-          </div>
-        ) : (
-          <div>
-            <p className="text-title font-semibold text-ink">
-              {isDragActive ? 'Bırak' : 'Ekstreni buraya bırak'}
-            </p>
-            <p className="mt-1 text-body text-muted">PDF, TXT veya CSV</p>
-          </div>
-        )}
+      <div {...getRootProps({ className: 'import-dropzone', 'data-dragging': isDragActive || undefined })}>
+        <input {...getInputProps({ 'aria-label': 'Ekstre dosyası' })} />
+        {progress.running ? <div className="import-progress" role="status">
+          <strong>{progress.fileName}</strong>
+          <span>{progress.message}</span>
+          {progress.total > 1 && <span>Dosya {progress.done + 1} / {progress.total}</span>}
+        </div> : <>
+          <Button type="button" onClick={dropzone.open}><Upload size={18} /> Dosya seç</Button>
+          <p className="text-body text-muted">{isDragActive ? 'Ekstreni şimdi bırak' : 'PDF, TXT veya CSV'}</p>
+        </>}
       </div>
 
       {/* Only shown once a file has actually been refused. Listing the
@@ -236,14 +220,18 @@ export function FirstRun() {
 
 export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { open: boolean; onClose: () => void; initialCardId?: string; sharedFiles?: File[] }) {
   const { state } = useStore()
+  const { openStatement } = useSheets()
   const [result, setResult] = useState<ImportOutcome[] | null>(null)
   const [dismissedOffers, setDismissedOffers] = useState<string[]>([])
   const [offeredStatements, setOfferedStatements] = useState<NonNullable<ImportOutcome['statement']>[]>([])
   const [reviewShared, setReviewShared] = useState(false)
+  const [lastCardId, setLastCardId] = useState<string>()
+  const resultHeading = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
-    if (!open) { setResult(null); setDismissedOffers([]); setOfferedStatements([]); setReviewShared(false) }
+    if (!open) { setResult(null); setDismissedOffers([]); setOfferedStatements([]); setReviewShared(false); setLastCardId(undefined) }
   }, [open])
+  useEffect(() => { if (open && result) resultHeading.current?.focus({ preventScroll: true }) }, [open, result])
 
   const added = result?.reduce((sum, o) => sum + o.added, 0) ?? 0
   const refreshed = result?.some(outcome => Boolean(outcome.removed)) ?? false
@@ -251,18 +239,19 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
   const hasEmptyStatement = result?.some(outcome => outcome.ok && outcome.statement?.transactionCount === 0) ?? false
   const imported = result?.flatMap(outcome => outcome.ok && outcome.statement ? [state.statements.find(statement => statement.id === outcome.statement!.id) ?? outcome.statement] : []) ?? []
   const offers = [...new Map(offeredStatements.filter(statement => !dismissedOffers.includes(statement.id)).map(statement => [statement.cardId ?? legacyCardKey(statement.bank, statement.accountLabel ?? statement.bank), statement])).values()]
-  const finished = (outcomes: ImportOutcome[]) => {
+  const finished: OnFinished = (outcomes, cardId) => {
+    setLastCardId(cardId)
     setResult(outcomes)
     const savedIds = (state.profile.cards ?? []).map(card => card.id)
     setOfferedStatements(outcomes.flatMap(outcome => outcome.ok && outcome.statement && importedCardDraft(outcome.statement, state.profile.archivedCards ?? [], savedIds) ? [outcome.statement] : []))
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={sharedFiles ? 'Mizan’a gönderilen ekstre' : 'Ekstre ekle'} description={sharedFiles ? 'PDF cihazında kontrol edilir. Desteklenen ekstreler doğrudan eklenir.' : undefined}>
+    <Modal open={open} onClose={onClose} title={sharedFiles ? 'Mizan’a gönderilen ekstre' : 'Ekstre yükle'} variant="sheet">
       {result ? (
         <div className="space-y-5">
           <div>
-            <p className="text-title font-semibold text-ink">
+            <p ref={resultHeading} tabIndex={-1} className="text-title font-semibold text-ink">
               {failed.length === result.length ? 'Dosya eklenemedi' : refreshed ? 'Ekstre güncellendi' : added > 0 ? `${count(added)} işlem eklendi` : hasEmptyStatement ? 'Harcamasız ekstre hazır' : 'Yeni işlem yok'}
             </p>
             {added === 0 && failed.length === 0 && !refreshed && (
@@ -277,7 +266,7 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
               .filter((outcome) => outcome.ok)
               .map((outcome) => (
                 <li key={outcome.fileName} className="rounded-[var(--radius-lg)] bg-sunken p-4">
-                  <p className="truncate text-body font-semibold text-ink">
+                  <p className="break-words text-body font-semibold text-ink">
                     {outcome.statement?.label ?? outcome.fileName}
                   </p>
                   <p className="mt-0.5 text-label text-faint">
@@ -288,6 +277,10 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
                   <div className="mt-2">
                     <ReconciliationBadge reconciliation={outcome.statement?.reconciliation} />
                   </div>
+                  {outcome.statement && <button type="button" className="text-button" onClick={() => {
+                    onClose()
+                    openStatement(outcome.statement!.id)
+                  }}>Ekstreyi aç <ArrowRight size={16} /></button>}
                 </li>
               ))}
           </ul>
@@ -297,7 +290,7 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
               {outcome.fileName}: {outcome.error}
             </p>
           ))}
-          {sharedFiles && failed.length > 0 && <Button className="w-full" onClick={() => { setReviewShared(true); setResult(null) }}>Kartı veya dosyaları kontrol edip yeniden dene</Button>}
+          {failed.length > 0 && <Button className="w-full" onClick={() => { setReviewShared(true); setResult(null) }}>{sharedFiles ? 'Kartı veya dosyaları kontrol et' : 'Yeniden dosya seç'}</Button>}
 
           {offers.map(statement => <SaveImportedCardOffer key={statement.id} statement={statement} relatedStatements={imported.filter(item => statement.cardId ? item.cardId === statement.cardId : !item.cardId && legacyCardKey(item.bank, item.accountLabel ?? item.bank) === legacyCardKey(statement.bank, statement.accountLabel ?? statement.bank))} onFinished={() => setDismissedOffers(previous => [...previous, ...imported.filter(item => statement.cardId ? item.cardId === statement.cardId : item.id === statement.id).map(item => item.id)])} />)}
 
@@ -306,7 +299,7 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
           </Button>
         </div>
       ) : (
-        <Picker primaryLabel="Ekle ve analiz et" onFinished={finished} initialCardId={initialCardId} initialFiles={sharedFiles} autoStart={Boolean(sharedFiles?.length) && !reviewShared} />
+        <Picker primaryLabel="Ekstreyi işle" onFinished={finished} initialCardId={lastCardId ?? initialCardId} initialFiles={sharedFiles} autoStart={Boolean(sharedFiles?.length) && !reviewShared} />
       )}
     </Modal>
   )

@@ -26,7 +26,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
   const { profile, settings, transactions, statements, rules } = state
 
   return (
-    <div className="settings-page"><header className="page-heading"><button className="page-back" onClick={onClose} aria-label="Önceki sayfaya dön"><ArrowLeft size={20} /></button><div><h1>Ayarlar</h1><p>Hesabın, tercihlerin ve verilerin.</p></div></header>
+    <div className="settings-page"><header className="page-heading"><button className="page-back" onClick={onClose} aria-label="Önceki sayfaya dön"><ArrowLeft size={20} /></button><div><h1>Ayarlar</h1></div></header>
       <div className="settings-grid">
         <AccountPanel onOpen={openAccount} />
         <div className="settings-block"><CloudServicesSettings /><DiagnosticsSettings /></div>

@@ -6,10 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Info, Plus, X } from "lucide-react";
-import { clsx } from "clsx";
+import { Info, X } from "lucide-react";
 import { useStore } from "../store/AppStore";
 import { useTheme } from "./useTheme";
 import { useNativeTheme } from "./useNativeTheme";
@@ -22,13 +20,13 @@ import {
 import { hapticTap } from "../platform/haptics";
 import { LockScreen } from "./LockScreen";
 import { Onboarding } from "./Onboarding";
-import { WorkspaceRail, WorkspaceToolbar } from "./WorkspaceChrome";
+import { WorkspaceRail, WorkspaceToolbar, BottomNav } from "./WorkspaceChrome";
 import { SheetProvider, useSheets } from "./sheets";
 import { FeedbackProvider } from '../ui/Feedback'
 import { useCloudServices } from './useCloudServices'
 import { SyncGate } from './SyncDecision'
 import { ANALYTICS_UPDATED, trackScreen } from '../platform/analytics'
-import { NAV, resolveView, parseRoute, navigateTo, goBack, type ViewId, type AppRoute } from "./navigation";
+import { parseRoute, navigateTo, goBack, type ViewId, type AppRoute } from "./navigation";
 import { ExploreProvider, useExplore } from './ExploreContext'
 import { UpdateGate } from './UpdateGate'
 import { initializeDiagnostics, recordDiagnostic } from '../platform/diagnostics'
@@ -55,6 +53,8 @@ const CardsView = lazy(() => import('../views/CardsView').then(m => ({ default: 
 const CardDetailView = lazy(() => import('../views/CardDetailView').then(m => ({ default: m.CardDetailView })))
 const AssetsView = lazy(() => import('../views/AssetsView').then(m => ({ default: m.AssetsView })))
 const AnalysisView = lazy(() => import('../views/AnalysisView').then(m => ({ default: m.AnalysisView })))
+const TransactionsView = lazy(() => import('../views/TransactionsSheet').then(m => ({ default: m.TransactionsView })))
+const StatementView = lazy(() => import('../views/StatementView').then(m => ({ default: m.StatementView })))
 const SettingsPage = lazy(() => import('./SettingsSheet').then(m => ({ default: m.SettingsPage })))
 function readHash(): AppRoute { return parseRoute(window.location.hash) }
 
@@ -69,11 +69,13 @@ export default function App() {
 
   // Back-button wiring for the Android shell; resolves to a no-op on web.
   useEffect(() => {
+    let active = true;
     let cleanup: (() => void) | undefined;
     initNativeShell().then((fn) => {
-      cleanup = fn;
+      if (active) cleanup = fn;
+      else fn();
     });
-    return () => cleanup?.();
+    return () => { active = false; cleanup?.(); };
   }, []);
 
   // The splash screen stays up until local data has actually loaded, so it
@@ -164,11 +166,14 @@ function Shell() {
   const { openImport, openEntry, openCards, openCardDetail } = useSheets();
   const [route, setRoute] = useState<AppRoute>(readHash);
   const view = route.view;
-  const renderStartedAt = useMemo(() => Date.now(), [view, route.cardId]);
-  const [direction, setDirection] = useState<"left" | "right">("right");
+  const renderStartedAt = useMemo(() => Date.now(), [view, route.cardId, route.statementId]);
+  const lastFocusedRoute = useRef(window.location.hash);
   const [privateMode, togglePrivate] = usePrivacy();
   useEffect(() => {
-    const report = () => trackScreen(view === 'future' ? 'plan' : view === 'card-detail' ? 'cards' : view)
+    const screen = view === 'future' ? 'plan'
+      : view === 'card-detail' || view === 'statement' ? 'cards'
+      : view === 'transactions' ? 'spending' : view
+    const report = () => trackScreen(screen)
     report()
     window.addEventListener(ANALYTICS_UPDATED, report)
     return () => window.removeEventListener(ANALYTICS_UPDATED, report)
@@ -207,22 +212,11 @@ function Shell() {
     }
   }, [state.settings.periodGrouping, dispatch]);
 
-  const setView = useCallback(
-    (next: string) => {
-      const resolved = resolveView(next);
-      if (resolved !== 'overview') stopExplore();
-      setDirection(
-        NAV.findIndex((n) => n.id === resolved) >=
-          NAV.findIndex((n) => n.id === view)
-          ? "right"
-          : "left",
-      );
-      if (resolved !== view) hapticTap();
-      navigateTo(resolved);
-      setRoute(readHash());
-    },
-    [view, stopExplore],
-  );
+  const setView = useCallback((next: ViewId) => {
+    if (next !== 'overview') stopExplore();
+    if (next !== view) hapticTap();
+    navigateTo(next);
+  }, [view, stopExplore]);
 
   // Dropping a statement anywhere on the app opens the importer, so the file
   // never has to be carried to a particular screen first.
@@ -234,14 +228,19 @@ function Shell() {
     return () => window.removeEventListener("dragenter", onDragEnter);
   }, [openImport]);
 
-  const swipe = useTabSwipe(view, setView);
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (lastFocusedRoute.current === window.location.hash) return;
+    lastFocusedRoute.current = window.location.hash;
+    window.scrollTo(0, 0);
     document.getElementById('main-content')?.focus({ preventScroll: true });
-  }, [view, route.cardId]);
+  }, [view, route.cardId, route.statementId]);
 
   return (
     <div className="finance-app">
+      <a className="workspace-skip" href="#main-content" onClick={event => {
+        event.preventDefault();
+        document.getElementById("main-content")?.focus();
+      }}>İçeriğe geç</a>
       <WorkspaceRail view={view} onSelect={setView} />
       <div className="workspace-body">
         <WorkspaceToolbar view={view} privateMode={privateMode} onTogglePrivate={togglePrivate} />
@@ -277,44 +276,24 @@ function Shell() {
           </div>
         )}
 
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="workspace-content"
-          style={{
-            paddingBottom:
-              "calc(var(--tabbar-height) + var(--safe-bottom) + 24px)",
-          }}
-          onPointerDown={swipe.onPointerDown}
-          onPointerUp={swipe.onPointerUp}
-          onPointerCancel={swipe.onPointerCancel}
-        >
+        <main id="main-content" tabIndex={-1} className="workspace-content">
           <Suspense key={view} fallback={<ViewSkeleton />}>
-            <div
-              className={
-                direction === "right" ? "slide-from-right" : "slide-from-left"
-              }
-            >
+            <div>
               <ScreenPaintMeasurement startedAt={renderStartedAt} />
-              {view === "overview" && <OverviewView onNavigate={setView} />}
-              {view === "spending" && <SpendingView />}
+              {view === 'overview' && <OverviewView onNavigate={setView} />}
+              {view === 'transactions' && <TransactionsView />}
+              {view === 'spending' && <SpendingView />}
               {view === 'analysis' && <AnalysisView onNavigate={setView} />}
-              {view === "future" && <FutureView />}
+              {view === 'future' && <FutureView />}
               {view === 'cards' && <CardsView onOpenCard={openCardDetail} />}
-              {view === 'card-detail' && route.cardId && <CardDetailView cardId={route.cardId} onBack={() => goBack('cards')} />}
+              {view === 'card-detail' && route.cardId && <CardDetailView key={route.cardId} cardId={route.cardId} onBack={() => goBack('cards')} />}
+              {view === 'statement' && route.statementId && <StatementView key={route.statementId} statementId={route.statementId} onBack={() => goBack('cards')} />}
               {view === 'assets' && <AssetsView />}
               {view === 'settings' && <SettingsPage onClose={() => goBack()} />}
             </div>
           </Suspense>
         </main>
-
-        {/* Present from the very first launch, with or without data: the bar is
-          the app's shape, not a reward for importing something. */}
-        <BottomNav
-          view={view}
-          onSelect={setView}
-          onImport={openEntry}
-        />
+        <BottomNav view={view} onSelect={setView} onAdd={openEntry} />
       </div>
     </div>
   );
@@ -330,168 +309,6 @@ function ScreenPaintMeasurement({ startedAt }: { startedAt: number }) {
     return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
   }, [startedAt]);
   return null;
-}
-
-/* ── Swipe between tabs ──────────────────────────────────────────────────── */
-
-/** Far enough to be a swipe rather than a wobble during a vertical scroll. */
-const SWIPE_DISTANCE = 64;
-
-/**
- * Horizontal swipe moves between the three tabs, the way it does in every app
- * with a tab bar. It costs nothing to discover and saves a reach to the bottom
- * of the screen for the most common move there is.
- *
- * Touch only. A mouse drag across a chart is not a navigation request, and
- * `pointerType` is the only reliable way to tell those apart. The gesture is
- * also refused when it started inside something that scrolls sideways of its
- * own accord — a wide table's own horizontal scroll wins over the tab strip.
- */
-function useTabSwipe(view: ViewId, setView: (id: ViewId) => void) {
-  const start = useRef<{ x: number; y: number } | null>(null);
-
-  const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-    if (event.pointerType !== "touch") return;
-    const target = event.target as HTMLElement;
-    if (
-      target.closest(
-        "[data-no-swipe], .overflow-x-auto, .recharts-wrapper, input, textarea, select",
-      )
-    )
-      return;
-    start.current = { x: event.clientX, y: event.clientY };
-  }, []);
-
-  const onPointerCancel = useCallback(() => {
-    start.current = null;
-  }, []);
-
-  const onPointerUp = useCallback(
-    (event: ReactPointerEvent<HTMLElement>) => {
-      const from = start.current;
-      start.current = null;
-      if (!from) return;
-
-      const dx = event.clientX - from.x;
-      const dy = event.clientY - from.y;
-      // A swipe that is mostly vertical is a scroll that drifted.
-      if (Math.abs(dx) < SWIPE_DISTANCE || Math.abs(dx) < Math.abs(dy) * 1.5)
-        return;
-
-      const index = NAV.findIndex((n) => n.id === view);
-      if (index < 0) return;
-      const next = NAV[dx < 0 ? index + 1 : index - 1];
-      if (next) setView(next.id);
-    },
-    [view, setView],
-  );
-
-  return { onPointerDown, onPointerUp, onPointerCancel };
-}
-
-/* ── Navigation chrome ───────────────────────────────────────────────────── */
-
-/**
- * The phone's whole navigation, in one bar: the three tabs, the one action
- * that creates data, and the one door out to settings.
- *
- * Import sits in the middle as a raised button rather than in the header,
- * because it is the only thing in the app that adds anything — every other
- * screen reads what it produced. Putting it here also means the first run and
- * the hundredth look the same: the bar is present with no data at all, so the
- * app never appears to be a different, smaller thing before its first import.
- */
-function BottomNav({
-  view,
-  onSelect,
-  onImport,
-}: {
-  view: ViewId;
-  onSelect: (id: ViewId) => void;
-  onImport: () => void;
-}) {
-  const [first, second, third, fourth] = NAV;
-
-  return (
-    <nav
-      aria-label="Mobil gezinme"
-      className="mizan-bottom-nav fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 backdrop-blur sm:hidden"
-      style={{ paddingBottom: "var(--safe-bottom)" }}
-    >
-      <div className="mx-auto flex w-full max-w-app items-stretch">
-        <TabButton
-          item={first}
-          active={view === first.id}
-          onSelect={onSelect}
-        />
-        <TabButton
-          item={second}
-          active={view === second.id}
-          onSelect={onSelect}
-        />
-
-        <div className="flex flex-1 items-center justify-center">
-          <button
-            type="button"
-            onClick={() => {
-              hapticTap();
-              onImport();
-            }}
-            aria-label="Kayıt ekle"
-            className={clsx(
-              "inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent text-inverse",
-              "shadow-[var(--shadow-overlay)] transition-transform duration-200 active:scale-95",
-            )}
-          >
-            <Plus size={22} />
-          </button>
-        </div>
-
-        <TabButton
-          item={third}
-          active={view === third.id}
-          onSelect={onSelect}
-        />
-
-        <TabButton item={fourth} active={view === fourth.id} onSelect={onSelect} />
-      </div>
-    </nav>
-  );
-}
-
-function TabButton({
-  item,
-  active,
-  onSelect,
-}: {
-  item: (typeof NAV)[number];
-  active: boolean;
-  onSelect: (id: ViewId) => void;
-}) {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(item.id)}
-      aria-current={active ? "page" : undefined}
-      className={clsx(
-        "flex h-[var(--tabbar-height)] flex-1 flex-col items-center justify-center gap-1",
-        "transition-colors duration-200",
-        active ? "text-accent" : "text-muted",
-      )}
-    >
-      {/* The icon lifts a little when its tab is the live one — the cheapest
-          way to say "you are here" without a second colour. */}
-      <Icon
-        size={20}
-        className={clsx(
-          "transition-transform duration-200",
-          active && "-translate-y-0.5",
-        )}
-      />
-      <span className="text-label font-semibold">{item.label}</span>
-    </button>
-  );
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */

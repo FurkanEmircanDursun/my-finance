@@ -86,7 +86,7 @@ export function AssetsView() {
   }
 
   return <div className="assets-page">
-    <header className="dashboard-title"><div><h1>Varlıkların.</h1><p>Bütçenden ayrı, birikimlerin bir arada.</p></div><button className="primary-button" onClick={() => setEditor({ holding: null })}><Plus size={18} /> Varlık ekle</button></header>
+    <header className="dashboard-title"><div><h1>Varlıklar</h1><p>Altın, gümüş ve döviz kayıtların.</p></div><button className="primary-button" onClick={() => setEditor({ holding: null })}><Plus size={18} /> Varlık ekle</button></header>
     <section className="assets-summary" aria-labelledby="assets-total-title">
       <div className="assets-summary-value"><h2 id="assets-total-title">{portfolio.missing ? 'Portföy değerini tamamlıyoruz' : 'Varlıklarının TL karşılığı'}</h2>
         <div className="assets-total">{holdings.length && portfolio.total !== null ? <MoneyValue value={portfolio.total} /> : <span className="num">—</span>}</div>

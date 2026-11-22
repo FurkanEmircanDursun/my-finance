@@ -1,3 +1,4 @@
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { isNative } from './index'
 
 export type ResolvedTheme = 'light' | 'dark'
@@ -41,9 +42,17 @@ export async function syncStatusBar(theme: ResolvedTheme): Promise<void> {
  */
 let backInterceptor: (() => boolean) | null = null
 let overlayBackHandler: (() => boolean) | null = null
+const navigationGestures = registerPlugin<{
+  setOverlayOpen(options: { open: boolean }): Promise<void>
+}>('MizanNavigationGestures')
 
 export function setOverlayBackHandler(handler: (() => boolean) | null): void {
+  const hadOverlay = overlayBackHandler !== null
   overlayBackHandler = handler
+  const hasOverlay = handler !== null
+  if (hadOverlay !== hasOverlay && Capacitor.getPlatform() === 'ios') {
+    void navigationGestures.setOverlayOpen({ open: hasOverlay }).catch(() => {})
+  }
 }
 
 export function setBackInterceptor(handler: (() => boolean) | null): void {

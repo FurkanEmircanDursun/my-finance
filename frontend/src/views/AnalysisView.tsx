@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { ArrowUpRight, ChevronDown, Plus, RefreshCw, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, CalendarClock, ChevronDown, Coins, Plus, RefreshCw, TrendingUp } from 'lucide-react'
 import { CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
@@ -78,9 +78,13 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
   const activeCategory = report?.categories.some(row => row.id === category) ? category : 'all'
   return <div className="analysis-page">
     <header className="dashboard-title">
-      <div><h1>Büyük resmi gör.</h1><p>Harcamaların ve birikimlerin, zaman içinde.</p></div>
+      <div><h1>Analiz</h1><p>Gelir, harcama ve birikimlerin zaman içinde nasıl değişti?</p></div>
       <button className="quiet-button" onClick={() => onNavigate('spending')}>Harcama ayrıntıları <ArrowUpRight size={16} /></button>
     </header>
+    <div className="analysis-destinations" aria-label="İlgili görünümler">
+      <button type="button" className="quiet-button" onClick={() => onNavigate('assets')}><Coins size={17} /> Varlıklar</button>
+      <button type="button" className="quiet-button" onClick={() => onNavigate('future')}><CalendarClock size={17} /> Gelecek</button>
+    </div>
     <div className="analysis-range">
       <Field label="Analiz dönemi"><select className="finance-select" value={window} onChange={event => { setWindow(event.target.value); setCategory('all') }}>
         <option value="all">Tüm geçmiş</option><option value="6m">Son 6 ay</option><option value="12m">Son 12 ay</option>
@@ -116,7 +120,7 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         </Panel>
         <Panel title="Harcama dağılımı" description="Seçili dönemin kategorilere göre net harcaması.">
           {report.categories.some(row => row.pieValue > 0) ? <div className="analysis-pie">
-            <div className="analysis-chart" role="img" aria-label="Kategorilere göre harcama pasta grafiği; tutarlar yanındaki listede."><ResponsiveContainer width="100%" height={190}><PieChart><Pie data={report.categories.filter(row => row.pieValue > 0)} dataKey="pieValue" nameKey="label" outerRadius={82} paddingAngle={1} stroke="var(--bg-raised)" strokeWidth={2} isAnimationActive={false}>{report.categories.filter(row => row.pieValue > 0).map(row => <Cell key={row.id} fill={row.color} />)}</Pie><Tooltip content={<MoneyTooltip pie />} /></PieChart></ResponsiveContainer></div>
+            <div className="analysis-chart" role="img" aria-label="Kategorilere göre harcama grafiği. Tutarlar kategori listesinde."><ResponsiveContainer width="100%" height={190}><PieChart><Pie data={report.categories.filter(row => row.pieValue > 0)} dataKey="pieValue" nameKey="label" outerRadius={82} paddingAngle={1} stroke="var(--bg-raised)" strokeWidth={2} isAnimationActive={false}>{report.categories.filter(row => row.pieValue > 0).map(row => <Cell key={row.id} fill={row.color} aria-label={row.label} />)}</Pie><Tooltip content={<MoneyTooltip pie />} /></PieChart></ResponsiveContainer></div>
             <ul className="analysis-key">{report.categories.map(row => <li key={row.id}><span><i style={{ background: row.color }} />{row.label}</span><strong className="num">{amount(row.net)}</strong><small className="num">{row.pieValue > 0 ? Math.round(row.share * 100) + '%' : 'İade kredisi'}</small></li>)}</ul>
             {report.categoryRefundCredit > 0 && <p className="analysis-caption">Negatif kategori bakiyeleri pastaya eklenmez. <span className="num">{amount(report.categoryRefundCredit)}</span> iade kredisi toplamdan ayrıca düşülür.</p>}
           </div> : <p className="analysis-placeholder">Dağılım için henüz pozitif net harcama yok.</p>}
@@ -162,7 +166,7 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
 }
 
 function Summary({ label, value, note }: { label: string; value: string; note: string }) {
-  return <div><dt>{label}</dt><dd className="num">{value}</dd><small>{note}</small></div>
+  return <div><dt>{label}</dt><dd className="num">{value}</dd><dd className="analysis-metric-note">{note}</dd></div>
 }
 function Panel({ title, description, action, children }: { title: string; description?: string; action?: ReactNode; children: ReactNode }) {
   return <section className="analysis-panel"><header><div><h2>{title}</h2>{description && <p>{description}</p>}</div>{action}</header>{children}</section>
