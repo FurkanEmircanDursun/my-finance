@@ -18,6 +18,8 @@ export interface RemoteSnapshot {
   full: boolean
   /** Served from the local cache because there is no connection. */
   fromCache: boolean
+  /** Transaction periods whose server snapshots have arrived. */
+  periods?: string[]
 }
 
 export interface Listener {

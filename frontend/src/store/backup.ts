@@ -511,10 +511,15 @@ export function applyBackup(
   })
 
   if (mode === 'replace') {
+    const statements = new Map(current.statements.map(statement => [statement.id, statement.importedAt]))
+    const rules = new Map(current.rules.map(rule => [rule.merchant, rule]))
     return {
       transactions: [...backup.transactions].sort(sortDesc),
-      statements: backup.statements,
-      rules: backup.rules,
+      statements: backup.statements.map(statement => ({ ...statement, importedAt: statements.get(statement.id) ?? statement.importedAt })),
+      rules: backup.rules.map(rule => {
+        const original = rules.get(rule.merchant)
+        return original ? { ...original, category: rule.category } : rule
+      }),
       profile: { ...defaultProfile, ...backup.profile },
       settings: carriedSettings(backup.settings),
       added: {

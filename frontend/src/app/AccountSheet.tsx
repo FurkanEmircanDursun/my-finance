@@ -10,7 +10,6 @@ import {
   authErrorMessage, continueWithEmail, reauthenticate, registerWithEmail, sendPasswordReset,
   signInWithGoogle, type AuthUser,
 } from '../firebase/auth'
-import { SyncDecision } from './SyncDecision'
 import { useNow } from './useNow'
 import { GoogleMark } from './GoogleConnectButton'
 import { UserFacingError } from '../core/errors'
@@ -42,7 +41,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
         </div>
       )}
       {!cloudAvailable ? (
-        <p className="text-body text-muted">Bu sürümde bulut senkronu kurulu değil; veriler yalnızca bu cihazda tutulur.</p>
+        <p className="text-body text-muted">Bu dağıtımda Firebase bağlantısı yapılandırılmamış.</p>
       ) : !authReady ? (
         <div className="space-y-3">
           <Skeleton className="h-11 w-full" />
@@ -52,7 +51,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
       ) : authUser && !authUser.isAnonymous ? (
         <SignedIn user={authUser} />
       ) : (
-        <SignedOut upgrading={authUser?.isAnonymous === true} />
+        <AccountSignInForm upgrading={authUser?.isAnonymous === true} />
       )}
     </Modal>
   )
@@ -62,7 +61,7 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
 
 type Busy = 'google' | 'email' | 'create' | 'reset' | null
 
-function SignedOut({ upgrading }: { upgrading: boolean }) {
+export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
   const { refreshAuthUser } = useStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -152,8 +151,7 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
       )}
 
       <p className="text-body text-muted">
-        Hesap açarsan veriler telefonunda ve bilgisayarında aynı görünür; internet yokken de çalışır, bağlanınca
-        kendiliğinden eşitlenir. Açmazsan her şey yalnızca bu cihazda kalır.
+        Kayıtların Firebase hesabında saklanır. Telefonunda ve bilgisayarında aynı hesapla giriş yapabilirsin.
       </p>
 
       <Button className="google-connect-button w-full" onClick={google} disabled={busy !== null} aria-busy={busy === 'google'}>
@@ -248,13 +246,12 @@ function SignedOut({ upgrading }: { upgrading: boolean }) {
 const PROVIDER: Record<string, string> = { 'google.com': 'Google', password: 'E-posta' }
 
 function SignedIn({ user }: { user: AuthUser }) {
-  const { state, sync, authUser, eraseCloud, logout } = useStore()
+  const { state, sync, authUser, eraseCloud, logout, historyReady } = useStore()
   const [leaving, setLeaving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wipeOpen, setWipeOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [clearDevice, setClearDevice] = useState(false)
 
   const via = user.providers.map((p) => PROVIDER[p]).filter(Boolean).join(' · ')
   const name = user.displayName ?? user.email ?? 'Hesabım'
@@ -263,7 +260,7 @@ function SignedIn({ user }: { user: AuthUser }) {
     setBusy(true)
     setError(null)
     try {
-      await logout({ clearLocal: clearDevice })
+      await logout()
     } catch (err) {
       setError(authErrorMessage(err))
       setBusy(false)
@@ -282,8 +279,6 @@ function SignedIn({ user }: { user: AuthUser }) {
     }
   }
 
-  // Signing out with changes still waiting leaves them on this device; the
-  // person is told so rather than left to wonder where they went.
   const unsent = sync.pending > 0
 
   return (
@@ -297,17 +292,10 @@ function SignedIn({ user }: { user: AuthUser }) {
         </div>
       </div>
 
-      {sync.status === 'decision' ? (
-        <section className="space-y-3">
-          <h3 className="text-title font-semibold text-ink">Bir seçim bekleniyor</h3>
-          <SyncDecision />
-        </section>
-      ) : (
-        <StatusPanel />
-      )}
+      <StatusPanel />
 
       <p className="text-label text-muted">
-        Bu cihazda {count(state.transactions.length)} işlem · {count(state.statements.length)} ekstre var.
+        Hesabında {historyReady && `${count(state.transactions.length)} işlem · `}{count(state.statements.length)} ekstre var.
         Giriş yaptığın diğer cihazlarda aynı veriyi görürsün.
       </p>
 
@@ -318,11 +306,10 @@ function SignedIn({ user }: { user: AuthUser }) {
       )}
 
       <div className="space-y-2">
-        <Button className="w-full sm:w-auto" onClick={() => { setClearDevice(false); setLeaving(true) }} disabled={busy}>
+        <Button className="w-full sm:w-auto" onClick={() => setLeaving(true)} disabled={busy}>
           <LogOut size={16} />
           Çıkış yap
         </Button>
-        <p className="text-label text-faint">Çıkış yapınca veriler bu cihazda kalır.</p>
       </div>
 
       <Disclosure title="Veri ve hesap">
@@ -332,15 +319,14 @@ function SignedIn({ user }: { user: AuthUser }) {
               Bulut verilerimi sil
             </Button>
             <p className="text-label text-faint">
-              Buluttaki kopya silinir ve çıkış yapılır. Bu cihazdaki veriler kalır; tekrar giriş yaparsan yeniden
-              eşitlenir.
+              Hesabındaki kayıtlar kalıcı olarak silinir ve çıkış yapılır.
             </p>
           </div>
           <div className="space-y-2">
             <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={busy}>
               Hesabımı sil
             </Button>
-            <p className="text-label text-faint">Hesap ve buluttaki tüm veriler kalıcı olarak silinir. Bu cihazdaki veriler kalır.</p>
+            <p className="text-label text-faint">Hesap ve buluttaki tüm veriler kalıcı olarak silinir.</p>
           </div>
         </div>
       </Disclosure>
@@ -349,20 +335,18 @@ function SignedIn({ user }: { user: AuthUser }) {
         open={leaving}
         onClose={() => setLeaving(false)}
         title="Çıkış yap"
-        footer={<><Button onClick={() => setLeaving(false)}>Vazgeç</Button><Button variant={clearDevice ? 'danger' : 'primary'} onClick={() => { setLeaving(false); void signOut() }}>{clearDevice ? 'Çıkış yap ve cihazı temizle' : 'Çıkış yap'}</Button></>}
+        footer={<><Button onClick={() => setLeaving(false)}>Vazgeç</Button><Button variant="primary" onClick={() => { setLeaving(false); void signOut() }}>Çıkış yap</Button></>}
       >
         <div className="space-y-4">
           <p className="text-body text-muted">Hesabındaki bulut verileri korunur. Tekrar giriş yaptığında kayıtlarına ulaşabilirsin.</p>
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body text-ink"><input type="checkbox" checked={clearDevice} onChange={event => setClearDevice(event.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />Bu cihazdaki verileri de kaldır</label>
-          {clearDevice && <p className="text-label text-muted">Yalnızca bu cihazdaki işlemler, ekstreler ve profil temizlenir. Eşitlenmemiş yerel kayıtların varsa önce yedek al.</p>}
-          {unsent && <p className="text-label text-warning" role="status">{sync.pending} değişiklik henüz buluta gönderilmedi. {clearDevice ? 'Cihazı temizlersen bu yerel değişiklikler kaldırılır.' : 'Bu cihazda kalır; aynı hesapla giriş yaptığında eşitlenir.'}</p>}
+          {unsent && <p className="text-label text-warning" role="status">{sync.pending} değişiklik buluta kaydedilmeyi bekliyor.</p>}
         </div>
       </Modal>
 
       <ConfirmDialog
         open={wipeOpen}
         title="Bulut verilerini sil"
-        message="Buluttaki işlem, ekstre, kural ve profil kopyan kalıcı olarak silinir ve çıkış yapılır. Bu cihazdaki veriler etkilenmez."
+        message="Hesabındaki işlemler, ekstreler, kategori kuralları, kartlar ve ayarlar kalıcı olarak silinir ve çıkış yapılır."
         confirmLabel="Buluttakini sil"
         destructive
         onCancel={() => setWipeOpen(false)}

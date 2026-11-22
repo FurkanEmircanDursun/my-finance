@@ -38,6 +38,7 @@ export interface AdapterOutput {
   accountLabel: string
   /** The cover figures the bank prints — used to verify the rows, never to replace them. */
   summary: StatementSummary
+  printedTotals?: { charges: Money; payments: Money; paymentLikeRefunds?: Money }
 }
 
 const CURRENCY_SYMBOLS: Record<string, string> = { $: 'USD', '€': 'EUR', '£': 'GBP' }

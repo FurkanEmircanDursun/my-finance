@@ -1,9 +1,10 @@
 import { hash } from '../core/hash'
 import { UserFacingError } from '../core/errors'
 import type { CardBank, CreditCard, ParseResult, Transaction } from './types'
+import { BANKS, identifyBank } from './banks'
 
 export function cardBankLabel(bank: CardBank): string {
-  return bank === 'akbank' ? 'Akbank' : 'Garanti BBVA'
+  return BANKS[bank].label
 }
 
 export function cardDisplayName(card: CreditCard): string {
@@ -22,7 +23,7 @@ export function sanitizeCards(value: unknown): CreditCard[] {
     if (!raw || typeof raw !== 'object') return []
     const card = raw as Partial<CreditCard>
     if (typeof card.id !== 'string' || !card.id || seen.has(card.id)) return []
-    if (card.bank !== 'akbank' && card.bank !== 'garanti') return []
+    if (typeof card.bank !== 'string' || !Object.prototype.hasOwnProperty.call(BANKS, card.bank)) return []
     if (typeof card.name !== 'string' || !card.name.trim()) return []
     if (!isCardDay(card.statementDay!) || !isCardDay(card.entryDay!)) return []
     seen.add(card.id)
@@ -46,13 +47,15 @@ export function nextCardDate(day: number, now = new Date()): Date {
 }
 
 export function cardMatchesBank(card: CreditCard, bank: string): boolean {
-  const normalized = bank.toLocaleLowerCase('tr-TR')
-  return card.bank === 'akbank' ? normalized.includes('akbank') : normalized.includes('garanti')
+  return card.bank !== 'other' && identifyBank(bank) === card.bank
 }
 
 /** Scope parser identities to a physical card, so identical purchases on two cards survive. */
 export function assignResultCard(result: ParseResult, card: CreditCard): ParseResult {
   if (!cardMatchesBank(card, result.bank)) throw new UserFacingError(`Bu dosya ${cardBankLabel(card.bank)} kartına ait değil. Doğru kartı seçip tekrar dene.`)
+  if (card.last4 && result.reportedCardLast4 && result.reportedCardLast4 !== card.last4) {
+    throw new UserFacingError('PDF’deki kartın son dört hanesi seçili kartla uyuşmuyor. Kartı ve dosyayı kontrol et.')
+  }
   const accountLabel = cardDisplayName(card)
   return {
     ...result,

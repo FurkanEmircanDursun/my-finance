@@ -22,8 +22,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { pdfPagesToText, recogniseLayerText, toTextGeom } from '../src/ingest/extract'
-import { parseStatementText } from '../src/ingest/pipeline'
+import { readPdfTextLayer, recogniseLayerText, toTextGeom } from '../src/ingest/extract'
+import { parseStatementText, statementImportProblem } from '../src/ingest/pipeline'
 import type { ParseResult } from '../src/domain/types'
 
 const args = process.argv.slice(2)
@@ -55,8 +55,8 @@ async function loadPdfText(file: string): Promise<{ text: string; engine: string
   }
   await doc.destroy()
 
-  const layer = pdfPagesToText(pages)
-  const recognised = recogniseLayerText(layer)
+  const layer = readPdfTextLayer(pages)
+  const recognised = layer.engine === 'pdf-ebcdic' ? layer : recogniseLayerText(layer.text)
   if (!recognised) {
     throw new Error('PDF metni tanınmadı (taranmış olabilir; uygulamadaki OCR yolu gerekir).')
   }
@@ -123,7 +123,7 @@ for (const file of files) {
     if (flags.has('--text')) console.log(text)
     const result = parseStatementText(text, { rules: [], engine, fileName: path.basename(file) })
     results.push({ file, result })
-    if (result.reconciliation.status === 'mismatch') failed = true
+    if (statementImportProblem(result, /\.pdf$/i.test(file))) failed = true
   } catch (error) {
     failed = true
     results.push({ file, error: error instanceof Error ? error.message : String(error) })

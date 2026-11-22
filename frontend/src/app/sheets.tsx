@@ -6,17 +6,18 @@ import {
   Suspense,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react'
 import { ImportSheet } from './ImportSheet'
-import { SyncGate } from './SyncDecision'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
-import type { TxKind } from '../domain/types'
+import { effectiveDate, type TxKind } from '../domain/types'
 import { EntrySheet } from './EntrySheet'
 import { useSharedPdfImport } from '../hooks/useSharedPdfImport'
+import { Modal } from '../ui/Modal'
 
 /**
  * Everything that is not one of the three tabs is a sheet, and every sheet in
@@ -58,6 +59,7 @@ const TransactionsSheet = lazy(() =>
 export interface TransactionQuery {
   category?: CategoryId
   merchant?: string
+  day?: string
   title?: string
   /** Read the whole account rather than the selected period. */
   overall?: boolean
@@ -68,7 +70,7 @@ export interface TransactionQuery {
 interface SheetApi {
   openEntry: () => void
   openIncomeEntry: () => void
-  openImport: (cardId?: string) => void
+  openImport: (cardId?: string, repairStatementId?: string) => void
   openSettings: () => void
   openAccount: () => void
   openIncome: () => void
@@ -92,9 +94,10 @@ export function useSheets(): SheetApi {
 
 export function SheetProvider({ children }: { children: ReactNode }) {
   const { stopExplore } = useExplore()
-  const { state, visible } = useStore()
+  const { state, visible, historyReady, loadedPeriods, requestPeriod, sync, syncNow } = useStore()
   const [importOpen, setImportOpen] = useState(false)
   const [importCardId, setImportCardId] = useState<string | undefined>()
+  const [repairStatementId, setRepairStatementId] = useState<string>()
   const [entryOpen, setEntryOpen] = useState<'expense' | 'income' | null>(null)
   const openEntry = useCallback(() => { stopExplore(); setEntryOpen('expense') }, [stopExplore])
   const openIncomeEntry = useCallback(() => { stopExplore(); setEntryOpen('income') }, [stopExplore])
@@ -106,8 +109,19 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
   const sharedImport = useSharedPdfImport()
   const sharedReady = !importOpen && !entryOpen && !accountOpen && !incomeOpen && !budgetsOpen && !archiveOpen && !rewardsOpen && !txQuery
+  const sheetPeriod = incomeOpen || archiveOpen || rewardsOpen || txQuery?.overall
+    ? 'all' : txQuery ? state.filters.month : null
+  const sheetReady = !sheetPeriod || historyReady || loadedPeriods.has(sheetPeriod)
+  useEffect(() => {
+    if (sheetPeriod && !sheetReady) requestPeriod(sheetPeriod)
+  }, [sheetPeriod, sheetReady, requestPeriod])
 
-  const openImport = useCallback((cardId?: string) => { stopExplore(); setImportCardId(cardId); setImportOpen(true) }, [stopExplore])
+  const openImport = useCallback((cardId?: string, repairId?: string) => {
+    stopExplore()
+    setImportCardId(cardId)
+    setRepairStatementId(repairId)
+    setImportOpen(true)
+  }, [stopExplore])
   const openSettings = useCallback(() => { stopExplore(); navigateTo('settings') }, [stopExplore])
   const openAccount = useCallback(() => { stopExplore(); setAccountOpen(true) }, [stopExplore])
   const openIncome = useCallback(() => { stopExplore(); setIncomeOpen(true) }, [stopExplore])
@@ -162,6 +176,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       (tx) =>
         (!txQuery.category || tx.category === txQuery.category) &&
         (!txQuery.merchant || tx.merchant === txQuery.merchant) &&
+        (!txQuery.day || effectiveDate(tx) === txQuery.day) &&
         (!txQuery.kinds || txQuery.kinds.includes(tx.kind)),
     )
   }, [source, txQuery])
@@ -182,25 +197,27 @@ export function SheetProvider({ children }: { children: ReactNode }) {
         />
       )}
 
-      <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} initialCardId={importCardId} />
+      <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} initialCardId={importCardId} repairStatementId={repairStatementId} />
       {sharedImport.delivery && <ImportSheet key={sharedImport.delivery.id} open={sharedReady} onClose={sharedImport.finish} sharedFiles={sharedImport.delivery.files} />}
-
-      {/* Not lazy and not behind a sheet: it must be able to appear on its own,
-          wherever the person is, the moment sync needs an answer. It carries no
-          Firebase code — that stays in the account sheet's chunk. */}
-      <SyncGate />
 
       <Suspense fallback={null}>
         {accountOpen && (
           <AccountSheet open onClose={() => setAccountOpen(false)} />
         )}
-        {incomeOpen && (
+        {!sheetReady && <Modal open title="Kayıtlar yükleniyor" onClose={() => {
+          setIncomeOpen(false); setArchiveOpen(false); setRewardsOpen(false); setTxQuery(null)
+        }}>
+          {sync.status === 'offline' || sync.status === 'error'
+            ? <button type="button" className="text-button" onClick={syncNow}>Bağlantıyı kontrol et ve yeniden dene</button>
+            : <p role="status">Seçtiğin kayıtlar Firebase’den alınıyor.</p>}
+        </Modal>}
+        {incomeOpen && sheetReady && (
           <IncomeSheet open onClose={() => setIncomeOpen(false)} />
         )}
         {budgetsOpen && (
           <BudgetSheet open onClose={() => setBudgetsOpen(false)} />
         )}
-        {archiveOpen && (
+        {archiveOpen && sheetReady && (
           <ArchiveSheet
             open
             onClose={() => setArchiveOpen(false)}
@@ -210,10 +227,10 @@ export function SheetProvider({ children }: { children: ReactNode }) {
             }}
           />
         )}
-        {rewardsOpen && (
+        {rewardsOpen && sheetReady && (
           <RewardsSheet open onClose={() => setRewardsOpen(false)} />
         )}
-        {txQuery !== null && (
+        {txQuery !== null && sheetReady && (
           <TransactionsSheet
             open
             onClose={() => setTxQuery(null)}

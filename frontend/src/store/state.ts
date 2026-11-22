@@ -52,7 +52,14 @@ export function toSnapshot(
     statements: state.statements,
     rules: state.rules,
     profile: state.profile,
-    prefs: { theme: state.settings.theme, periodGrouping: state.settings.periodGrouping },
+    prefs: {
+      theme: state.settings.theme,
+      periodGrouping: state.settings.periodGrouping,
+      ...(state.settings.reminders && (state.settings.reminders.enabled ||
+          state.settings.reminders.hour !== defaultSettings.reminders?.hour || state.settings.reminders.cloudPush !== undefined)
+        ? { reminders: state.settings.reminders ?? defaultSettings.reminders } : {}),
+      ...(state.settings.onboardingSeen ? { onboardingSeen: true } : {}),
+    },
   }
 }
 
@@ -60,12 +67,15 @@ const newestFirst = (a: Transaction, b: Transaction) => (a.date < b.date ? 1 : a
 
 export type Action =
   | { type: 'hydrate'; payload: Partial<AppState> }
+  | { type: 'seedSession'; payload: Partial<AppState> }
+  | { type: 'resetSession' }
   | { type: 'import'; transactions: Transaction[]; statements: Statement[]; outcomes: ImportOutcome[]; refreshedStatementIds?: string[] }
   | { type: 'setCategory'; transactionIds: string[]; category: CategoryId; learn: boolean }
   | { type: 'addManual'; transaction: Transaction }
   | { type: 'addManualBatch'; transactions: Transaction[] }
   | { type: 'deleteTransactions'; ids: string[] }
   | { type: 'removeStatement'; statementId: string }
+  | { type: 'restoreStatement'; statement: Statement; transactions: Transaction[] }
   | { type: 'setFilters'; filters: Partial<Filters> }
   | { type: 'setProfile'; profile: Partial<Profile> }
   | { type: 'upsertCard'; card: CreditCard }
@@ -91,10 +101,17 @@ function applyRuleToAll(
 
 export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
+    case 'resetSession':
+      return initialState
+    case 'seedSession':
+      return { ...state, ...action.payload, hydrated: false }
     case 'hydrate':
       return { ...state, ...action.payload, hydrated: true }
 
     case 'import': {
+      if (action.transactions.length === 0 && action.statements.length === 0 && !action.refreshedStatementIds?.length) {
+        return { ...state, lastImport: action.outcomes }
+      }
       const refreshed = new Set(action.refreshedStatementIds)
       const priorRows = new Map(state.transactions.map((tx) => [tx.id, tx]))
       const kept = state.transactions.filter((tx) => !tx.statementId || !refreshed.has(tx.statementId))
@@ -108,7 +125,7 @@ export function reducer(state: AppState, action: Action): AppState {
       // that is how a re-import refreshes the summary and reconciliation of a
       // statement imported by an older build.
       const byId = new Map(state.statements.map((st) => [st.id, st]))
-      for (const st of action.statements) byId.set(st.id, st)
+      for (const st of action.statements) byId.set(st.id, { ...st, importedAt: byId.get(st.id)?.importedAt ?? st.importedAt })
       const transactions = merged.map((tx) => {
         const statement = tx.statementId ? byId.get(tx.statementId) : undefined
         return statement?.cardId && tx.cardId !== statement.cardId
@@ -137,9 +154,11 @@ export function reducer(state: AppState, action: Action): AppState {
         // One rule per distinct merchant in the selection; re-assigning a
         // merchant replaces its previous rule instead of stacking.
         const merchants = [...new Set(touched.map((t) => t.merchant))]
+        const priorRules = new Map(state.rules.map(rule => [rule.merchant, rule]))
         rules = state.rules.filter((r) => !merchants.includes(r.merchant))
         for (const merchant of merchants) {
-          rules = [...rules, { id: uid('rule-'), merchant, category: action.category, createdAt: Date.now() }]
+          const prior = priorRules.get(merchant)
+          rules.push({ id: prior?.id ?? uid('rule-'), merchant, category: action.category, createdAt: prior?.createdAt ?? Date.now() })
           transactions = applyRuleToAll(transactions, merchant, action.category)
         }
       }
@@ -187,6 +206,21 @@ export function reducer(state: AppState, action: Action): AppState {
         transactions: state.transactions.filter(
           (t) => t.statementId !== action.statementId,
         ),
+      }
+    }
+
+    case 'restoreStatement': {
+      const { statement, transactions } = action
+      if (state.statements.some(item => item.id === statement.id || (
+        statement.periodEnd && item.periodEnd === statement.periodEnd && item.bank === statement.bank &&
+        (statement.cardId ? item.cardId === statement.cardId : !item.cardId && item.accountLabel === statement.accountLabel)
+      ))) return state
+      const ids = new Set(state.transactions.map(item => item.id))
+      if (transactions.some(item => item.statementId !== statement.id || ids.has(item.id))) return state
+      return {
+        ...state,
+        statements: [...state.statements, statement].sort((a, b) => b.importedAt - a.importedAt),
+        transactions: [...state.transactions, ...transactions].sort(newestFirst),
       }
     }
 
@@ -275,7 +309,13 @@ export function reducer(state: AppState, action: Action): AppState {
       const next = applyChange(toSnapshot(state), action.change)
       const { prefs, profile } = action.change
       const settings = prefs
-        ? { ...state.settings, theme: prefs.theme, periodGrouping: prefs.periodGrouping }
+        ? {
+            ...state.settings,
+            theme: prefs.theme,
+            periodGrouping: prefs.periodGrouping,
+            reminders: prefs.reminders ?? defaultSettings.reminders,
+            onboardingSeen: prefs.onboardingSeen ?? false,
+          }
         : state.settings
 
       return {
@@ -284,7 +324,7 @@ export function reducer(state: AppState, action: Action): AppState {
           next.transactions === state.transactions ? state.transactions : [...next.transactions].sort(newestFirst),
         statements: next.statements,
         rules: next.rules,
-        profile: profile ? { ...defaultProfile, ...profile, cards: sanitizeCards(profile.cards), archivedCards: sanitizeCards(profile.archivedCards) } : state.profile,
+        profile: profile ? { ...defaultProfile, ...next.profile, cards: sanitizeCards(profile.cards), archivedCards: sanitizeCards(profile.archivedCards) } : state.profile,
         settings,
         // The period filter names months of the old grouping.
         filters:

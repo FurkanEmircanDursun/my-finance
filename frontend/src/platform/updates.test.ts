@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cacheUpdatePolicy, parseUpdatePolicy } from './updatesPolicy'
 
 const mocks = vi.hoisted(() => ({
   native: vi.fn(() => true), info: vi.fn(), supported: vi.fn(), fetch: vi.fn(), activate: vi.fn(),
@@ -51,7 +50,7 @@ describe('Remote Config update lifecycle', () => {
     watcher.dispose()
   })
   it('retains a previously validated mandatory policy during a network failure', async () => {
-    cacheUpdatePolicy(localStorage, parseUpdatePolicy(policy)!)
+    mocks.source = 'remote'
     mocks.fetch.mockRejectedValue(new Error('offline'))
     const { watchUpdates } = await import('./updates')
     const changed = vi.fn(), watcher = watchUpdates(changed)
@@ -59,11 +58,12 @@ describe('Remote Config update lifecycle', () => {
     watcher.dispose()
   })
   it('does not replace a cached valid policy with invalid remote values', async () => {
-    cacheUpdatePolicy(localStorage, parseUpdatePolicy(policy)!)
-    mocks.values.update_url = 'javascript:alert(1)'
-    mocks.values.update_url_android = 'javascript:alert(1)'
     const { watchUpdates } = await import('./updates')
     const changed = vi.fn(), watcher = watchUpdates(changed)
+    await vi.waitFor(() => expect(mocks.observer).not.toBeNull())
+    mocks.values.update_url = 'javascript:alert(1)'
+    mocks.values.update_url_android = 'javascript:alert(1)'
+    mocks.observer!.next()
     await vi.waitFor(() => expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({ decision: 'hard', status: 'invalid' })))
     watcher.dispose()
   })

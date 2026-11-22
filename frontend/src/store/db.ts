@@ -1,18 +1,13 @@
 import { UserFacingError } from '../core/errors'
 /**
- * Minimal IndexedDB key-value store (no dependency).
- *
- * The previous build kept nothing but the profile in localStorage, so a page
- * reload threw away every imported statement. Transactions can run to tens of
- * thousands of rows, which is past what localStorage comfortably holds, so they
- * live in IndexedDB. An unavailable API can retain an explicitly nondurable
- * in-memory copy; blocked upgrades and database failures never look like empty data.
+ * Compatibility access to the legacy financial database. The workspace reads
+ * it during migration only. Blocked upgrades must not look like an empty database.
  */
 
 const DB_NAME = 'my-finance'
-// Version 2 excludes older clients whose unconditional writes could resurrect
-// a cleared snapshot. The existing store and every key stay unchanged.
-const DB_VERSION = 2
+// A previous local-first client cannot reopen this database and write a copy
+// after the cloud-first migration. Opening it retains every legacy key.
+const DB_VERSION = 3
 const STORE = 'kv'
 const GENERATION_KEY = 'device:generation'
 let financialGeneration = 0
@@ -125,6 +120,27 @@ export async function dbFinancialGenerationIsCurrent(): Promise<boolean> {
   return Number(await dbReadFinancialValue<number>(GENERATION_KEY) ?? 0) === financialGeneration
 }
 
+/** Claim old local records before a first upload, so retries cannot switch accounts. */
+export async function dbClaimLegacyState(uid: string): Promise<boolean> {
+  const db = await openDb()
+  if (!db) return false
+  const expected = financialGeneration
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite')
+    const store = tx.objectStore(STORE)
+    const owner = store.get('sync:owner')
+    const generation = store.get(GENERATION_KEY)
+    let claimed = false
+    generation.onsuccess = () => {
+      if (Number(generation.result ?? 0) !== expected || (owner.result && owner.result !== uid)) return
+      store.put(uid, 'sync:owner')
+      claimed = true
+    }
+    tx.oncomplete = () => resolve(claimed)
+    tx.onerror = tx.onabort = () => reject(new UserFacingError('Cihaz kayıtları aktarıma hazırlanamadı. Yeniden dene.'))
+  })
+}
+
 /** A stale tab can never write an old snapshot or sync baseline after clearing. */
 function writeFinancialValue(db: IDBDatabase, key: string, value: unknown, expected: number): Promise<boolean> {
   return new Promise((resolve, reject) => {
@@ -200,13 +216,14 @@ export async function dbDelete(key: string): Promise<void> {
 }
 
 /** Device clearing and sync-baseline removal must commit as one transaction. */
-export async function dbResetFinancialState(value: unknown): Promise<void> {
+export async function dbResetFinancialState(value: unknown = undefined): Promise<void> {
   const expected = financialGeneration
   const db = await openDb()
   if (!db) {
     if (Number(memoryFallback.get(GENERATION_KEY) ?? 0) !== expected) throw new DeviceDataChangedError()
     for (const key of memoryFallback.keys()) if (key.startsWith('sync:')) memoryFallback.delete(key)
-    memoryFallback.set('state', value)
+    if (value === undefined) memoryFallback.delete('state')
+    else memoryFallback.set('state', value)
     financialGeneration = Number(memoryFallback.get(GENERATION_KEY) ?? 0) + 1
     memoryFallback.set(GENERATION_KEY, financialGeneration)
     return
@@ -222,7 +239,8 @@ export async function dbResetFinancialState(value: unknown): Promise<void> {
         if (Number(generation.result ?? 0) !== expected) { stale = true; tx.abort(); return }
         nextGeneration = Number(generation.result ?? 0) + 1
         store.put(nextGeneration, GENERATION_KEY)
-        store.put(value, 'state')
+        if (value === undefined) store.delete('state')
+        else store.put(value, 'state')
       }
       const cursor = store.openCursor()
       cursor.onsuccess = () => {

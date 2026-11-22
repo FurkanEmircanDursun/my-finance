@@ -7,6 +7,7 @@ import { ADAPTERS } from './banks'
 const harness = vi.hoisted(() => ({
   items: [] as Array<{ str: string; transform: number[]; width: number }>,
   browserText: '',
+  pageCount: 1,
   render: vi.fn(() => ({ promise: Promise.resolve() })),
   terminate: vi.fn(async () => {}),
   destroy: vi.fn(async () => {}),
@@ -18,7 +19,7 @@ vi.mock('pdfjs-dist/legacy/build/pdf.min.mjs', () => ({
   GlobalWorkerOptions: {},
   getDocument: () => ({
     promise: Promise.resolve({
-      numPages: 1,
+      numPages: harness.pageCount,
       getPage: async () => ({
         getTextContent: harness.getTextContent,
         getViewport: () => ({ width: 100, height: 100 }),
@@ -38,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   harness.items = []
   harness.browserText = ''
+  harness.pageCount = 1
   harness.getTextContent.mockImplementation(async () => ({ items: harness.items }))
   harness.createWorker.mockResolvedValue({
     recognize: async () => ({ data: { text: harness.browserText } }),
@@ -96,6 +98,20 @@ describe('PDF extraction followed by document validation', () => {
     await expect(extractText(file(), { ...options, useLocalOcr: false })).resolves.toMatchObject({ text: AKBANK_COLUMNS, engine: 'ocr-browser' })
     expect(fetch).not.toHaveBeenCalled()
     expect(harness.terminate).toHaveBeenCalledOnce()
+  })
+
+  it('uses the readable cover and OCRs only the missing transaction page', async () => {
+    const firstRow = AKBANK_COLUMNS.indexOf('07/09/2026')
+    const cover = AKBANK_COLUMNS.slice(0, firstRow).trim().split('\n')
+    const items = cover.map((str, index) => ({ str, transform: [1, 0, 0, 10, 0, 800 - index * 15], width: 400 }))
+    harness.pageCount = 2
+    harness.getTextContent.mockResolvedValueOnce({ items }).mockResolvedValueOnce({ items: [] })
+    harness.browserText = AKBANK_COLUMNS.slice(firstRow)
+    await expect(parseFile(file(), options)).resolves.toMatchObject({
+      bank: 'Akbank', engine: 'pdf-ocr', skipped: 0, reconciliation: { status: 'match' },
+    })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(harness.render).toHaveBeenCalledOnce()
   })
 
   it('reports a blank scan after both text and OCR extraction produced nothing', async () => {

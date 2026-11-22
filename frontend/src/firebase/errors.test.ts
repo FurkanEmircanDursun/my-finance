@@ -14,13 +14,13 @@ describe('Firebase errors at the user boundary', () => {
   it.each(['unauthenticated', 'auth/user-token-expired', 'auth/invalid-user-token', 'storage/unauthenticated'])(
     'offers a new session after %s', code => expect(firebaseErrorMessage({ code })).toContain('yeniden giriş'),
   )
-  it('keeps the offline sync message clear about device records', () => {
-    expect(firebaseErrorMessage({ code: 'unavailable' }, 'sync')).toContain('kayıtların bu cihazda duruyor')
+  it('asks the user to check the connection when sync is unavailable', () => {
+    expect(firebaseErrorMessage({ code: 'unavailable' }, 'sync')).toContain('İnternet bağlantını kontrol edip yeniden dene')
     expect(firebaseErrorMessage({ code: 'auth/network-request-failed' }, 'auth')).toContain('İnternet bağlantısı')
   })
   it('never exposes unknown SDK errors, thrown strings, nested errors or object metadata', () => {
     for (const error of [new Error('FirebaseError: private path'), 'raw secret', { code: 'storage/new-code', message: 'secret' }, { cause: new Error('secret') }, null]) {
-      expect(firebaseErrorMessage(error, 'sync')).toBe('Eşitleme tamamlanamadı. Kayıtların bu cihazda duruyor; yeniden dene.')
+      expect(firebaseErrorMessage(error, 'sync')).toBe('Eşitleme tamamlanamadı. Bağlantını kontrol edip yeniden dene.')
     }
   })
   it('preserves only explicitly application-authored recovery instructions', () => {

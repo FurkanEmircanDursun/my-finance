@@ -3,10 +3,11 @@ import { addDays, parseSlashDate, parseTurkishLongDate, type DayKey } from '../.
 import { fold } from '../../core/text'
 import type { CategoryId } from '../../domain/categories'
 import { REWARD_OPEN, splitBilledTag, splitRewardTags, stripBilledTag } from '../columns'
+import { hasUnrecognisedRowDate, parseStatementRowDate, STATEMENT_ROW } from '../rowDate'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
 import { LOYALTY_SUFFIX_PATTERN, PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, resolvePeriodStart } from './types'
 import {
-  emptySummary, type IgnoredReason, type IgnoredRow, type Installment, type StatementSummary, type TxKind,
+  emptySummary, type IgnoredReason, type IgnoredRow, type Installment, type TxKind,
 } from '../../domain/types'
 
 /**
@@ -43,7 +44,6 @@ import {
  *    previous section's category bleeds onto rows that were never in it.
  */
 
-const LINE_RE = /^(\d{1,2}\s+[A-Za-zğüşıöçĞÜŞİÖÇ]+\s+\d{4})(?:\s+(.*))?$/
 const NUMBER_RE = /^\d{1,3}(?:\.\d{3})*,\d{2}[+-]?$|^\d+,\d{2}[+-]?$/
 const INSTALLMENT_RE = /(?:TAKSIT|TAKSİT)?\s*(?:^|\s)(\d{1,2})\/(\d{1,2})(?:\s*\.?\s*taksit)?(?=\s|$)/i
 /** "Google makromusic for 899,99 TL 899,99" — the price is echoed twice. */
@@ -152,7 +152,7 @@ function parseHeaderDate(raw: string): DayKey | null {
  * The cover figures, matched against a folded (upper-case, diacritic-free)
  * copy of the text so "Dönem Borcunuz" and "DÖNEM BORCUNUZ" are one pattern.
  */
-function readSummary(text: string): StatementSummary {
+function readSummary(text: string): Pick<AdapterOutput, 'summary' | 'printedTotals'> {
   const folded = fold(text)
   const summary = emptySummary()
   const AMOUNT = String.raw`([\d.]+,\d{2})`
@@ -206,7 +206,13 @@ function readSummary(text: string): StatementSummary {
     summary.loyalty = { programme: 'Bonus', earned, spent, balance }
   }
 
-  return summary
+  return {
+    summary,
+    ...(ledger ? { printedTotals: {
+      charges: parseTrAmount(ledger[2]) + parseTrAmount(ledger[3]),
+      payments: parseTrAmount(ledger[4]),
+    } } : {}),
+  }
 }
 
 function parse(text: string): AdapterOutput {
@@ -235,10 +241,13 @@ function parse(text: string): AdapterOutput {
       continue
     }
 
-    const match = LINE_RE.exec(line)
-    if (!match) continue
+    const match = STATEMENT_ROW.exec(line)
+    if (!match) {
+      if (hasUnrecognisedRowDate(line)) skipped++
+      continue
+    }
 
-    const date = parseTurkishLongDate(match[1])
+    const date = parseStatementRowDate(match[1])
     if (!date) {
       skipped++
       continue
@@ -339,7 +348,14 @@ function parse(text: string): AdapterOutput {
   const cutMatch = CUT_DATE_RE.exec(text)
   const dueMatch = DUE_DATE_RE.exec(text)
   const cardMatch = CARD_RE.exec(text)
-  const summary = readSummary(text)
+  const { summary, printedTotals } = readSummary(text)
+  if (printedTotals) {
+    // Some Garanti covers count these credits with payments. For the app they
+    // still reduce spending rather than being recorded as a card repayment.
+    printedTotals.paymentLikeRefunds = rows
+      .filter(row => row.kind === 'refund' && /^OTOMATIK\s+FATURA\s+FAIZ\s+IADE(?:SI)?$/.test(fold(row.description)))
+      .reduce((total, row) => total + row.amount, 0)
+  }
 
   const periodEnd = (cutMatch ? parseHeaderDate(cutMatch[1]) : null) ?? maxDate
 
@@ -360,6 +376,7 @@ function parse(text: string): AdapterOutput {
     dueDate: dueMatch ? parseHeaderDate(dueMatch[1]) : null,
     accountLabel: cardMatch ? `Garanti ${cardMatch[0].trim()}` : 'Garanti BBVA',
     summary,
+    printedTotals,
   }
 }
 

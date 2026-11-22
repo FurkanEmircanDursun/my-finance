@@ -2,6 +2,7 @@ import { parseEnAmount, type Money } from '../../core/money'
 import { addDays, parseSlashDate, type DayKey } from '../../core/date'
 import { fold } from '../../core/text'
 import { splitBilledTag, splitRewardTags, stripBilledTag } from '../columns'
+import { hasUnrecognisedRowDate, parseStatementRowDate, STATEMENT_ROW } from '../rowDate'
 import type { AdapterOutput, BankAdapter, RawRow } from './types'
 import {
   PAYMENT_PATTERNS, REWARD_ONLY_PATTERNS, readForeignAmount, resolvePeriodStart, stripForeignNote,
@@ -29,7 +30,6 @@ import {
  * the row is read, and a row left with no charge at all is a chip-para award.
  */
 
-const LINE_RE = /^(\d{1,2}\/\d{1,2}\/\d{4})(?:\s+(.*))?$/
 const PRINCIPAL_RE = /\(([\d,.]+)\s*TL[^)]*\)/
 const INSTALLMENT_RE = /(?:^|\s)(\d{1,2})\/(\d{1,2})\s*\.?\s*taksit/i
 const AMOUNT_TOKEN_RE = /^\d+(?:,\d{3})*\.\d{2}(?:\(-\))?$/
@@ -122,14 +122,18 @@ function parse(text: string): AdapterOutput {
     ignored.push({ date, description, amount, reason, raw })
   }
 
-  for (const rawLine of text.split('\n')) {
+  const lines = text.split('\n')
+  for (const [index, rawLine] of lines.entries()) {
     const { line, rewards } = splitRewardTags(rawLine.trim())
     if (!line) continue
 
-    const match = LINE_RE.exec(line)
-    if (!match) continue
+    const match = STATEMENT_ROW.exec(line)
+    if (!match) {
+      if (hasUnrecognisedRowDate(line)) skipped++
+      continue
+    }
 
-    const date = parseSlashDate(match[1])
+    const date = parseStatementRowDate(match[1])
     if (!date) {
       skipped++
       continue
@@ -139,6 +143,11 @@ function parse(text: string): AdapterOutput {
     // references in the description. A remainder alone cannot be billed.
     const body = match[2] ?? ''
     const billed = splitBilledTag(body)
+    // Supplemental loyalty text can start with a date and repeat the merchant.
+    // Only the actual billed row carries a standalone signed amount.
+    const loyaltyNote = /\d[\d,.]*\.\d{2}\s+TL\s+CHIP-?PARA\s+ILE(\s+ODEDINIZ[.!]?)?$/.exec(fold(body))
+    if (!billed && loyaltyNote &&
+      (loyaltyNote[1] || /^ODEDINIZ[.!]?$/.test(fold(lines[index + 1]?.trim() ?? '')))) continue
     const parts = (billed?.before ?? body).trim().split(/\s+/).filter(Boolean)
     const trailing = billed ? [billed.token, ...billed.after.split(/\s+/)] : []
     if (!billed) {

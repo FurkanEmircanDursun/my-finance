@@ -3,7 +3,7 @@ import {
   pendingWrites, KINDS, isDefaultProfile,
   type Kind, type Ledger, type RemoteChange, type RemoteDoc, type Snapshot, type Write,
 } from './model'
-import type { CommitOp, Purge, RemoteSnapshot, SyncTransport } from './transport'
+import { isPurge, type CommitOp, type Purge, type RemoteSnapshot, type SyncTransport } from './transport'
 import type { SyncStorage } from './storage'
 import { migratePersisted } from '../store/migrate'
 import { defaultProfile, defaultSettings } from '../store/defaults'
@@ -23,7 +23,10 @@ export interface EngineOptions {
   /** Clears this device's financial data (not its settings), ahead of loading an account's. */
   replaceLocal: () => void
   hasLocalData: () => boolean
+  prepareInitial?: (snapshot: RemoteSnapshot, ledger: Ledger) => Ledger
   onState: (state: SyncState) => void
+  onSnapshotApplied?: (snapshot: RemoteSnapshot) => void
+  onAccessDenied?: (error: unknown) => void
   now?: () => number
   /** How long to wait after the last edit before sending. */
   debounceMs?: number
@@ -49,11 +52,13 @@ export class SyncEngine {
   private ledger: Ledger = {}
   private unlisten: (() => void) | null = null
   private chain: Promise<void> = Promise.resolve()
+  private commitChain: Promise<void> = Promise.resolve()
   private timer: ReturnType<typeof setTimeout> | null = null
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   private retryIndex = 0
   private stopped = false
   private firstDone = false
+  private preparedInitial = false
   private listenFailed = false
   private held: RemoteSnapshot | null = null
   private inflight = new Set<string>()
@@ -106,6 +111,11 @@ export class SyncEngine {
     return this.state
   }
 
+  hasUnsavedChanges(): boolean {
+    return this.pendingCount() > 0 || this.inflight.size > 0 ||
+      (this.firstDone && diffLocal(this.ledger, this.o.getSnapshot(), this.clock()).writes.length > 0)
+  }
+
   /** The app's state changed; send what is new after a short pause. */
   notify(): void {
     if (this.stopped || !this.firstDone) return
@@ -124,7 +134,9 @@ export class SyncEngine {
     this.enqueue(async () => {
       // Firestore snapshot listeners stop after an error. A retry must attach
       // a new listener; flushing alone cannot recover an initial failure.
-      if ((this.listenFailed || !this.firstDone) && !this.held) this.subscribe()
+      // The SDK reconnects an open listener itself, even before the first
+      // server snapshot. Reattaching it here discards its current query state.
+      if ((this.listenFailed || !this.unlisten) && !this.held) this.subscribe()
       await this.flush()
     })
   }
@@ -138,6 +150,10 @@ export class SyncEngine {
         onSnapshot: (snapshot) => this.enqueue(() => this.handle(snapshot)),
         onError: (error) => {
           this.listenFailed = true
+          const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : null
+          if (code === 'permission-denied' || code === 'unauthenticated' || code === 'firestore/permission-denied') {
+            this.o.onAccessDenied?.(error)
+          }
           this.fail(error)
         },
       })
@@ -169,8 +185,9 @@ export class SyncEngine {
 
   // ── The queue ───────────────────────────────────────────────────────────────
 
-  private enqueue(task: () => Promise<void>): void {
+  private enqueue(task: () => Promise<void>): Promise<void> {
     this.chain = this.chain.then(() => this.stopped ? undefined : task()).catch((error) => this.fail(error))
+    return this.chain
   }
 
   private setState(patch: Partial<SyncState>): void {
@@ -198,6 +215,10 @@ export class SyncEngine {
     if (first) {
       const owner = await this.o.storage.getOwner()
       if (this.stopped) return
+      if (!this.preparedInitial) {
+        if (this.o.prepareInitial) this.ledger = this.o.prepareInitial(snapshot, this.ledger)
+        this.preparedInitial = true
+      }
       // A device that held one account's money and is now signed in to another's
       // must not quietly pour one into the other.
       if (owner && owner !== this.o.uid && this.o.hasLocalData()) {
@@ -257,9 +278,12 @@ export class SyncEngine {
     if (first) await this.o.storage.setOwner(this.o.uid)
     if (this.stopped) return
 
-    this.send(writes, purges)
+    const writtenKeys = new Set(writes.map(row => keyOf(row.kind, row.id)))
+    const obsolete = purges.filter(row => !writtenKeys.has(keyOf(row.kind, row.id)))
+    this.send(writes, obsolete)
+    this.o.onSnapshotApplied?.(remote)
 
-    if (writes.length === 0 && purges.length === 0 && this.pendingCount() === 0) {
+    if (writes.length === 0 && obsolete.length === 0 && this.pendingCount() === 0) {
       this.setState({ status: remote.fromCache || !this.online ? 'offline' : 'synced', lastSyncedAt: remote.fromCache ? this.state.lastSyncedAt : now, pending: 0, error: null })
     }
   }
@@ -291,17 +315,31 @@ export class SyncEngine {
     const batches: CommitOp[][] = []
     for (let i = 0; i < ops.length; i += BATCH) batches.push(ops.slice(i, i + BATCH))
 
-    void (async () => {
+    this.commitChain = this.commitChain.then(async () => {
       try {
         for (const batch of batches) {
           if (this.stopped) return
-          await this.o.transport.commit(this.o.uid, batch)
+          // A newer local edit (such as undo) may supersede a queued write
+          // while the previous group is still being acknowledged.
+          const current = batch.filter(op => {
+            if (isPurge(op)) return true
+            const entry = this.ledger[keyOf(op.kind, op.id)]
+            if (entry?.p && entry.u === op.u) return true
+            this.inflight.delete(inflightKey(op))
+            return false
+          })
+          if (!current.length) continue
+          await this.o.transport.commit(this.o.uid, current)
+          const acknowledged = current.filter((op): op is Write => !isPurge(op))
+          await this.enqueue(async () => {
+            for (const w of acknowledged) this.inflight.delete(inflightKey(w))
+            this.ledger = acknowledge(this.ledger, acknowledged)
+            await this.save()
+            this.setState({ pending: this.pendingCount() })
+          })
         }
         if (this.stopped) return
         this.enqueue(async () => {
-          for (const w of fresh) this.inflight.delete(inflightKey(w))
-          this.ledger = acknowledge(this.ledger, fresh)
-          await this.save()
           this.retryIndex = 0
           const pending = this.pendingCount()
           this.setState({
@@ -315,7 +353,7 @@ export class SyncEngine {
         for (const w of fresh) this.inflight.delete(inflightKey(w))
         this.fail(error)
       }
-    })()
+    })
   }
 
   // ── Trouble ─────────────────────────────────────────────────────────────────
@@ -326,6 +364,9 @@ export class SyncEngine {
     this.setState({ status: this.online ? 'error' : 'offline', error: message, pending: this.pendingCount() })
 
     if (this.retryTimer) clearTimeout(this.retryTimer)
+    const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : null
+    if (code === 'permission-denied' || code === 'invalid-argument' ||
+        code === 'firestore/permission-denied' || code === 'firestore/invalid-argument') return
     const steps = this.o.retryMs ?? [3_000, 10_000, 30_000, 120_000]
     const wait = steps[Math.min(this.retryIndex, steps.length - 1)]
     this.retryIndex++

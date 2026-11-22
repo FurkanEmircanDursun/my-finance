@@ -10,6 +10,7 @@ import { Button, Empty } from '../ui/primitives'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
 import { CardStatementStatus, useCardPeriods } from './CardsView'
+import { BankLogo } from '../ui/BankLogo'
 import '../styles/cards.css'
 
 export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () => void }) {
@@ -30,7 +31,10 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
   return <div className="card-detail-page">
     <button type="button" className="card-back-button" onClick={onBack}><ArrowLeft size={18} /> Kartlara dön</button>
     {!period ? <Empty title="Kart bu dönemde görünmüyor" description="Kart kaldırılmış olabilir veya bu ay için kayıt bulunmayabilir. Başka bir dönem seçebilir ya da kartlarına dönebilirsin." action={<Button onClick={onBack}>Kartlarım</Button>} /> : <>
-      <header className="dashboard-title card-context-heading"><div><h1>{period.name}</h1><p>{period.bank} · {month}</p></div><Button onClick={() => sheets.openImport(period.card && !period.archived ? period.card.id : period.statements.length ? period.id : undefined)}><Upload size={17} /> Ekstre yükle</Button></header>
+      <header className="dashboard-title card-context-heading">
+        <div className="card-context-title"><BankLogo bank={period.card?.bank ?? period.bank} /><div><h1>{period.name}</h1><p>{period.bank} · {month}</p></div></div>
+        <Button onClick={() => sheets.openImport(period.card && !period.archived && period.card.bank !== 'other' ? period.card.id : period.statements.length ? period.id : undefined)}><Upload size={17} /> Ekstre yükle</Button>
+      </header>
       {period.statements.length > 0 && <section className="card-detail-documents"><h2>Ekstreler</h2><ul>{[...period.statements].sort((a, b) => (b.periodEnd ?? '').localeCompare(a.periodEnd ?? '')).map(statement => {
         const debt = statement.summary?.totalDebt ?? statement.reconciliation?.printedDebt ?? null
         return <li key={statement.id}><button type="button" className="card-document-link" onClick={() => sheets.openStatement(statement.id)}>

@@ -145,7 +145,7 @@ describe('mixed-version device safety', () => {
     const current = await import('./db')
     await current.dbReadFinancialState()
     await current.dbWriteFinancialValue('state', { transactions: ['preserve-during-version-change'] })
-    const newer = await openRawDatabase(3)
+    const newer = await openRawDatabase(4)
     expect(await current.dbFinancialGenerationIsCurrent()).toBe(false)
     await expect(current.dbWriteFinancialValue('state', { transactions: ['old-repopulation'] })).rejects.toMatchObject({ name: 'DeviceDataChangedError' })
     await expect(current.dbReadFinancialState()).rejects.toMatchObject({ name: 'DeviceDataChangedError' })

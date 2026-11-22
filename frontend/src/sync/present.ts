@@ -61,8 +61,8 @@ export function describeSync(state: SyncState, now: number): SyncPresentation {
         title: 'Çevrimdışı',
         detail:
           pending > 0
-            ? `${changes} bu cihazda bekliyor; bağlanınca kendiliğinden gönderilir.`
-            : 'Bağlanınca değişiklikler kendiliğinden eşitlenir.',
+            ? `${changes} açık oturumda bekliyor. İnternet geldiğinde kaydedilene kadar uygulamayı açık tut.`
+            : 'Bağlantı geldiğinde bulut eşitlemesi devam eder.',
         tone: 'warning',
         busy: false,
       }
@@ -70,7 +70,7 @@ export function describeSync(state: SyncState, now: number): SyncPresentation {
     case 'error':
       return {
         title: 'Gönderilemedi',
-        detail: 'Verilerin bu cihazda güvende. Otomatik olarak tekrar deneniyor.',
+        detail: 'Kaydedilmeyi bekleyen değişiklikler için açık oturumda yeniden deneniyor.',
         tone: 'negative',
         busy: false,
       }

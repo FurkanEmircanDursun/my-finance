@@ -24,15 +24,16 @@ import { WorkspaceRail, WorkspaceToolbar, BottomNav } from "./WorkspaceChrome";
 import { SheetProvider, useSheets } from "./sheets";
 import { FeedbackProvider } from '../ui/Feedback'
 import { useCloudServices } from './useCloudServices'
-import { SyncGate } from './SyncDecision'
 import { ANALYTICS_UPDATED, trackScreen } from '../platform/analytics'
 import { parseRoute, navigateTo, goBack, type ViewId, type AppRoute } from "./navigation";
 import { ExploreProvider, useExplore } from './ExploreContext'
 import { UpdateGate } from './UpdateGate'
 import { initializeDiagnostics, recordDiagnostic } from '../platform/diagnostics'
-import { Skeleton } from "../ui/primitives";
+import { Button, Field, Skeleton, TextInput } from "../ui/primitives";
 import { useReminderSync } from './useReminderSync'
 import { consumePendingReminder, REMINDER_OPEN } from '../platform/reminders'
+import { Brand } from '../ui/Brand'
+import { firebaseErrorMessage } from '../firebase/errors'
 
 /**
  * The dashboard views pull in the charting library; the first run does not.
@@ -56,10 +57,11 @@ const AnalysisView = lazy(() => import('../views/AnalysisView').then(m => ({ def
 const TransactionsView = lazy(() => import('../views/TransactionsSheet').then(m => ({ default: m.TransactionsView })))
 const StatementView = lazy(() => import('../views/StatementView').then(m => ({ default: m.StatementView })))
 const SettingsPage = lazy(() => import('./SettingsSheet').then(m => ({ default: m.SettingsPage })))
+const AccountSignInForm = lazy(() => import('./AccountSheet').then(m => ({ default: m.AccountSignInForm })))
 function readHash(): AppRoute { return parseRoute(window.location.hash) }
 
 export default function App() {
-  const { state, sessionBusy, sessionError, dataEpoch } = useStore();
+  const { state, authReady, authUser, sync, syncNow, sessionBusy, sessionError, dataEpoch } = useStore();
 
   useTheme(state.settings.theme);
   useNativeTheme(state.settings.theme);
@@ -78,26 +80,79 @@ export default function App() {
     return () => { active = false; cleanup?.(); };
   }, []);
 
-  // The splash screen stays up until local data has actually loaded, so it
-  // never hands off to a bare skeleton.
   useEffect(() => {
-    if (state.hydrated) void hideSplashScreen();
-  }, [state.hydrated]);
-
-  if (!state.hydrated || sessionBusy) return <div aria-live="polite"><div className="px-6 pt-8 text-body text-muted"><p role={sessionError ? 'alert' : 'status'}>{sessionError || (sessionBusy ? 'Oturum işlemi tamamlanıyor…' : 'Kayıtların yükleniyor…')}</p>{sessionError && <button type="button" className="quiet-button mt-4" onClick={() => window.location.reload()}>Yeniden yükle</button>}</div><BootSkeleton /></div>;
+    if (authReady) void hideSplashScreen();
+  }, [authReady]);
 
   return (
-    <UpdateGate><Locked>
-      <Introduced>
+    <UpdateGate>{!authReady || !authUser || !state.hydrated || sessionBusy
+      ? <WorkspaceAccess key={dataEpoch} />
+      : <Locked key={dataEpoch}>
         <ExploreProvider key={dataEpoch}>
         <FeedbackProvider><SheetProvider>
+          <Introduced>
           {sessionError && <p role="alert" className="mx-5 mt-4 rounded-lg bg-warning-soft p-4 text-body text-warning">{sessionError}</p>}
+          {(sync.status === 'offline' || sync.status === 'error') &&
+            <aside className="workspace-sync-notice" aria-live="polite">
+              <p>{sync.error || 'Bağlantı kesildi.'} {sync.pending > 0 && 'Bekleyen değişiklikler kaydedilene kadar Mizan’ı açık tut.'}</p>
+              <Button size="sm" onClick={syncNow}>Yeniden eşitle</Button>
+            </aside>}
           <Shell />
+          </Introduced>
         </SheetProvider></FeedbackProvider>
         </ExploreProvider>
-      </Introduced>
-    </Locked></UpdateGate>
+    </Locked>}</UpdateGate>
   );
+}
+
+function WorkspaceAccess() {
+  const {
+    authReady, authUser, authError, retryAuth, cloudAvailable, sync, syncNow, logout,
+    legacyMigration, migrateLegacy, sessionBusy, sessionError,
+  } = useStore()
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const retry = sync.status === 'offline' || sync.status === 'error' || !!sessionError
+
+  async function run(operation: () => Promise<void>) {
+    setBusy(true)
+    setError(null)
+    try { await operation() }
+    catch (failure) { setError(firebaseErrorMessage(failure, 'session')) }
+    finally { setBusy(false) }
+  }
+
+  return <main className="workspace-access">
+    <section className="workspace-access__panel">
+      <Brand />
+      <h1>{authUser ? 'Hesabın hazırlanıyor' : 'Mizan’a giriş yap'}</h1>
+      {(error || sessionError || authError) && <p role="alert" className="text-negative">{error || sessionError || authError}</p>}
+      {sessionBusy || !authReady ? <p role="status">Oturum kontrol ediliyor…</p>
+        : !cloudAvailable ? <p role="alert">Bu dağıtımda Firebase bağlantısı yapılandırılmamış.</p>
+        : !authUser ? <>
+          {authError && <Button onClick={retryAuth}>Bağlantıyı yeniden dene</Button>}
+          <Suspense fallback={<Skeleton className="h-24 w-full" />}><AccountSignInForm upgrading={false} /></Suspense>
+        </>
+        : legacyMigration ? <>
+          <p>Bu cihazda eski Mizan kayıtları var. Bunları açık hesabına aktarabilir veya daha sonra aktarabilirsin.</p>
+          {legacyMigration.pinRequired && <Field label="Eski uygulama PIN’i">
+            <TextInput type="password" inputMode="numeric" autoComplete="off" maxLength={4} value={pin} onChange={event => setPin(event.target.value)} />
+          </Field>}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" disabled={busy || (legacyMigration.pinRequired && pin.length !== 4)} onClick={() => void run(() => migrateLegacy('import', pin))}>Bu hesaba aktar</Button>
+            <Button disabled={busy} onClick={() => void run(() => migrateLegacy('later'))}>Daha sonra</Button>
+          </div>
+        </>
+        : <>
+          <p role={retry ? 'alert' : 'status'}>{sync.error || (sync.status === 'offline'
+            ? 'Hesabını açmak için internet bağlantısı gerekiyor.'
+            : 'Hesabındaki kayıtlar yükleniyor…')}</p>
+          {retry && <Button onClick={syncNow}>Yeniden dene</Button>}
+        </>}
+      {!sessionBusy && authUser && <Button variant="ghost" disabled={busy} onClick={() => void run(logout)}>Çıkış yap</Button>}
+    </section>
+  </main>
 }
 
 /* ── Intro ───────────────────────────────────────────────────────────────── */
@@ -118,14 +173,13 @@ function Introduced({ children }: { children: React.ReactNode }) {
         dispatch({ type: "setSettings", settings: { onboardingSeen: true } })
       }
     />
-    <SyncGate />
   </>);
 }
 
 /* ── Lock ────────────────────────────────────────────────────────────────── */
 
 function Locked({ children }: { children: React.ReactNode }) {
-  const { state, clearLocalData, sessionError } = useStore();
+  const { state, logout, sessionError } = useStore();
   const pinSet = Boolean(
     state.settings.lockPinHash && state.settings.lockPinSalt,
   );
@@ -150,10 +204,7 @@ function Locked({ children }: { children: React.ReactNode }) {
       salt={state.settings.lockPinSalt!}
       onUnlock={() => setUnlocked(true)}
       resetError={sessionError}
-      onForgotPin={async () => {
-        await clearLocalData({ clearLock: true });
-        setUnlocked(true);
-      }}
+      onForgotPin={logout}
     />
   );
 }
@@ -162,10 +213,16 @@ function Locked({ children }: { children: React.ReactNode }) {
 
 function Shell() {
   const { stopExplore } = useExplore()
-  const { state, dispatch } = useStore();
+  const { state, dispatch, authUser, loadedPeriods, historyReady, requestPeriod, sync, syncNow } = useStore();
   const { openImport, openEntry, openCards, openCardDetail } = useSheets();
   const [route, setRoute] = useState<AppRoute>(readHash);
   const view = route.view;
+  const period = view === 'assets' ? null : view === 'overview' || view === 'transactions' ? state.filters.month
+    : view === 'statement' && route.statementId ? `statement:${route.statementId}` : 'all'
+  const periodReady = !period || historyReady || loadedPeriods.has(period)
+  useEffect(() => {
+    if (period && !periodReady) requestPeriod(period)
+  }, [period, periodReady, requestPeriod])
   const renderStartedAt = useMemo(() => Date.now(), [view, route.cardId, route.statementId]);
   const lastFocusedRoute = useRef(window.location.hash);
   const [privateMode, togglePrivate] = usePrivacy();
@@ -181,7 +238,7 @@ function Shell() {
 
   useEffect(() => {
     const openReminder = () => {
-      const reminder = consumePendingReminder()
+      const reminder = consumePendingReminder(authUser?.uid)
       if (!reminder) return
       // Opening the card list preserves context and lets the person review the
       // dates before choosing their statement file. This runs only after PIN.
@@ -190,7 +247,7 @@ function Shell() {
     window.addEventListener(REMINDER_OPEN, openReminder)
     openReminder()
     return () => window.removeEventListener(REMINDER_OPEN, openReminder)
-  }, [openCards, openCardDetail]);
+  }, [authUser?.uid, openCards, openCardDetail]);
 
   // Hash routing keeps the browser's back button and page reloads working
   // without pulling in a router dependency. On Android the same history also
@@ -277,10 +334,12 @@ function Shell() {
         )}
 
         <main id="main-content" tabIndex={-1} className="workspace-content">
-          <Suspense key={view} fallback={<ViewSkeleton />}>
+          {!periodReady ? (sync.status === 'error' || sync.status === 'offline'
+            ? <div className="workspace-sync-notice" role="status"><p>Dönem kayıtları yüklenemedi.</p><Button size="sm" onClick={syncNow}>Yeniden dene</Button></div>
+            : <ViewSkeleton />) : <Suspense key={view} fallback={<ViewSkeleton />}>
             <div>
               <ScreenPaintMeasurement startedAt={renderStartedAt} />
-              {view === 'overview' && <OverviewView onNavigate={setView} />}
+              {view === 'overview' && <OverviewView onNavigate={setView} privateMode={privateMode} />}
               {view === 'transactions' && <TransactionsView />}
               {view === 'spending' && <SpendingView />}
               {view === 'analysis' && <AnalysisView onNavigate={setView} />}
@@ -291,7 +350,7 @@ function Shell() {
               {view === 'assets' && <AssetsView />}
               {view === 'settings' && <SettingsPage onClose={() => goBack()} />}
             </div>
-          </Suspense>
+          </Suspense>}
         </main>
         <BottomNav view={view} onSelect={setView} onAdd={openEntry} />
       </div>
@@ -312,19 +371,6 @@ function ScreenPaintMeasurement({ startedAt }: { startedAt: number }) {
 }
 
 /* ── Loading ─────────────────────────────────────────────────────────────── */
-
-function BootSkeleton() {
-  return (
-    <div
-      className="mx-auto w-full max-w-app space-y-4 p-6"
-      style={{ paddingTop: "calc(var(--safe-top) + 24px)" }}
-    >
-      <Skeleton className="h-12 w-48" />
-      <Skeleton className="h-24 w-full" />
-      <Skeleton className="h-64 w-full" />
-    </div>
-  );
-}
 
 function ViewSkeleton() {
   return (

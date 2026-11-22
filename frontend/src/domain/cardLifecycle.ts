@@ -2,7 +2,8 @@ import { UserFacingError } from '../core/errors'
 import { daysInMonth, makeDayKey, monthOf, type DayKey, type MonthKey } from '../core/date'
 import { hash, uid } from '../core/hash'
 import { fold } from '../core/text'
-import { cardDisplayName, cardMatchesBank } from './cards'
+import { cardBankLabel, cardDisplayName, cardMatchesBank } from './cards'
+import { identifyBank } from './banks'
 import { cardOf, effectiveDate, spendAmount, type CardBank, type CreditCard, type ParseResult, type Statement, type Transaction } from './types'
 
 export type CardStatementState = 'ready' | 'missing' | 'upcoming' | 'untracked'
@@ -21,11 +22,12 @@ export interface CardPeriod {
 
 const labelKey = (label: string) => fold(label.trim()).replace(/\s+/g, ' ')
 export function cardBankFromName(bank: string): CardBank | null {
-  const value = fold(bank)
-  return value.includes('AKBANK') ? 'akbank' : value.includes('GARANTI') ? 'garanti' : null
+  const id = identifyBank(bank)
+  return id === 'other' ? null : id
 }
 export function legacyCardKey(bank: string, label: string): string {
-  return `legacy-${hash(`${cardBankFromName(bank) ?? labelKey(bank)}|${labelKey(label)}`)}`
+  const id = cardBankFromName(bank)
+  return `legacy-${hash(`${id === 'akbank' || id === 'garanti' ? id : labelKey(bank)}|${labelKey(label)}`)}`
 }
 export function cardCutoffDate(month: MonthKey, day: number): DayKey {
   return makeDayKey(Number(month.slice(0, 4)), Number(month.slice(5, 7)), Math.min(day, daysInMonth(month)))
@@ -60,7 +62,7 @@ export function buildCardPeriods({ cards, archivedCards = [], statements, transa
   }
   const all = new Map<string, CardPeriod>()
   for (const card of configurations) all.set(card.id, {
-    id: card.id, name: cardDisplayName(card), bank: card.bank === 'akbank' ? 'Akbank' : 'Garanti BBVA',
+    id: card.id, name: cardDisplayName(card), bank: cardBankLabel(card.bank),
     card, archived: !activeIds.has(card.id), statements: [], transactions: [], netSpend: 0,
     cutoff: month === 'all' ? null : cardCutoffDate(month, card.statementDay), status: 'untracked',
   })
@@ -124,19 +126,31 @@ export function importCardChoices(cards: readonly CreditCard[], statements: read
 }
 
 /** Reserve physical identity before deduplication, independently of saving reminder preferences. */
-export function resolveImportCard(result: ParseResult, { selectedId, newCard = false, cards, statements, reservations }: {
+export function resolveImportCard(result: ParseResult, { selectedId, newCard = false, cards, statements, reservations, interruptedCard }: {
   selectedId?: string
   newCard?: boolean
   cards: readonly CreditCard[]
   statements: readonly Statement[]
   reservations: Map<string, CreditCard>
+  interruptedCard?: { id: string; name: string }
 }): CreditCard | undefined {
+  if (interruptedCard && (newCard || (selectedId && interruptedCard.id !== selectedId))) {
+    throw new UserFacingError('Bu PDF’nin aktarımı başlamış. Devam etmek için aynı kartı kullan.')
+  }
+  const bank = cardBankFromName(result.bank)
+  if (interruptedCard && bank) {
+    const day = result.periodEnd ? Number(result.periodEnd.slice(8, 10)) : 0
+    const card = cards.find(item => item.id === interruptedCard.id) ?? {
+      ...interruptedCard, bank, statementDay: day, entryDay: day ? Math.min(31, day + 1) : 0, remindersEnabled: true,
+    }
+    reservations.set(`${bank}|${labelKey(result.accountLabel)}`, card)
+    return card
+  }
   if (selectedId) {
     const selected = importCardChoices(cards, statements).find(choice => choice.card.id === selectedId)?.card
     if (!selected) throw new UserFacingError('Seçilen kart bulunamadı. Kartını yeniden seç.')
     return selected
   }
-  const bank = cardBankFromName(result.bank)
   if (!bank) return undefined
   if (!newCard && cards.some(card => cardMatchesBank(card, result.bank))) {
     throw new UserFacingError('Bu banka için kayıtlı kartın var. Ekstrenin ait olduğu kartı veya Yeni / farklı kart seçeneğini seçip tekrar dene.')

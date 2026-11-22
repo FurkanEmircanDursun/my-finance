@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { ArrowRight, ArrowUpRight, Check, ChevronDown, ChevronRight, CreditCard, Plus, Upload, Wallet, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, ChevronRight, CreditCard, Plus, Upload, Wallet, X } from 'lucide-react'
 import { useSheets } from '../app/sheets'
 import { cardDisplayName } from '../domain/cards'
-import { fullDayLabel } from '../core/date'
+import { daysInMonth, fullDayLabel, monthOf } from '../core/date'
 import { money2 } from '../core/money'
-import { SpendingPulse } from '../ui/SpendingPulse'
+import { categoryLabel } from '../domain/categories'
+import { OverviewDaily } from './OverviewDaily'
+import { OverviewCategories, OverviewReview, type PeriodAdvice } from './OverviewReview'
+import './overview.css'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
 import { BudgetRibbon } from '../ui/BudgetRibbon'
@@ -13,16 +16,20 @@ import { FindingsSheet } from './FindingsSheet'
 import { useOverviewModel } from './useOverviewModel'
 import type { ViewId } from '../app/navigation'
 
-export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
+export function OverviewView({ onNavigate, privateMode }: { onNavigate: (view: ViewId) => void; privateMode: boolean }) {
   const sheets = useSheets()
   const remove = useTransactionDelete()
-  const { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, period, recent, unknown, statementLedgers, upcoming, methods } = useOverviewModel()
-  const [detail, setDetail] = useState<'categories' | 'sources' | 'findings' | 'demo-records' | null>(null)
+  const { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, period, recent, unknown, statementLedgers, upcoming, methods, historyReady, today, month, spending, habit, budgetOverrun } = useOverviewModel()
+  const [detail, setDetail] = useState<'sources' | 'findings' | 'demo-records' | null>(null)
+  const [demoSelection, setDemoSelection] = useState<{ day?: string; category?: string }>({})
+  const showDemo = (filter: typeof demoSelection = {}) => { setDemoSelection(filter); setDetail('demo-records') }
   const startReal = () => { setDemo(false); setDetail(null); sheets.openEntry() }
-  const showTransactions = () => demo ? setDetail('demo-records') : onNavigate('transactions')
+  const showTransactions = () => demo ? showDemo() : onNavigate('transactions')
   const cardStatements = statementLedgers.ledgers.filter(ledger => ledger.statement.bank !== 'CSV')
-  const mismatches = cardStatements.filter(ledger => ledger.status === 'mismatch')
-  const displayedDebt = demo ? null : state.filters.month === 'all' ? null : statementLedgers.totals.printedDebt
+  const mismatches = cardStatements.filter(ledger =>
+    (historyReady ? ledger.status : ledger.statement.reconciliation?.status) === 'mismatch')
+  const displayedDebt = demo || month === 'all' ? null : cardStatements.reduce<number | null>((sum, { printedDebt }) =>
+    printedDebt === null ? sum : (sum ?? 0) + printedDebt, null)
   const showDebt = () => {
     if (!demo && cardStatements.length === 1) sheets.openStatement(cardStatements[0].statement.id)
     else sheets.openCards()
@@ -34,9 +41,51 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
     { label: 'Aylık limitini belirle', done: profile.spendingLimit > 0, action: sheets.openBudgets },
   ]
 
+  const advice: PeriodAdvice[] = []
+  const addAdvice = (title: string, description: string, label?: string, run?: () => void) =>
+    advice.push({ title, description, action: label && run ? { label, run } : undefined })
+  const action = (run: () => void) => demo ? undefined : run
+  if (spending.gross <= 0) {
+    addAdvice('Kayıtlarını tamamla', 'Bir gider veya ekstre ekleyerek hangi harcamaları düzenli takip etmek istediğini belirle.', 'İşlem ekle', action(startReal))
+  } else {
+    if (scopedBudget && limit > 0 && spend > limit) {
+      addAdvice('Aylık limit aşıldı', `Net harcaman aylık limitini ${money2(spend - limit)} aştı. Esnek giderlerden birini seçip bir sonraki alışveriş için sınır koy.`, 'Kategorileri incele', action(() => document.getElementById('overview-categories')?.scrollIntoView({ block: 'start' })))
+    }
+    if (scopedBudget && budgetOverrun) {
+      addAdvice(`${categoryLabel(budgetOverrun.category)} limitini gözden geçir`, `Bu kategoride limitin ${money2(budgetOverrun.difference)} üzerinde harcama var. Tek seferlik giderleri düzenli olanlardan ayır.`, 'İşlemleri aç', action(() => sheets.openTransactions({ category: budgetOverrun.category })))
+    }
+    if (scopedBudget && income > 0 && spend > income) {
+      addAdvice('Giderler kayıtlı geliri aştı', `Fark ${money2(spend - income)}. Gelir kayıtlarını kontrol et ve erteleyebileceğin giderleri belirle.`, 'Gelir ekle', action(sheets.openIncomeEntry))
+    }
+    if (scopedBudget && limit === 0) {
+      addAdvice('Aylık bir harcama limiti belirle', 'Önce kira, fatura ve diğer zorunlu ödemeleri ayır. Kalan tutarı esnek giderler için planla.', 'Limit belirle', action(sheets.openBudgets))
+    }
+    if (scopedBudget && limit > spend && month !== 'all' && month === monthOf(today)) {
+      const remainingDays = daysInMonth(month) - Number(today.slice(-2))
+      if (remainingDays > 0) {
+        addAdvice('Kalan bütçeyi günlere böl', `Ayın kalan ${remainingDays} günü için günlük ortalama alan ${money2(Math.floor((limit - Math.max(0, spend)) / remainingDays))}. Yaklaşan sabit ödemeleri önce ayır.`)
+      }
+    }
+    if (unknown.length > 0) {
+      addAdvice('Diğer kategorisini gözden geçir', `${unknown.length} gider Diğer kategorisinde. Düzenli olanları ayırmak, bütçeyi planlamayı kolaylaştırır.`, 'Kayıtları incele', action(() => sheets.openTransactions({ category: 'other' })))
+    }
+    if (scopedBudget && !income) {
+      addAdvice('Gelirini de kaydet', 'Kaydedilen geliri giderle karşılaştırarak ay sonunda ne kadar kaldığını görebilirsin.', 'Gelir ekle', action(sheets.openIncomeEntry))
+    }
+    if (advice.length < 2) {
+      const flexible = spending.categories.find(item => item.nature === 'want')
+      if (flexible) {
+        addAdvice(`${flexible.label} harcamalarını incele`, 'Tekrarlanan küçük kalemleri kontrol et. Sürdürmek istediklerin için bir kategori limiti belirleyebilirsin.', 'İşlemleri aç', action(() => sheets.openTransactions({ category: flexible.id })))
+      } else if (spending.peak) {
+        addAdvice('En yüksek günü incele', 'Tek seferlik büyük giderleri düzenli ödemelerden ayırarak gelecek aya daha gerçekçi bir bütçe ayırabilirsin.')
+      }
+    }
+  }
+  if (!advice.length) addAdvice('Kayıtlarını düzenli gözden geçir', 'Takip etmek istediğin harcamalar için bir ay seçerek giderlerini ve bütçeni karşılaştır.')
+
   return (
     <div className="month-overview">
-      <h1>Ay Özeti</h1>
+      <header className="overview-title"><h1>Ay Özeti</h1><p>{period}</p></header>
       {demo && <div className="demo-banner" role="status">
         <p><strong>Örnek bütçe</strong> · Bu kayıtlar yalnızca denemek için.</p>
         <button onClick={startReal}>Kendi kaydını ekle <ArrowRight size={16} /></button>
@@ -63,6 +112,18 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
           <dd className="month-metric-note">{displayedDebt !== null ? 'Yüklü ekstrelerden' : state.filters.month === 'all' ? 'Borç için bir ay seç' : 'Bu aya ait borç bilgisi yok'}</dd>
         </div>
       </dl>
+
+      <div className="overview-evidence">
+        <OverviewDaily key={`${demo ? 'demo' : 'account'}:${month}`} days={spending.days} peak={spending.peak} privateMode={privateMode}
+          unavailable={month === 'all' ? 'Günlük harcamaları görmek için üstten bir ay seç.' : month > monthOf(today) ? 'Bu ay henüz başlamadı.' : 'Bu ay için harcama veya iade kaydı yok.'}
+          onAnalysis={demo ? undefined : () => onNavigate('analysis')}
+          onDay={day => demo ? showDemo({ day }) : sheets.openTransactions({ day, title: fullDayLabel(day), kinds: ['expense', 'refund'] })} />
+        <OverviewCategories spending={spending} privateMode={privateMode}
+          onCategory={category => demo ? showDemo({ category }) : sheets.openTransactions({ category, kinds: ['expense'] })} />
+      </div>
+
+      <OverviewReview habit={habit} advice={advice.slice(0, 3)} privateMode={privateMode}
+        unavailable={!scopedBudget ? 'Puan için tek ayı ve tüm hesapları seç.' : !spending.gross ? 'Gider kaydı eklendiğinde puan hesaplanabilir.' : 'Puan için bir aylık limit veya gelir kaydı ekle.'} />
 
       <div className="month-work">
         <section className="month-activity" aria-labelledby="recent-heading">
@@ -94,22 +155,10 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         </section>
       </div>
 
-      <details className="month-detail">
-        <summary><span>Bu ayın bütçesi ve dağılımı</span><ChevronDown size={18} /></summary>
-        <div className="month-detail-body">
-          <BudgetRibbon limit={limit} spend={spend} scoped={scopedBudget} onEdit={sheets.openBudgets} />
-          <section className="mizan-panel mizan-chart-panel">
-            <SpendingPulse daily={rows.some(tx => tx.kind === 'expense' || tx.kind === 'refund') ? current.daily : []} />
-            <div className="pulse-footer"><button className="text-button" onClick={() => demo ? setDetail('categories') : onNavigate('analysis')}>Analizi aç <ArrowUpRight size={15} /></button></div>
-          </section>
-          <section className="mizan-panel">
-            <div className="workspace-section-heading"><h2>Harcama kategorileri</h2><button className="text-button" onClick={() => setDetail('categories')}>Dağılımı gör <ArrowUpRight size={15} /></button></div>
-            <div className="mizan-category-list">{current.categories.slice(0, 4).map(cat => <button key={cat.id} onClick={() => demo ? setDetail('categories') : sheets.openTransactions({ category: cat.id })}><span className="category-color" style={{ background: cat.color }} /><span>{cat.label}</span><strong className="num">{money2(cat.total)}</strong></button>)}</div>
-            {!current.categories.length && <p className="workspace-empty-line">Bu dönemde gider kaydı yok.</p>}
-          </section>
-          {rows.length > 0 && <button className="text-button" onClick={() => setDetail(demo ? 'categories' : 'findings')}>Bütçe bulgularını gör <ArrowUpRight size={16} /></button>}
-        </div>
-      </details>
+      <div className="overview-budget" hidden={privateMode}>
+        {scopedBudget && <BudgetRibbon limit={limit} spend={spend} scoped onEdit={sheets.openBudgets} />}
+        {!demo && spending.gross > 0 && <button className="text-button" onClick={() => setDetail('findings')}>Bütçe bulgularını gör <ArrowRight size={16} aria-hidden="true" /></button>}
+      </div>
       {!demo && <details className="month-detail">
         <summary><span>Mizan’ı kur ve keşfet</span><ChevronDown size={18} /></summary>
         <div className="month-detail-body">
@@ -146,55 +195,6 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
           İadeler düşülür. Kart borcu ödemeleri bu toplama eklenmez.
         </p>
       </Modal>
-      <Modal
-        open={detail === 'categories'}
-        onClose={() => setDetail(null)}
-        title="Harcamanın dağılımı"
-        description={demo ? 'Örnek bütçe · gerçek verilerin değil' : period}
-      >
-        <div className="expanded-categories">
-          {current.categories.map((cat) => (
-            <button
-              className="category-preview-row"
-              key={cat.id}
-              onClick={() => {
-                setDetail(null)
-                demo
-                  ? setDetail('demo-records')
-                  : sheets.openTransactions({ category: cat.id })
-              }}
-            >
-              <span
-                className="category-color"
-                style={{ background: cat.color }}
-              />
-              <span>{cat.label}</span>
-              <strong className="num">{money2(cat.total)}</strong>
-              <ArrowUpRight size={15} />
-            </button>
-          ))}
-        </div>
-        {!current.categories.length && (
-          <p className="text-body text-muted">Bu dönemde gider kaydı yok.</p>
-        )}
-        {current.totals.unallocatedRefunds > 0 && (
-          <p className="num text-label text-muted">
-            Kategori dışı iade: −{money2(current.totals.unallocatedRefunds)}
-          </p>
-        )}
-        {unknown.length > 0 && !demo && (
-          <button
-            className="text-button"
-            onClick={() => {
-              setDetail(null)
-              sheets.openTransactions({ category: 'other' })
-            }}
-          >
-            {unknown.length} kaydın kategorisini gözden geçir{' '}
-            <ArrowRight size={14} />
-          </button>
-        )}
-      </Modal>
       <FindingsSheet
         open={detail === 'findings'}
         onClose={() => setDetail(null)}
@@ -207,7 +207,8 @@ export function OverviewView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         description="Yalnızca keşif için. Bu veriler kaydedilmez."
       >
         <div>
-          {sampleRows.map((tx) => (
+          {sampleRows.filter(tx => (!demoSelection.day || tx.date === demoSelection.day && tx.kind !== 'income')
+            && (!demoSelection.category || tx.category === demoSelection.category && tx.kind === 'expense')).map((tx) => (
             <div className="compact-transaction" key={tx.id}>
               <span>{tx.description}</span>
               <strong className="num">{money2(tx.amount)}</strong>

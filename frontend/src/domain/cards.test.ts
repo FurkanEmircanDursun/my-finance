@@ -51,7 +51,7 @@ describe('card persistence', () => {
     expect(restored.profile.monthlyIncome).toBe(100)
   })
   it('rejects malformed card configurations at the storage boundary', () => {
-    expect(sanitizeCards([card, card, { ...card, id: 'bad', statementDay: 0 }, { ...card, id: 'foreign', bank: 'other' }])).toEqual([card])
+    expect(sanitizeCards([card, card, { ...card, id: 'bad', statementDay: 0 }, { ...card, id: 'foreign', bank: 'invalid' }])).toEqual([card])
   })
   it('saves two cards of the same bank, edits dates, and retains history when removing a card', () => {
     const parsed = parseStatementText(AKBANK_COLUMNS, { rules: [], engine: 'text', fileName: 'test.txt' })

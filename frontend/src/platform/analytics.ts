@@ -1,7 +1,6 @@
 import { isNative } from './index'
 import { cloudAvailable } from '../firebase/available'
 
-const CONSENT_KEY = 'finance.analytics-consent.v1'
 export const ANALYTICS_UPDATED = 'finance:analytics-updated'
 const EVENTS = ['entry_saved', 'statement_imported', 'card_added', 'onboarding_completed', 'sign_in_completed', 'asset_saved', 'asset_deleted', 'transaction_deleted', 'update_opened'] as const
 const SCREENS = ['overview', 'analysis', 'spending', 'plan', 'cards', 'settings', 'assets'] as const
@@ -9,6 +8,7 @@ export type ProductEvent = typeof EVENTS[number]
 export type ProductScreen = typeof SCREENS[number]
 let queue: Promise<void> = Promise.resolve()
 let lastError: string | undefined
+let consentGranted = false
 let webAnalytics: import('firebase/analytics').Analytics | undefined
 // Explicit metadata prevents browser paths, search strings and external
 // referrers being attached to our allowlisted custom events by gtag defaults.
@@ -18,9 +18,9 @@ export const WEB_MEASUREMENT_CONTEXT = {
   page_title: 'Mizan',
 } as const
 
-/** Consent belongs to this device, not to the synced financial profile. */
+/** The session starts without analytics consent. */
 export function analyticsConsent(): boolean {
-  try { return localStorage.getItem(CONSENT_KEY) === 'granted' } catch { return false }
+  return consentGranted
 }
 
 export function analyticsError(): string | undefined { return lastError }
@@ -53,10 +53,7 @@ async function applyConsent(enabled: boolean): Promise<void> {
 
 /** UI preference changes immediately; SDK transitions are serialized. */
 export function setAnalyticsConsent(enabled: boolean): Promise<void> {
-  try { localStorage.setItem(CONSENT_KEY, enabled ? 'granted' : 'denied') } catch {
-    lastError = 'Tercihin kaydedilemedi. Cihaz depolamasını kontrol et.'
-    return Promise.resolve()
-  }
+  consentGranted = enabled
   queue = queue.catch(() => {}).then(() => applyConsent(analyticsConsent())).then(() => {
     lastError = undefined
   }).catch(() => {

@@ -129,17 +129,14 @@ export function LockScreen({
         </button>
       ) : (
         <div className="max-w-xs space-y-3 rounded border border-line bg-sunken p-3 text-center">
-          <p className="text-label leading-relaxed text-muted">
-            Bu cihazdaki tüm yerel veriler silinir ve kilit kaldırılır. Buluta yedeklediyseniz (Ayarlar →
-            Hesap) giriş yaptığınızda geri gelir; yedeğiniz yoksa veriler kalıcı olarak kaybolur.
-          </p>
+            <p className="text-label leading-relaxed text-muted">Çıkış yapıp Firebase hesabınla yeniden giriş yapabilirsin.</p>
           <div className="flex justify-center gap-2">
             <button
               type="button"
               onClick={() => { void Promise.resolve(onForgotPin()).catch(() => { /* The store preserves the lock and exposes the recovery error. */ }) }}
               className="rounded border border-negative bg-negative-soft px-2.5 py-1.5 text-label font-semibold text-negative"
             >
-              Verileri sil, kilidi kaldır
+                Çıkış yap
             </button>
             <button
               type="button"

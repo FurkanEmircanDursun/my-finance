@@ -3,6 +3,7 @@ import type { CreditCard } from './types'
 export interface ReminderPreferences {
   enabled: boolean
   hour: number
+  cloudPush?: boolean
 }
 
 export const defaultReminders: ReminderPreferences = { enabled: false, hour: 20 }

@@ -143,13 +143,27 @@ function TransactionRow({
   onToggle: () => void
   onDone: () => void
 }) {
-  const { dispatch } = useStore()
+  const { dispatch, ensureHistory, historyReady, syncNow } = useStore()
   const [onlyThis, setOnlyThis] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(false)
   const remove = useTransactionDelete()
 
-  const assign = (category: CategoryId) => {
-    dispatch({ type: 'setCategory', transactionIds: [tx.id], category, learn: !onlyThis })
-    onDone()
+  const assign = async (category: CategoryId) => {
+    setError(false)
+    setSaving(true)
+    try {
+      if (!onlyThis && !historyReady) {
+        syncNow()
+        await ensureHistory()
+      }
+      dispatch({ type: 'setCategory', transactionIds: [tx.id], category, learn: !onlyThis })
+      onDone()
+    } catch {
+      setError(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -163,7 +177,8 @@ function TransactionRow({
               <button
                 key={def.id}
                 type="button"
-                onClick={() => assign(def.id)}
+                disabled={saving}
+                onClick={() => void assign(def.id)}
                 className={clsx(
                   'flex min-h-[44px] items-center gap-2 rounded-[var(--radius)] px-3 text-left text-body transition-colors duration-200',
                   def.id === tx.category ? 'bg-accent-soft text-accent-text' : 'bg-sunken text-ink hover:bg-hover',
@@ -182,6 +197,7 @@ function TransactionRow({
             <label className="flex cursor-pointer items-center gap-2 text-body text-muted">
               <input
                 type="checkbox"
+                disabled={saving}
                 checked={onlyThis}
                 onChange={(e) => setOnlyThis(e.target.checked)}
                 className="h-4 w-4 accent-[var(--accent)]"
@@ -198,6 +214,8 @@ function TransactionRow({
               güncellenir.
             </p>
           )}
+          {saving && <p role="status">İşlemler kontrol ediliyor…</p>}
+          {error && <p role="alert">İşlem geçmişi yüklenemedi. Bağlantını kontrol edip tekrar dene.</p>}
         </div>
       )}
     </li>

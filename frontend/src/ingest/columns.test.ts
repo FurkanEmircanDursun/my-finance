@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPageLines, groupRows, type TextGeom } from './extract'
+import { buildPageLines, groupRows, readPdfTextLayer, type TextGeom } from './extract'
 import { findColumnLayout, splitRewardTags } from './columns'
 import { decodeEbcdic } from '../core/ebcdic'
 import { akbankAdapter } from './banks/akbank'
@@ -58,6 +58,14 @@ describe('column layout', () => {
   it('finds nothing on a page with no such table', () => {
     const prose = [run('Ekstreniz ile ilgili açıklamalar', 36, 200, 700), run('Tutar nedir', 36, 60, 680)]
     expect(findColumnLayout(groupRows(prose), (t) => t)).toBeNull()
+  })
+
+  it('reuses an aligned header on the following page when it is omitted', () => {
+    const continuation = garantiPage().filter(item => item.y < 545)
+    const layer = readPdfTextLayer([garantiPage(), continuation])
+    expect(layer.pageText[1]).toContain('⟦0,08⟧ ⟨261,00⟩')
+    const shifted = readPdfTextLayer([garantiPage(), continuation.map(item => ({ ...item, x: item.x - 50 }))])
+    expect(shifted.pageText[1]).not.toContain('⟨')
   })
 })
 

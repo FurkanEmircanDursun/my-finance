@@ -1,4 +1,4 @@
-import { extractText, type ProgressFn } from './extract'
+import { extractText, type ExtractResult, type ProgressFn } from './extract'
 import { isPdfFile, pdfExtractionError, validateStatementFile, validateStatementText } from './validation'
 import { createCategorizer } from './categorize'
 import { assignIds } from './identity'
@@ -40,6 +40,15 @@ export interface TextParseOptions {
   onProgress?: ProgressFn
 }
 
+/** Read only explicitly labelled, masked card numbers; ambiguous numbers prove nothing. */
+function maskedCardSuffix(text: string): string | undefined {
+  const header = fold(text.split('\n', 60).join('\n'))
+  const suffixes = new Set(Array.from(
+    header.matchAll(/\bKART[ \t]+(?:NUMARASI|NO\.?)[ \t]*:?[ \t]*(?:\n[ \t]*)?(?:\d{4}|[*X•●]{4})[ \t-]*(?:[\d*X•●]{4}[ \t-]*){2}(\d{4})(?![\d*X•●])/g),
+  ).filter(match => /[*X•●]/.test(match[0])).map(match => match[1]))
+  return suffixes.size === 1 ? [...suffixes][0] : undefined
+}
+
 /**
  * Statement text → transactions, with no file system and no PDF library in
  * sight. Everything that decides what a statement *means* happens here, which
@@ -55,6 +64,11 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
   const output = adapter.parse(text)
 
   const reconciliation = reconcile(output.rows, output.summary)
+  const printedTotals = output.printedTotals
+  const chargesDelta = printedTotals ? printedTotals.charges - reconciliation.parsedCharges : 0
+  const paymentsDelta = printedTotals ? printedTotals.payments - reconciliation.payments : 0
+  const paymentLikeRefunds = printedTotals?.paymentLikeRefunds ?? 0
+  const printedTotalsMismatch = chargesDelta !== paymentsDelta || (chargesDelta !== 0 && chargesDelta !== paymentLikeRefunds)
   // Empty is meaningful only when a supported bank explicitly says the cycle
   // had no activity and its printed balance confirms it. Missing/failed text
   // extraction must never clear a missing-statement warning.
@@ -126,10 +140,12 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
     ? `${output.accountLabel} · ${monthLabel(monthOf(periodEnd))}`
     : `${output.accountLabel} · ${options.fileName}`
 
+  const reportedCardLast4 = adapter.id === 'csv' ? undefined : maskedCardSuffix(text)
   return {
     bank,
     engine: options.engine,
     accountLabel: output.accountLabel,
+    ...(reportedCardLast4 ? { reportedCardLast4 } : {}),
     transactions,
     skipped: output.skipped,
     periodStart: output.periodStart,
@@ -138,29 +154,53 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
     label,
     summary: output.summary,
     reconciliation,
+    ...(printedTotalsMismatch ? { printedTotalsMismatch: true } : {}),
     ignored: output.ignored,
   }
 }
 
+export function statementImportProblem(result: ParseResult, pdf: boolean): ParseError | null {
+  const hint = 'Bankadan indirdiğin özgün ekstreyle yeniden dene.'
+  if (result.bank !== 'CSV' && result.skipped > 0) {
+    return new ParseError('Ekstrede okunamayan işlem satırları var. Hiçbir hareket kaydedilmedi.', hint)
+  }
+  if (result.reconciliation.status === 'mismatch' || result.printedTotalsMismatch) {
+    return new ParseError('Okunan hareketler bankanın ekstre toplamlarıyla uyuşmuyor. Hiçbir hareket kaydedilmedi.', hint)
+  }
+  if (pdf && result.reconciliation.status === 'unverified') {
+    return new ParseError('Ekstrenin dönem borcu veya önceki bakiyesi okunamadı. Hiçbir hareket kaydedilmedi.', hint)
+  }
+  return null
+}
+
 export async function parseFile(file: File, options: PipelineOptions): Promise<ParseResult> {
   await validateStatementFile(file)
+  const parse = ({ text, engine }: ExtractResult) => parseStatementText(text, {
+    rules: options.rules, engine, fileName: file.name, onProgress: options.onProgress,
+  })
+  const candidates = new WeakMap<ExtractResult, ParseResult>()
+  let bank: string | undefined
   let extracted: Awaited<ReturnType<typeof extractText>>
   try {
     extracted = await extractText(file, {
       useLocalOcr: options.useLocalOcr,
       ocrEndpoint: options.ocrEndpoint,
       onProgress: options.onProgress,
+      assessReadable: candidate => {
+        try {
+          const result = parse(candidate)
+          if (bank && bank !== result.bank) return 'reject'
+          bank = result.bank
+          candidates.set(candidate, result)
+          return statementImportProblem(result, true) ? 'retry' : 'accept'
+        } catch (error) {
+          return error instanceof ParseError ? 'retry' : 'reject'
+        }
+      },
     })
   } catch (error) {
     if (isPdfFile(file)) throw pdfExtractionError(error)
     throw error
   }
-  const { text, engine } = extracted
-
-  return parseStatementText(text, {
-    rules: options.rules,
-    engine,
-    fileName: file.name,
-    onProgress: options.onProgress,
-  })
+  return candidates.get(extracted) ?? parse(extracted)
 }
