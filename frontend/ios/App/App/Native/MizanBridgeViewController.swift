@@ -13,7 +13,9 @@ final class MizanBridgeViewController: CAPBridgeViewController {
 final class MizanNavigationGesturesPlugin: CAPPlugin, CAPBridgedPlugin {
     let identifier = "MizanNavigationGesturesPlugin"
     let jsName = "MizanNavigationGestures"
-    let pluginMethods = [CAPPluginMethod(name: "setOverlayOpen", returnType: CAPPluginReturnPromise)]
+    let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setOverlayOpen", returnType: CAPPluginReturnPromise)
+    ]
 
     @objc func setOverlayOpen(_ call: CAPPluginCall) {
         guard let open = call.getBool("open") else {
