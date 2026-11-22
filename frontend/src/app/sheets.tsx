@@ -101,14 +101,22 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const [entryOpen, setEntryOpen] = useState<'expense' | 'income' | null>(null)
   const openEntry = useCallback(() => { stopExplore(); setEntryOpen('expense') }, [stopExplore])
   const openIncomeEntry = useCallback(() => { stopExplore(); setEntryOpen('income') }, [stopExplore])
-  const [accountOpen, setAccountOpen] = useState(false)
+  const [accountPanel, setAccountPanel] = useState<'account' | 'delete' | null>(() =>
+    new URLSearchParams(window.location.search).has('delete-account') ? 'delete' : null,
+  )
+  useEffect(() => {
+    if (accountPanel !== 'delete') return
+    const url = new URL(window.location.href)
+    url.searchParams.delete('delete-account')
+    window.history.replaceState(window.history.state, '', url)
+  }, [accountPanel])
   const [incomeOpen, setIncomeOpen] = useState(false)
   const [budgetsOpen, setBudgetsOpen] = useState(false)
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [rewardsOpen, setRewardsOpen] = useState(false)
   const [txQuery, setTxQuery] = useState<TransactionQuery | null>(null)
   const sharedImport = useSharedPdfImport()
-  const sharedReady = !importOpen && !entryOpen && !accountOpen && !incomeOpen && !budgetsOpen && !archiveOpen && !rewardsOpen && !txQuery
+  const sharedReady = !importOpen && !entryOpen && !accountPanel && !incomeOpen && !budgetsOpen && !archiveOpen && !rewardsOpen && !txQuery
   const sheetPeriod = incomeOpen || archiveOpen || rewardsOpen || txQuery?.overall
     ? 'all' : txQuery ? state.filters.month : null
   const sheetReady = !sheetPeriod || historyReady || loadedPeriods.has(sheetPeriod)
@@ -123,7 +131,7 @@ export function SheetProvider({ children }: { children: ReactNode }) {
     setImportOpen(true)
   }, [stopExplore])
   const openSettings = useCallback(() => { stopExplore(); navigateTo('settings') }, [stopExplore])
-  const openAccount = useCallback(() => { stopExplore(); setAccountOpen(true) }, [stopExplore])
+  const openAccount = useCallback(() => { stopExplore(); setAccountPanel('account') }, [stopExplore])
   const openIncome = useCallback(() => { stopExplore(); setIncomeOpen(true) }, [stopExplore])
   const openBudgets = useCallback(() => { stopExplore(); setBudgetsOpen(true) }, [stopExplore])
   const openCards = useCallback(() => { stopExplore(); navigateTo('cards') }, [stopExplore])
@@ -201,8 +209,8 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {sharedImport.delivery && <ImportSheet key={sharedImport.delivery.id} open={sharedReady} onClose={sharedImport.finish} sharedFiles={sharedImport.delivery.files} />}
 
       <Suspense fallback={null}>
-        {accountOpen && (
-          <AccountSheet open onClose={() => setAccountOpen(false)} />
+        {accountPanel && (
+          <AccountSheet open startDeletion={accountPanel === 'delete'} onClose={() => setAccountPanel(null)} />
         )}
         {!sheetReady && <Modal open title="Kayıtlar yükleniyor" onClose={() => {
           setIncomeOpen(false); setArchiveOpen(false); setRewardsOpen(false); setTxQuery(null)

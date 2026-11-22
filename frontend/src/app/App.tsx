@@ -58,6 +58,7 @@ const TransactionsView = lazy(() => import('../views/TransactionsSheet').then(m 
 const StatementView = lazy(() => import('../views/StatementView').then(m => ({ default: m.StatementView })))
 const SettingsPage = lazy(() => import('./SettingsSheet').then(m => ({ default: m.SettingsPage })))
 const AccountSignInForm = lazy(() => import('./AccountSheet').then(m => ({ default: m.AccountSignInForm })))
+const PrivacyPolicyLink = lazy(() => import('./AccountSheet').then(m => ({ default: m.PrivacyPolicyLink })))
 function readHash(): AppRoute { return parseRoute(window.location.hash) }
 
 export default function App() {
@@ -132,7 +133,10 @@ function WorkspaceAccess() {
         : !cloudAvailable ? <p role="alert">Bu dağıtımda Firebase bağlantısı yapılandırılmamış.</p>
         : !authUser ? <>
           {authError && <Button onClick={retryAuth}>Bağlantıyı yeniden dene</Button>}
-          <Suspense fallback={<Skeleton className="h-24 w-full" />}><AccountSignInForm upgrading={false} /></Suspense>
+          <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+            <AccountSignInForm upgrading={false} />
+            <PrivacyPolicyLink />
+          </Suspense>
         </>
         : legacyMigration ? <>
           <p>Bu cihazda eski Mizan kayıtları var. Bunları açık hesabına aktarabilir veya daha sonra aktarabilirsin.</p>

@@ -28,7 +28,7 @@ import { UserFacingError } from '../core/errors'
  * sign-in itself — it turns from the form into the status in place — so the
  * answer to "did that work?" is on screen the moment it is true.
  */
-export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AccountSheet({ open, onClose, startDeletion = false }: { open: boolean; onClose: () => void; startDeletion?: boolean }) {
   const { cloudAvailable, authReady, authUser, authError, retryAuth, sessionError } = useStore()
 
   return (
@@ -49,12 +49,17 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
           <Skeleton className="h-11 w-full" />
         </div>
       ) : authUser && !authUser.isAnonymous ? (
-        <SignedIn user={authUser} />
+        <SignedIn user={authUser} startDeletion={startDeletion} />
       ) : (
         <AccountSignInForm upgrading={authUser?.isAnonymous === true} />
       )}
+      <PrivacyPolicyLink />
     </Modal>
   )
+}
+
+export function PrivacyPolicyLink() {
+  return <a className="mt-4 inline-block text-body text-accent underline" href="https://my-finance-webapp-fd.web.app/privacy.html" target="_blank" rel="noopener noreferrer">Gizlilik politikası</a>
 }
 
 /* ── Signed out ──────────────────────────────────────────────────────────── */
@@ -245,7 +250,7 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
 
 const PROVIDER: Record<string, string> = { 'google.com': 'Google', password: 'E-posta' }
 
-function SignedIn({ user }: { user: AuthUser }) {
+function SignedIn({ user, startDeletion }: { user: AuthUser; startDeletion: boolean }) {
   const { state, sync, authUser, eraseCloud, logout, historyReady } = useStore()
   const [leaving, setLeaving] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -312,7 +317,7 @@ function SignedIn({ user }: { user: AuthUser }) {
         </Button>
       </div>
 
-      <Disclosure title="Veri ve hesap">
+      <Disclosure title="Veri ve hesap" initiallyOpen={startDeletion}>
         <div className="space-y-5">
           <div className="space-y-2">
             <Button variant="danger" onClick={() => setWipeOpen(true)} disabled={busy}>
@@ -464,7 +469,7 @@ function DeleteAccountDialog({ user, onClose }: { user: AuthUser; onClose: () =>
     >
       <form id="delete-account" onSubmit={submit} className="space-y-4">
         <p className="text-body text-muted">
-          Hesabın ve buluttaki tüm verilerin kalıcı olarak silinir. Bu cihazdaki veriler kalır. Geri alınamaz.
+          Mizan hesabın ve hesabındaki finans kayıtları kalıcı olarak silinir. İndirdiğin dosyaları cihazından ayrıca silebilirsin.
         </p>
         {usesPassword ? (
           <Field label="Şifren" hint="Devam etmek için kimliğini doğrula.">
@@ -493,8 +498,8 @@ function DeleteAccountDialog({ user, onClose }: { user: AuthUser; onClose: () =>
   )
 }
 
-function Disclosure({ title, children }: { title: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false)
+function Disclosure({ title, children, initiallyOpen = false }: { title: string; children: ReactNode; initiallyOpen?: boolean }) {
+  const [open, setOpen] = useState(initiallyOpen)
   return (
     <section>
       <button
