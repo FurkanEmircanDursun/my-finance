@@ -64,4 +64,8 @@ jobs:
           MIZAN_ASC_KEY_ID: ${{ secrets.MIZAN_ASC_KEY_ID }}
           MIZAN_ASC_ISSUER_ID: ${{ secrets.MIZAN_ASC_ISSUER_ID }}
           MIZAN_APPLE_TEAM_ID: ${{ vars.MIZAN_APPLE_TEAM_ID }}
+          MIZAN_IOS_DISTRIBUTION_P12: ${{ secrets.MIZAN_IOS_DISTRIBUTION_P12 }}
+          MIZAN_IOS_DISTRIBUTION_PASSWORD: ${{ secrets.MIZAN_IOS_DISTRIBUTION_PASSWORD }}
+          MIZAN_IOS_APP_PROFILE: ${{ secrets.MIZAN_IOS_APP_PROFILE }}
+          MIZAN_IOS_SHARE_PROFILE: ${{ secrets.MIZAN_IOS_SHARE_PROFILE }}
         run: bash scripts/upload-ios-beta.sh
