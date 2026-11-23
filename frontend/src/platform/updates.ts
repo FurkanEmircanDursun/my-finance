@@ -1,7 +1,7 @@
 import { cloudAvailable } from '../firebase/available'
 import { isNative, isAndroid } from './index'
 import { measureOperation } from './diagnostics'
-import { cacheUpdatePolicy, compareVersions, parseUpdatePolicy, readCachedUpdatePolicy, resolveUpdateUrl, updateDecision, type UpdateDecision, type UpdatePolicy, type UpdatePlatform } from './updatesPolicy'
+import { compareVersions, parseUpdatePolicy, resolveUpdateUrl, updateDecision, type UpdateDecision, type UpdatePolicy, type UpdatePlatform } from './updatesPolicy'
 
 export interface UpdateState {
   currentVersion: string | null
@@ -51,7 +51,6 @@ export function watchUpdates(onChange: (state: UpdateState) => void): { refresh:
       update_message: sdk.getString(remote, 'update_message'),
     })
     if (!policy) { publish({ status: 'invalid' }); return }
-    if (typeof localStorage !== 'undefined') cacheUpdatePolicy(localStorage, policy)
     publish({ policy, status: 'ready' })
   }
   const refreshRemote = async () => {
@@ -64,11 +63,12 @@ export function watchUpdates(onChange: (state: UpdateState) => void): { refresh:
   }
   const initialize = async () => {
     const currentVersion = await installedVersion()
-    let policy: UpdatePolicy | null = null
-    try { if (typeof localStorage !== 'undefined') policy = readCachedUpdatePolicy(localStorage) } catch { /* Storage can be unavailable in private mode. */ }
-    publish({ currentVersion, policy, platform: isNative() ? isAndroid() ? 'android' : 'ios' : 'web' })
+    publish({ currentVersion, platform: isNative() ? isAndroid() ? 'android' : 'ios' : 'web' })
     if (disposed) return
-    if (!cloudAvailable) { publish({ status: 'unavailable' }); return }
+    if (!cloudAvailable || (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_AUTH_EMULATOR)) {
+      publish({ status: 'unavailable' })
+      return
+    }
     try {
       sdk = await import('firebase/remote-config')
       if (disposed) return

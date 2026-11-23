@@ -1,4 +1,5 @@
 import type { TextGeom } from './extract'
+import { STATEMENT_ROW } from './rowDate'
 
 /**
  * Column awareness for tabular statement PDFs.
@@ -70,7 +71,9 @@ interface Word {
 
 /** A number as either bank prints it, with its sign marker and instalment tail. */
 const MONEY_WORD_RE = /^\d[\d.,]*[.,]\d{2}(?:\(-\)|[+-])?(?:x\d+)?$/
-const TRANSACTION_START_RE = /^(?:bosluk\s+)?\d{1,2}(?:\/\d{1,2}\/|\s+\p{L}+\s+)\d{4}\s+/iu
+function isTransactionRow(words: Word[]): boolean {
+  return Boolean(STATEMENT_ROW.exec(words.map(word => word.text).join(' ').replace(/^bosluk\s+/i, ''))?.[2])
+}
 
 /** How far a number's right edge may sit from its header's and still belong to it. */
 const COLUMN_TOLERANCE = 14
@@ -178,6 +181,16 @@ export function findColumnLayout(rows: TextGeom[][], decode: (text: string) => s
   return null
 }
 
+/** Reuse a preceding header only when several dated rows fit its amount edge. */
+export function continuationLayout(rows: TextGeom[][], previous: ColumnLayout, decode: (text: string) => string): ColumnLayout | null {
+  const aligned = rows.map(row => rowWords(row, decode)).filter(words =>
+    isTransactionRow(words) && words.some(word =>
+      MONEY_WORD_RE.test(word.text) && Math.abs(word.right - previous.amountRight) <= COLUMN_TOLERANCE,
+    ),
+  )
+  return aligned.length >= 2 ? { ...previous, headerY: Infinity } : null
+}
+
 /**
  * Annotates positioned money values before the text is flattened.
  *
@@ -209,7 +222,7 @@ export function tagStatementColumns(
       }
     }
     // Annotate only an unambiguous amount on a transaction-shaped row.
-    if (billed.length === 1 && TRANSACTION_START_RE.test(words.map(word => word.text).join(' '))) {
+    if (billed.length === 1 && isTransactionRow(words)) {
       billed[0].first.text = '⟨' + billed[0].first.text
       billed[0].last.text += '⟩'
     }

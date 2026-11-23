@@ -7,9 +7,10 @@ import { useStore } from '../store/AppStore'
 import { Button } from '../ui/primitives'
 import { firebaseErrorMessage } from '../firebase/errors'
 
-/** Device-specific privacy and delivery preferences, separate from financial settings. */
+/** Account delivery settings and this session's optional measurement controls. */
 export function CloudServicesSettings() {
-  const { state, authUser, sync, cloudAvailable } = useStore()
+  const { state, authUser, sync, cloudAvailable, dispatch } = useStore()
+  const preferences = state.settings.reminders ?? defaultReminders
   const [consent, setConsent] = useState(analyticsConsent)
   const [status, setStatus] = useState(getPushStatus)
   const [busy, setBusy] = useState(false)
@@ -24,10 +25,15 @@ export function CloudServicesSettings() {
   const togglePush = async () => {
     setBusy(true); setError(''); setMessage('')
     try {
-      if (status.optedIn) { await disconnectCloudPush(); setMessage('Cihaz hatırlatmaları kullanılacak.') }
+      if (preferences.cloudPush) {
+        dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, cloudPush: false } } })
+        await disconnectCloudPush()
+        setMessage('Cihaz hatırlatmaları kullanılacak.')
+      }
       else if (authUser && !authUser.isAnonymous) {
-        await requestCloudPush(authUser.uid, state.settings.reminders ?? defaultReminders,
+        await requestCloudPush(authUser.uid, preferences,
           sync.lastSyncedAt !== null && sync.pending === 0 && sync.status !== 'decision' && sync.status !== 'error')
+        dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, cloudPush: true } } })
         setMessage('Bulut bildirimleri bağlandı. Saatler Türkiye saatine göre planlanır.')
       }
     } catch (cause) { setError(firebaseErrorMessage(cause, 'notification')) }
@@ -39,7 +45,7 @@ export function CloudServicesSettings() {
       <div className="min-w-0 flex-1">
         <h3 className="text-body font-semibold text-ink">Bulut bildirimleri</h3>
         <p className="mt-1 text-label leading-relaxed text-muted">
-          {!status.supported ? 'Ekstre bildirimleri Android uygulamasında kullanılabilir.'
+          {!status.supported ? 'Bulut teslimi Android’de kullanılabilir. iOS’ta bildirimleri cihaz planlar.'
             : !status.backendReady ? 'Cihaz hatırlatmaları kullanılabilir. Buluttan otomatik gönderim henüz etkin değil.'
               : status.active ? 'Firebase bağlantısı açık. Cihaz hatırlatmaları çift bildirim oluşmaması için beklemede.'
                 : 'Ekstre ve kayıt günlerinde Firebase üzerinden hatırlatma al. İnternet gerekir.'}
@@ -47,7 +53,7 @@ export function CloudServicesSettings() {
         {status.supported && status.backendReady && (
           <div className="mt-3">
             {authUser && !authUser.isAnonymous ? <Button disabled={busy} onClick={() => { void togglePush() }}>
-              {busy ? 'Bağlanıyor…' : status.optedIn ? 'Cihaz hatırlatmalarını kullan' : 'Bulut bildirimlerini aç'}
+              {busy ? 'Bağlanıyor…' : preferences.cloudPush ? 'Cihaz hatırlatmalarını kullan' : 'Bulut bildirimlerini aç'}
             </Button> : <p className="text-label text-muted">Önce Google hesabınla giriş yap.</p>}
           </div>
         )}
@@ -66,7 +72,7 @@ export function CloudServicesSettings() {
         </label>
         <p id="analytics-privacy" className="mt-1 text-label leading-relaxed text-muted">
           İsteğe bağlı kullanım ölçümü. Açılan ekranlar ve tamamlanan işlemler sayılır.
-          Tutar, kart bilgisi, ekstre içeriği ve e-posta gönderilmez. İstediğin an kapatabilirsin.
+          Tutar, kart bilgisi, ekstre içeriği ve e-posta gönderilmez. İzin oturum bitince sıfırlanır.
         </p>
         {analyticsError() && <p className="mt-2 text-label text-negative" role="alert">{analyticsError()}</p>}
       </div>

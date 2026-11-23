@@ -9,7 +9,6 @@ import { money2 } from '../core/money'
 import { Brand } from '../ui/Brand'
 import { Button, Field, TextInput } from '../ui/primitives'
 import { setBackInterceptor } from '../platform/native'
-import { GoogleConnectButton } from './GoogleConnectButton'
 import { trackProductEvent } from '../platform/analytics'
 import { hapticTap } from '../platform/haptics'
 import './onboarding.css'
@@ -123,18 +122,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           {step === 0 ? <>
             <div className="onb-start-actions">
               <Button variant="primary" className="onb-primary" onClick={() => { hapticTap(); setStep(1) }}>Mizan’a başla <ArrowRight size={18} /></Button>
-              <span>Hesap açman gerekmez.</span>
-            </div>
-            <div className="onb-connect">
-              <p>Cihazların arasında devam etmek için</p>
-              <GoogleConnectButton />
             </div>
           </> : <ol className="onb-steps" aria-label="Kurulum adımları">
             {steps.map(({ label, icon: Icon }, index) => <li key={label} aria-current={step === index ? 'step' : undefined} className={index < step ? 'onb-step-complete' : ''}>
               <span>{index < step ? <Check size={16} /> : <Icon size={17} />}</span><strong>{label}</strong>
             </li>)}
           </ol>}
-          <p className="onb-privacy"><LockKeyhole size={15} /> Kayıtların cihazında saklanır. Eşitlemek senin seçimin.</p>
+          <p className="onb-privacy"><LockKeyhole size={15} aria-hidden="true" /> Kayıtların Firebase hesabında saklanır.</p>
         </aside>
         {step === 0 ? <BudgetPlayground /> : <section className="onb-form-panel" aria-labelledby="onb-step-title">
           <div className="onb-step-progress" aria-label={`Kurulum adımı ${step + 1}, toplam ${steps.length}`}>
@@ -142,7 +136,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           </div>
           <h2 id="onb-step-title" ref={heading} tabIndex={-1}>{['', 'Önce kartını tanıyalım.', 'Bu ayki gelirini ekle.', 'Tarihleri aklında tutma.'][step]}</h2>
           {step === 1 && <>
-            <p>Tam kart numaran gerekmez. Akbank veya Garanti BBVA kartını ekleyip tarihlerini belirle.</p>
+            <p>Tam kart numaran gerekmez. Kartını ekleyip kesim ve hatırlatma günlerini belirle.</p>
             {cards.length > 0 && <p className="onb-saved" role="status"><Check size={17} /> {cards.length} kart hazır. Mevcut kartlarınla devam edebilirsin.</p>}
             <CardEditor existingCards={cards} onSave={card => { dispatch({ type: 'upsertCard', card }); setStep(2) }} submitLabel={cards.length ? 'Yeni kartı kaydet ve devam et' : 'Kartı kaydet ve devam et'} />
             <button type="button" className="onb-quiet-action onb-skip" onClick={() => setStep(2)}>{cards.length ? 'Mevcut kartlarla devam et' : 'Şimdilik kart ekleme'} <ArrowRight size={15} /></button>

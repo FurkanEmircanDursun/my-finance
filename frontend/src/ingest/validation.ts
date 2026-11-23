@@ -34,7 +34,7 @@ export class StatementValidationError extends Error {
 export const MAX_STATEMENT_BYTES = 25 * 1024 * 1024
 
 export function isPdfFile(file: Pick<File, 'name' | 'type'>): boolean {
-  return file.type.toLowerCase().split(';')[0].trim() === 'application/pdf' || /\.pdf$/i.test(file.name)
+  return /\.pdf$/i.test(file.name) || file.type?.toLowerCase().split(';')[0].trim() === 'application/pdf'
 }
 
 /** Checks the container before loading PDF.js or sending anything to OCR. */

@@ -1,7 +1,6 @@
 import { cloudAvailable } from '../firebase/available'
 import { DIAGNOSTICS_PATH, isDiagnosticSample, type DiagnosticTrace } from './diagnosticsContract'
 
-const CONSENT_KEY = 'mizan.performance-consent.v1'
 export const DIAGNOSTICS_UPDATED = 'mizan:diagnostics-updated'
 export type { DiagnosticTrace } from './diagnosticsContract'
 export interface DiagnosticsStatus { enabled: boolean; active: boolean; error?: string }
@@ -10,9 +9,10 @@ let bridge: Bridge | undefined
 let generation = 0
 let starting: Promise<void> | undefined
 let error: string | undefined
+let consentGranted = false
 
 export function diagnosticsConsent(): boolean {
-  try { return localStorage.getItem(CONSENT_KEY) === 'granted' } catch { return false }
+  return consentGranted
 }
 export function diagnosticsStatus(): DiagnosticsStatus {
   return { enabled: diagnosticsConsent(), active: Boolean(bridge?.ready), error }
@@ -68,20 +68,16 @@ function synchronize(): Promise<void> {
   starting = applyDiagnostics().finally(() => { starting = undefined })
   return starting
 }
-/** Independent device-local consent. Removing the frame also discards its SDK queues. */
+/** Removing the frame discards its SDK queues. Consent expires with this session. */
 export function setDiagnosticsConsent(enabled: boolean): Promise<void> {
-  try { localStorage.setItem(CONSENT_KEY, enabled ? 'granted' : 'denied') } catch {
-    error = 'Tercihin kaydedilemedi. Cihaz depolamasını kontrol et.'; notify(); return Promise.resolve()
-  }
+  consentGranted = enabled
   if (!enabled) stopBridge()
   notify()
   return synchronize()
 }
 export function initializeDiagnostics(): () => void {
   void synchronize()
-  const onStorage = (event: StorageEvent) => { if (event.key === CONSENT_KEY) { if (!diagnosticsConsent()) stopBridge(); void synchronize() } }
-  window.addEventListener('storage', onStorage)
-  return () => { window.removeEventListener('storage', onStorage); stopBridge() }
+  return stopBridge
 }
 /** Only bounded names and durations cross into the fixed-URL measurement realm. */
 export function recordDiagnostic(name: DiagnosticTrace, durationMs: number): boolean {

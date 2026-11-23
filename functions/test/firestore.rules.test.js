@@ -45,6 +45,18 @@ const fixtures = () => [
   ['users/owner/rules/r_hash', rule()], ['users/owner/meta/profile', profile()], ['users/owner/meta/prefs', prefs()],
 ]
 
+test('statement PDF fingerprints must be lowercase SHA-256 and remain owner-only', async () => {
+  const path = 'users/owner/statements/st-1'
+  const ref = doc(owner(), path)
+  await assertSucceeds(setDoc(ref, statement()))
+  await assertSucceeds(updateDoc(ref, { pdfSha256: 'ab'.repeat(32) }))
+  for (const pdfSha256 of ['AB'.repeat(32), 'a'.repeat(63), 'g'.repeat(64), null]) {
+    await assertFails(updateDoc(ref, { pdfSha256 }))
+  }
+  for (const reader of attackers()) await assertFails(getDoc(doc(reader, path)))
+  await assertSucceeds(setDoc(ref, statement()))
+})
+
 test('owner full-sync batch, collection queries, edit, tombstone, resurrection and deletion work without a parent user document', async () => {
   const db = owner()
   const batch = writeBatch(db)
@@ -146,17 +158,33 @@ test('statement summaries, reconciliation, ignored rows and reimport update stay
     summary: { totalDebt: 100, previousBalance: -100, minPayment: 40, creditLimit: 100000, availableLimit: 99900, cashAdvanceLimit: 50000, interestMonthly: 3.75, previousCutDate: '2026-10-14', nextCutDate: '2026-12-14', nextDueDate: '2026-12-24', loyalty: { programme: 'Synthetic', earned: 10, spent: 0, balance: 10 } },
     reconciliation: { status: 'match', printedDebt: 100, previousBalance: -100, payments: 0, parsedCharges: 200, expectedCharges: 200, delta: 0 } }
   await assertSucceeds(setDoc(ref, data))
-  await assertSucceeds(updateDoc(ref, { importedAt: time + 1000, _u: time + 1000, engine: 'reimport' }))
+  await assertSucceeds(updateDoc(ref, { _u: time + 1000, engine: 'reimport' }))
+  await assertSucceeds(updateDoc(ref, { importedAt: time + 1000, _u: time + 1001 }))
   for (const patch of [{ fileName: 'x'.repeat(1025) }, { id: 'other' }, { summary: { ...data.summary, totalDebt: '100' } }, { reconciliation: { ...data.reconciliation, status: 'invented' } }, { ignored: {} }, { ignored: Array(5001).fill(null) }]) {
     await assertFails(updateDoc(ref, patch))
   }
 })
 
-test('merchant rule re-learning may replace its id and historical creation time', async () => {
+test('legacy merchant rule re-learning can replace its local ID and date while retaining its merchant', async () => {
   const ref = doc(owner(), 'users/owner/rules/r_hash')
   await assertSucceeds(setDoc(ref, rule()))
-  await assertSucceeds(setDoc(ref, { ...rule(), id: 'rule-new', createdAt: time + 1, category: 'market', _u: time + 1 }))
+  await assertSucceeds(updateDoc(ref, { category: 'market', _u: time + 1 }))
+  await assertSucceeds(updateDoc(ref, { id: 'rule-new', createdAt: time + 2, category: 'dining', _u: time + 2 }))
+  await assertFails(updateDoc(ref, { merchant: 'another merchant' }))
   await assertFails(updateDoc(ref, { createdAt: 'yesterday' }))
+})
+
+test('account reminder and onboarding preferences accept exact types and reject out-of-range updates', async () => {
+  const ref = doc(owner(), 'users/owner/meta/prefs')
+  for (const reminders of [true, { enabled: true }, { enabled: 1, hour: 8 }, { enabled: false, hour: 24 }, { enabled: true, hour: 9, cloudPush: 'true' }]) {
+    await assertFails(setDoc(ref, { ...prefs(), reminders }))
+  }
+  await assertSucceeds(setDoc(ref, { ...prefs(), onboardingSeen: true, reminders: { enabled: true, hour: 9, cloudPush: true } }))
+  await assertFails(updateDoc(ref, { 'reminders.hour': -1 }))
+  await assertFails(updateDoc(ref, { 'reminders.enabled': 'yes' }))
+  await assertFails(updateDoc(ref, { 'reminders.extra': 'unexpected' }))
+  await assertFails(updateDoc(ref, { onboardingSeen: 1 }))
+  await assertSucceeds(updateDoc(ref, { 'reminders.hour': 22, 'reminders.cloudPush': false }))
 })
 
 test('profile supports 240 complete monthly asset observations without an expression-limit failure', async () => {

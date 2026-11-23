@@ -4,7 +4,7 @@ export type FirebaseErrorContext = 'auth' | 'sync' | 'storage' | 'session' | 'no
 
 const FALLBACKS: Record<FirebaseErrorContext, string> = {
   auth: 'Hesap işlemi tamamlanamadı. Yeniden dene veya farklı bir giriş yöntemi kullan.',
-  sync: 'Eşitleme tamamlanamadı. Kayıtların bu cihazda duruyor; yeniden dene.',
+  sync: 'Eşitleme tamamlanamadı. Bağlantını kontrol edip yeniden dene.',
   storage: 'Dosya işlemi tamamlanamadı. Yeniden dene.',
   session: 'Oturum işlemi tamamlanamadı. Kayıtların korunuyor; yeniden dene.',
   notification: 'Bildirimler ayarlanamadı. Bağlantını ve bildirim izinlerini kontrol et.',
@@ -48,7 +48,7 @@ export function firebaseErrorMessage(error: unknown, context: FirebaseErrorConte
   }
   if (['network-request-failed', 'network-error', 'unavailable', 'retry-limit-exceeded', 'deadline-exceeded'].includes(name)) {
     return context === 'sync'
-      ? 'Eşitleme servisine ulaşılamadı. İnternet bağlantını kontrol et; kayıtların bu cihazda duruyor.'
+      ? 'Eşitleme servisine ulaşılamadı. İnternet bağlantını kontrol edip yeniden dene.'
       : 'İnternet bağlantısı veya servis erişimi kesildi. Bağlantını kontrol edip yeniden dene.'
   }
   if (['too-many-requests', 'quota-exceeded', 'resource-exhausted'].includes(name)) {

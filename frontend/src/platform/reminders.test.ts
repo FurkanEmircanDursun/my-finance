@@ -4,10 +4,11 @@ import { planReminders, REMINDER_ID_START } from '../domain/reminders'
 
 const mocks = vi.hoisted(() => ({
   isAndroid: vi.fn(() => true),
+  isIOS: vi.fn(() => false),
   checkPermissions: vi.fn(), getPending: vi.fn(), cancel: vi.fn(),
   createChannel: vi.fn(), schedule: vi.fn(), requestPermissions: vi.fn(), addListener: vi.fn(),
 }))
-vi.mock('./index', () => ({ isAndroid: mocks.isAndroid }))
+vi.mock('./index', () => ({ isAndroid: mocks.isAndroid, isIOS: mocks.isIOS }))
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: mocks }))
 
 import { consumePendingReminder, getReminderStatus, onReminderOpen, requestReminderPermission, sendTestReminder, setRemoteReminderDelivery, syncReminders } from './reminders'
@@ -21,6 +22,7 @@ beforeEach(() => {
   vi.stubGlobal('window', new EventTarget())
   setRemoteReminderDelivery(false)
   mocks.isAndroid.mockReturnValue(true)
+  mocks.isIOS.mockReturnValue(false)
   mocks.checkPermissions.mockResolvedValue({ display: 'granted' })
   mocks.getPending.mockResolvedValue({ notifications: [] })
   mocks.cancel.mockResolvedValue(undefined)
@@ -33,6 +35,15 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('native reminder lifecycle', () => {
+  it('schedules nearest iOS reminders without trying to create Android channels', async () => {
+    mocks.isAndroid.mockReturnValue(false)
+    mocks.isIOS.mockReturnValue(true)
+    await syncReminders([card, { ...card, id: 'second' }, { ...card, id: 'third' }], { enabled: true, hour: 17 }, 'owner')
+    const notifications = mocks.schedule.mock.calls[0][0].notifications
+    expect(notifications).toHaveLength(60)
+    expect(notifications.every((item: { extra: { uid: string } }) => item.extra.uid === 'owner')).toBe(true)
+    expect(mocks.createChannel).not.toHaveBeenCalled()
+  })
   it('cancels the local plan while cloud delivery owns reminders and restores it on fallback', async () => {
     mocks.getPending.mockResolvedValue({ notifications: [{ id: REMINDER_ID_START + 2 }] })
     setRemoteReminderDelivery(true)
@@ -114,6 +125,8 @@ describe('native reminder lifecycle', () => {
     callback({ notification: { id: REMINDER_ID_START, extra: { cardId: 'card', reminderKind: 'entry' } } })
     expect(consumePendingReminder()).toEqual({ cardId: 'card', reminderKind: 'entry' })
     expect(consumePendingReminder()).toBeNull()
+    callback({ notification: { id: REMINDER_ID_START, extra: { uid: 'previous', cardId: 'card' } } })
+    expect(consumePendingReminder('new')).toBeNull()
   })
   it('preserves a delayed inexact alarm when the app resumes after its requested time', async () => {
     vi.useFakeTimers()

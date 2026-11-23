@@ -39,18 +39,18 @@ describe('describeSync', () => {
     expect(describeSync(state({ status: 'syncing', pending: 1 }), NOW).detail).toContain('1 değişiklik')
   })
 
-  it('treats offline as ordinary news — amber, with nothing lost', () => {
+  it('labels offline edits as pending in the active session', () => {
     const view = describeSync(state({ status: 'offline', pending: 2 }), NOW)
     expect(view.tone).toBe('warning')
     expect(view.detail).toContain('2 değişiklik')
-    expect(view.detail).toContain('bu cihazda')
+    expect(view.detail).toContain('açık oturumda')
   })
 
-  it('keeps red for a failure, and still says the data is safe and being retried', () => {
+  it('keeps red for a failure and explains pending retries', () => {
     const view = describeSync(state({ status: 'error', error: 'boom' }), NOW)
     expect(view.tone).toBe('negative')
-    expect(view.detail).toContain('güvende')
-    expect(view.detail).toContain('tekrar')
+    expect(view.detail).toContain('bekleyen değişiklikler')
+    expect(view.detail).toContain('yeniden deneniyor')
   })
 
   it('asks for a choice when the device holds another account\'s data', () => {

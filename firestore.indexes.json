@@ -2,6 +2,14 @@
   "indexes": [],
   "fieldOverrides": [
     { "collectionGroup": "pushDevices", "fieldPath": "hour", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
-    { "collectionGroup": "notificationDeliveries", "fieldPath": "expireAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] }
+    { "collectionGroup": "notificationDeliveries", "fieldPath": "expireAt", "indexes": [{ "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }] },
+    { "collectionGroup": "meta", "fieldPath": "assets", "indexes": [] },
+    { "collectionGroup": "meta", "fieldPath": "assetValuations", "indexes": [] },
+    { "collectionGroup": "meta", "fieldPath": "cards", "indexes": [] },
+    { "collectionGroup": "meta", "fieldPath": "archivedCards", "indexes": [] },
+    { "collectionGroup": "meta", "fieldPath": "budgets", "indexes": [] },
+    { "collectionGroup": "transactions", "fieldPath": "raw", "indexes": [] },
+    { "collectionGroup": "statements", "fieldPath": "ignored", "indexes": [] },
+    { "collectionGroup": "statements", "fieldPath": "pdfSha256", "indexes": [] }
   ]
 }

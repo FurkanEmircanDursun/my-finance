@@ -81,6 +81,10 @@ describe('removeStatement', () => {
     // The month selection is a calendar/statement-group key, not a reference
     // to this statement's id, so it is left exactly as the user set it.
     expect(after.filters.month).toBe('2026-08')
+    const restored = reducer(after, { type: 'restoreStatement', statement: stateWithData.statements[0], transactions: stateWithData.transactions })
+    expect(restored).toEqual(stateWithData)
+    const reimported = { ...after, statements: [{ ...stateWithData.statements[0], id: 'replacement' }] }
+    expect(reducer(reimported, { type: 'restoreStatement', statement: stateWithData.statements[0], transactions: stateWithData.transactions })).toBe(reimported)
   })
 
   it('is a no-op for an unknown id', () => {

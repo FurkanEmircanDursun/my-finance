@@ -83,8 +83,7 @@ export function onAuthChange(callback: (user: AuthUser | null) => void, onError?
  * email or Google account that already exists (made on their phone, say), has
  * asked for exactly one thing: to be in that account. Failing with "this
  * credential is already in use" turns a perfectly clear request into a dead end.
- * Their local data is not lost either way: the sync engine notices the device
- * holds data from a different identity and asks what to do with it.
+ * The workspace starts a fresh data session if this changes the UID.
  */
 async function attach(credential: AuthCredential): Promise<void> {
   const auth = getFirebaseAuth()

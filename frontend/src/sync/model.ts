@@ -1,7 +1,7 @@
 import { normalizeAssetHoldings } from '../domain/assets'
 import { mergeAssetValuations, normalizeAssetValuations } from '../domain/assetsHistory'
 import { hash } from '../core/hash'
-import type { CategoryRule, Profile, Statement, Transaction } from '../domain/types'
+import type { CategoryRule, Profile, Settings, Statement, Transaction } from '../domain/types'
 
 
 /**
@@ -43,13 +43,15 @@ export const SINGLES: readonly Single[] = ['profile', 'prefs']
 
 /**
  * What of `Settings` is the *person's* and so follows them between devices. The
- * PIN, the intro flag and the OCR address describe one device and stay on it —
+ * PIN and OCR endpoint describe one device and stay in session memory —
  * and the PIN hash in particular must never reach the cloud: four digits is ten
  * thousand guesses.
  */
 export interface Prefs {
   theme: 'light' | 'dark' | 'system'
   periodGrouping: 'calendar' | 'statement' | null
+  reminders?: Settings['reminders']
+  onboardingSeen?: boolean
 }
 
 export interface Entities {
@@ -167,8 +169,9 @@ export function diffLocal(ledger: Ledger, snapshot: Snapshot, now: number): Diff
 
       // New here, edited here, or back after having been deleted: all three are
       // "this device has something newer to say".
-      next[key] = { h, u: now, p: true }
-      writes.push({ kind, id, u: now, deleted: false, data: entity })
+      const u = known ? Math.max(now, known.u + 1) : now
+      next[key] = { h, u, p: true }
+      writes.push({ kind, id, u, deleted: false, data: entity })
     }
   }
 
@@ -179,8 +182,9 @@ export function diffLocal(ledger: Ledger, snapshot: Snapshot, now: number): Diff
 
     // Known to the cloud, gone from here: deleted here.
     const id = key.slice(kind.length + 1)
-    next[key] = { h: '', u: now, d: true, p: true }
-    writes.push({ kind: kind as Kind, id, u: now, deleted: true })
+    const u = Math.max(now, entry.u + 1)
+    next[key] = { h: '', u, d: true, p: true }
+    writes.push({ kind: kind as Kind, id, u, deleted: true })
   }
 
   for (const kind of SINGLES) {
@@ -193,8 +197,9 @@ export function diffLocal(ledger: Ledger, snapshot: Snapshot, now: number): Diff
     // factory default; stamping the default would let a fresh install overwrite
     // an account's real profile with nothing.
     if (!known && isFactoryDefault(kind, snapshot)) continue
-    next[key] = { h, u: now, p: true }
-    writes.push({ kind, id: kind, u: now, deleted: false, data: value })
+    const u = known ? Math.max(now, known.u + 1) : now
+    next[key] = { h, u, p: true }
+    writes.push({ kind, id: kind, u, deleted: false, data: value })
   }
 
   return { ledger: next, writes }
@@ -203,7 +208,8 @@ export function diffLocal(ledger: Ledger, snapshot: Snapshot, now: number): Diff
 function isFactoryDefault(kind: Single, snapshot: Snapshot): boolean {
   return kind === 'profile'
     ? isDefaultProfile(snapshot.profile)
-    : snapshot.prefs.theme === 'system' && snapshot.prefs.periodGrouping === null
+    : snapshot.prefs.theme === 'system' && (snapshot.prefs.periodGrouping === null || snapshot.prefs.periodGrouping === 'calendar') &&
+      !snapshot.prefs.reminders && !snapshot.prefs.onboardingSeen
 }
 
 // ─── What arrived from the cloud ──────────────────────────────────────────────

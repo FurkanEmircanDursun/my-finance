@@ -1,6 +1,7 @@
 import { detectAdapter } from './banks'
 import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
-import { findColumnLayout, tagStatementColumns } from './columns'
+import { continuationLayout, findColumnLayout, tagStatementColumns, type ColumnLayout } from './columns'
+import type { Block } from 'tesseract.js'
 import { hasReadableText, isPdfFile } from './validation'
 
 /**
@@ -29,6 +30,8 @@ export interface ExtractOptions {
   useLocalOcr: boolean
   ocrEndpoint: string
   onProgress?: ProgressFn
+  /** Reading can fail validation even when the extracted text looks legible. */
+  assessReadable?: (result: ExtractResult) => 'accept' | 'retry' | 'reject'
 }
 
 function isRecognised(text: string): boolean {
@@ -81,6 +84,7 @@ async function loadPdfjs(): Promise<any> {
  */
 export interface TextGeom {
   text: string
+  fontName?: string
   /** Left edge, in PDF user units. */
   x: number
   /** Baseline. */
@@ -179,8 +183,13 @@ export function buildLines(items: TextGeom[]): string[] {
  * and numbers; the lines it returns keep the original, still-encoded text.
  */
 export function buildPageLines(items: TextGeom[], decode: (text: string) => string = (t) => t): string[] {
+  return pageLines(items, decode).lines
+}
+
+function pageLines(items: TextGeom[], decode: (text: string) => string, previous?: ColumnLayout) {
   const rows = groupRows(items.map((item) => ({ ...item })))
   const layout = findColumnLayout(rows, decode)
+    ?? (previous ? continuationLayout(rows, previous, decode) : null)
   if (layout) tagStatementColumns(rows, layout, decode)
 
   const lines: string[] = []
@@ -188,7 +197,7 @@ export function buildPageLines(items: TextGeom[], decode: (text: string) => stri
     const line = rowToLine(row)
     if (line) lines.push(line)
   }
-  return lines
+  return { lines, layout }
 }
 
 /**
@@ -201,6 +210,7 @@ export function toTextGeom(items: ReadonlyArray<any>): TextGeom[] {
     .filter((i) => typeof i.str === 'string' && i.str.length)
     .map((i) => ({
       text: i.str as string,
+      fontName: typeof i.fontName === 'string' ? i.fontName : undefined,
       x: i.transform[4] as number,
       y: i.transform[5] as number,
       w: (i.width ?? 0) as number,
@@ -217,13 +227,35 @@ export function toTextGeom(items: ReadonlyArray<any>): TextGeom[] {
  * EBCDIC is decided per page: an Akbank page is mojibake throughout, and the
  * column detector can only recognise "Tutar" and digits once decoded.
  */
-export function pdfPagesToText(pages: readonly TextGeom[][]): string {
-  const out: string[] = []
-  for (const items of pages) {
-    const sample = items.map((i) => i.text).join(' ')
-    out.push(...buildPageLines(items, looksLikeEbcdic(sample) ? decodeEbcdic : undefined))
+export function readPdfTextLayer(pages: readonly TextGeom[][]) {
+  const fontText = new Map<string, string>()
+  for (const items of pages) for (const { fontName, text } of items) {
+    if (!fontName) continue
+    const collected = fontText.get(fontName) ?? ''
+    if (collected.length < 4000) fontText.set(fontName, (collected + text).slice(0, 4000))
   }
-  return out.join('\n')
+  const encodedFonts = new Set([...fontText].filter(([, sample]) => looksLikeEbcdic(sample)).map(([name]) => name))
+  const identity = (text: string) => text
+  let previousLayout: ColumnLayout | undefined
+  let encoded = false
+  const pageText = pages.map(items => {
+    const sample = items.map((i) => i.text).join(' ')
+    const hasEncodedFont = items.some(item => item.fontName && encodedFonts.has(item.fontName))
+    const hasUnicodeFont = items.some(item =>
+      item.fontName && !encodedFonts.has(item.fontName) && /[A-Za-z]{3,}/.test(item.text))
+    const encodedSample = looksLikeEbcdic(sample)
+    const byFont = hasEncodedFont && (hasUnicodeFont || !encodedSample)
+    const pageEncoded = !byFont && encodedSample
+    const input = byFont ? items.map(item => item.fontName && encodedFonts.has(item.fontName)
+      ? { ...item, text: decodeEbcdic(item.text) } : item) : items
+    const { lines, layout } = pageLines(input, pageEncoded ? decodeEbcdic : identity, previousLayout)
+    previousLayout = layout ?? undefined
+    encoded ||= byFont || pageEncoded
+    const rendered = lines.join('\n')
+    return pageEncoded ? decodeEbcdic(rendered) : rendered
+  })
+  const text = pageText.join('\n')
+  return { pageText, text, engine: encoded ? 'pdf-ebcdic' : 'pdf-text' }
 }
 
 interface PdfTextPage {
@@ -315,7 +347,19 @@ async function ocrViaService(file: File, endpoint: string, onProgress?: Progress
   }
 }
 
-async function ocrInBrowser(file: File, onProgress?: ProgressFn): Promise<string> {
+function ocrWords(blocks: Block[], scale: number): TextGeom[] {
+  return blocks.flatMap(block => block.paragraphs.flatMap(paragraph =>
+    paragraph.lines.flatMap(line => line.words.map(({ text, bbox }) => ({
+      text,
+      x: bbox.x0 / scale,
+      y: -bbox.y1 / scale,
+      w: (bbox.x1 - bbox.x0) / scale,
+      h: (bbox.y1 - bbox.y0) / scale,
+    }))),
+  ))
+}
+
+async function ocrInBrowser(file: File, targets: number[] | null, initialPages: string[], onProgress?: ProgressFn): Promise<string> {
   onProgress?.('Tarayıcı içi OCR başlatılıyor (bu adım yavaştır)…')
 
   const pdfjs = await loadPdfjs()
@@ -323,33 +367,41 @@ async function ocrInBrowser(file: File, onProgress?: ProgressFn): Promise<string
 
   const data = await file.arrayBuffer()
   const doc = await pdfjs.getDocument({ data, isEvalSupported: false }).promise
-  const worker = await Tesseract.createWorker('tur')
-
-  const out: string[] = []
+  const pageNumbers = targets ?? Array.from({ length: doc.numPages }, (_, index) => index + 1)
+  const out = [...initialPages]
   try {
-    for (let pageNo = 1; pageNo <= doc.numPages; pageNo++) {
-      onProgress?.(`OCR · sayfa ${pageNo}/${doc.numPages}`)
-      const page = await doc.getPage(pageNo)
-      const viewport = page.getViewport({ scale: 2 })
+    // Keep the fallback bounded and refuse to return a silently truncated scan.
+    if (pageNumbers.length > 40) return ''
+    const worker = await Tesseract.createWorker('tur')
+    try {
+      for (const pageNo of pageNumbers) {
+        onProgress?.(`OCR · sayfa ${pageNo}/${doc.numPages}`)
+        const page = await doc.getPage(pageNo)
+        const pageSize = page.getViewport({ scale: 1 })
+        const scale = Math.min(2, Math.sqrt(4_000_000 / (pageSize.width * pageSize.height)), 4096 / Math.max(pageSize.width, pageSize.height))
+        const viewport = page.getViewport({ scale })
 
-      const canvas = document.createElement('canvas')
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      const ctx = canvas.getContext('2d')
-      if (!ctx) continue
-
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      await page.render({ canvasContext: ctx, viewport }).promise
-
-      const { data: result } = await worker.recognize(canvas)
-      out.push(result.text)
-
-      canvas.width = 0
-      canvas.height = 0
+        const canvas = document.createElement('canvas')
+        canvas.width = viewport.width
+        canvas.height = viewport.height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) return ''
+        try {
+          ctx.fillStyle = '#ffffff'
+          ctx.fillRect(0, 0, canvas.width, canvas.height)
+          await page.render({ canvasContext: ctx, viewport }).promise
+          const { data: result } = await worker.recognize(canvas, {}, { text: true, blocks: true })
+          const words = ocrWords(result.blocks ?? [], scale)
+          out[pageNo - 1] = words.length ? buildPageLines(words).join('\n') : result.text
+        } finally {
+          canvas.width = 0
+          canvas.height = 0
+        }
+      }
+    } finally {
+      await worker.terminate()
     }
   } finally {
-    await worker.terminate()
     await doc.destroy()
   }
 
@@ -365,19 +417,34 @@ export async function extractText(file: File, options: ExtractOptions): Promise<
     return { text: await readAsText(file), engine: 'text' }
   }
 
-  const layerText = pdfPagesToText(await extractPdfPages(file, onProgress))
-  const recognised = recogniseLayerText(layerText, onProgress)
-  if (recognised) return recognised
+  const layer = readPdfTextLayer(await extractPdfPages(file, onProgress))
+  const recognised = layer.engine === 'pdf-ebcdic' && hasReadableText(layer.text)
+    ? { text: layer.text, engine: layer.engine }
+    : recogniseLayerText(layer.text, onProgress)
+  const assess = options.assessReadable ?? (() => 'accept')
+  if (recognised && assess(recognised) !== 'retry') return recognised
 
-  if (options.useLocalOcr) {
+  let best = recognised
+  if (!best && options.useLocalOcr) {
     const serviceText = await ocrViaService(file, options.ocrEndpoint, onProgress)
-    if (serviceText && (isRecognised(serviceText) || hasReadableText(serviceText))) return { text: serviceText, engine: 'ocr-service' }
+    if (serviceText && (isRecognised(serviceText) || hasReadableText(serviceText))) {
+      const service = { text: serviceText, engine: 'ocr-service' }
+      if (assess(service) !== 'retry') return service
+      best = service
+    }
   }
 
-  const browserText = await ocrInBrowser(file, onProgress)
-  if (browserText.trim()) return { text: browserText, engine: 'ocr-browser' }
+  const weakPages = layer.pageText.flatMap((text, index) => hasReadableText(text) ? [] : [index + 1])
+  const selectPages = recognised && weakPages.length > 0 ? weakPages : null
+  try {
+    const browserText = await ocrInBrowser(file, selectPages, selectPages ? layer.pageText : [], onProgress)
+    const browser = { text: browserText, engine: selectPages ? 'pdf-ocr' : 'ocr-browser' }
+    if (browserText.trim() && (!best || assess(browser) === 'accept')) return browser
+  } catch (error) {
+    if (!best) throw error
+  }
 
   // Nothing recognised it; hand back the best text we have so the caller can
   // report a parse failure rather than a silent empty import.
-  return { text: layerText, engine: 'pdf-text' }
+  return best ?? { text: layer.text, engine: layer.engine }
 }

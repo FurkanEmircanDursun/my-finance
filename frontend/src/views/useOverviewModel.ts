@@ -10,12 +10,14 @@ import { defaultProfile } from '../store/defaults'
 import { analyze } from '../analytics/engine'
 import { buildLedgers } from '../analytics/ledger'
 import { monthLabel, monthOf, todayKey } from '../core/date'
+import { biggestBudgetOverrun, overviewSpending, spendingHabits } from './overviewSpending'
 
 /** The monthly presentation model keeps sample records outside the store. */
 export function useOverviewModel() {
-  const { state, analysis } = useStore()
+  const { state, analysis, historyReady } = useStore()
   const { exploring: demo, setExploring: setDemo } = useExplore()
-  const demoMonth = monthOf(todayKey())
+  const today = todayKey()
+  const demoMonth = monthOf(today)
   const sampleRows = useMemo(() => demoTransactions(demoMonth), [demoMonth])
   const demoProfile = useMemo(() => ({ ...defaultProfile, spendingLimit: 3000000 }), [])
   const demoAnalysis = useMemo(() => analyze(sampleRows, demoProfile), [sampleRows, demoProfile])
@@ -30,14 +32,18 @@ export function useOverviewModel() {
   const income = rows.filter(tx => tx.kind === 'income').reduce((sum, tx) => sum + tx.amount, 0)
   const scopedBudget = demo || (state.filters.month !== 'all' && !state.filters.cards.length && !state.filters.categories.length && !state.filters.query)
   const limit = scopedBudget ? profile.spendingLimit : 0
-  const used = limit ? Math.max(0, (spend / limit) * 100) : 0
+  const month = demo ? demoMonth : state.filters.month
   const period = demo ? monthLabel(demoMonth) : state.filters.month === 'all' ? 'Tüm dönemler' : monthLabel(state.filters.month)
   const recent = useMemo(() => [...rows].filter(tx => tx.kind !== 'payment')
     .sort((a, b) => effectiveDate(b).localeCompare(effectiveDate(a))).slice(0, 4), [rows])
   const unknown = rows.filter(tx => tx.kind === 'expense' && tx.category === 'other')
+  const spending = useMemo(() => overviewSpending(rows, month, today), [rows, month, today])
+  const habit = spendingHabits(spend, spending.gross, income, limit,
+    spending.categories.find(item => item.id === 'other')?.total ?? 0, scopedBudget)
+  const budgetOverrun = scopedBudget ? biggestBudgetOverrun(rows, profile.budgets) : undefined
   const statementLedgers = useMemo(() => buildLedgers(state.statements.filter(statement =>
     state.filters.month === 'all' || statementMonth(statement) === state.filters.month,
-  ), state.transactions), [state.statements, state.transactions, state.filters.month])
+  ), historyReady ? state.transactions : []), [state.statements, state.transactions, state.filters.month, historyReady])
   const upcoming = (state.profile.cards ?? [])
     .map(card => ({ card, date: nextCardDate(card.statementDay) }))
     .sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 2)
@@ -46,5 +52,5 @@ export function useOverviewModel() {
     { label: 'Kira ve aidat', value: rows.filter(tx => tx.source === 'manual' && tx.category === 'rent').reduce((sum, tx) => sum + spendAmount(tx), 0) },
     { label: 'Diğer kart dışı giderler', value: rows.filter(tx => tx.source === 'manual' && tx.category !== 'rent').reduce((sum, tx) => sum + spendAmount(tx), 0) },
   ]
-  return { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, used, period, recent, unknown, statementLedgers, upcoming, methods }
+  return { state, demo, setDemo, sampleRows, rows, current, profile, spend, income, scopedBudget, limit, period, recent, unknown, statementLedgers, upcoming, methods, historyReady, today, month, spending, habit, budgetOverrun }
 }

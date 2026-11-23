@@ -1,4 +1,4 @@
-import { addMonths, daysInMonth, eachMonth, monthLabel, monthOf, toEpochDay, weekdayIndex, type DayKey, type MonthKey } from '../core/date'
+import { addMonths, daysInMonth, eachDay, eachMonth, monthLabel, monthOf, toEpochDay, weekdayIndex, type DayKey, type MonthKey } from '../core/date'
 import { median } from '../core/stats'
 import { CATEGORIES, type CategoryId } from '../domain/categories'
 import { ASSET_INSTRUMENTS, portfolioValue, type AssetHolding, type AssetQuotes } from '../domain/assets'
@@ -86,6 +86,40 @@ function validFinancialRow(transaction: Transaction): boolean {
   return validDay(effectiveDate(transaction)) && Number.isSafeInteger(transaction.amount) && transaction.amount > 0 && ['income', 'expense', 'refund', 'payment'].includes(transaction.kind)
 }
 function percentChange(previous: number, current: number): number | null { return previous > 0 ? sum(current, -previous) / previous * 100 : null }
+
+export function dailyNetSpending(transactions: readonly Transaction[], month: MonthKey, asOf: DayKey, category: CategoryId | 'all') {
+  if (!validMonth(month) || month > monthOf(asOf)) return []
+  const lastDay = month === monthOf(asOf) ? asOf : `${month}-${daysInMonth(month)}`
+  const days = new Map(eachDay(`${month}-01`, lastDay).map(date => [
+    date, { date, net: 0n, count: 0 },
+  ]))
+  for (const row of transactions) {
+    const bucket = days.get(effectiveDate(row))
+    if (!bucket || !validFinancialRow(row) || (row.kind !== 'expense' && row.kind !== 'refund')) continue
+    const id = CATEGORY_MAP.has(row.category) ? row.category : 'other'
+    if (category !== 'all' && category !== id) continue
+    bucket.net += BigInt(row.kind === 'refund' ? -row.amount : row.amount)
+    bucket.count++
+  }
+  return [...days.values()].map(({ date, net, count }) => ({
+    date, count, net: net <= BigInt(Number.MAX_SAFE_INTEGER) && net >= BigInt(Number.MIN_SAFE_INTEGER) ? Number(net) : null,
+  }))
+}
+
+export function compareMonthlySpending(months: readonly LongitudinalMonth[], month: MonthKey, category: CategoryId | 'all') {
+  const focus = months.find(row => row.month === month && row.hasSpendingEvidence)
+  if (!focus) return null
+  const getAmount = (row: LongitudinalMonth) => category === 'all' ? row.netSpend : row.categories[category] ?? 0
+  const history = months.filter(row => row.month < month && row.hasSpendingEvidence)
+  const previous = history.find(row => row.month === addMonths(month, -1))
+  const current = getAmount(focus)
+  const average = history.length ? Number(history.reduce((total, row) => total + BigInt(getAmount(row)), 0n)) / history.length : null
+  const baseline = (value: number | null) => ({
+    value,
+    percent: value !== null && value > 0 ? (current - value) / value * 100 : null,
+  })
+  return { current, previous: baseline(previous ? getAmount(previous) : null), average: baseline(average), historyCount: history.length }
+}
 
 /** Coverage is the union of actual statement day ranges, never an inferred span between purchases. */
 function statementCoverage(statements: readonly Statement[], asOf: DayKey) {

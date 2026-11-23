@@ -1,7 +1,6 @@
 import { ASSET_INSTRUMENTS, QUARTER_GOLD_PURE_GRAMS, TROY_OUNCE_GRAMS, type AssetInstrument, type AssetQuote, type AssetQuotes } from '../domain/assets'
 import { measureOperation } from './diagnostics'
 
-const CACHE_KEY = 'mizan:asset-rates:v1'
 const MAX_QUOTE_AGE = 7 * 24 * 60 * 60 * 1000
 const CACHE_TTL = 5 * 60 * 1000
 const REQUEST_COOLDOWN = 60 * 1000
@@ -122,13 +121,7 @@ export function cachedAssetRates(now = Date.now()): RateSnapshot | null {
     const quotes = validatedQuotes(memory.quotes, now)
     if (Object.keys(quotes).length) return { ...memory, quotes }
   }
-  try {
-    const data = record(JSON.parse(localStorage.getItem(CACHE_KEY) ?? 'null'))
-    if (!data || typeof data.fetchedAt !== 'number' || !usableTime(data.fetchedAt, now)) return null
-    const quotes = validatedQuotes(data.quotes, now)
-    if (!Object.keys(quotes).length) return null
-    return { quotes, fetchedAt: data.fetchedAt, warning: null }
-  } catch { return null }
+  return null
 }
 
 async function requestJson(url: string): Promise<unknown> {
@@ -162,10 +155,7 @@ export function refreshAssetRates(force = false): Promise<RateSnapshot> {
     quotes = { ...(cached?.quotes ?? {}), ...quotes }
     const warning = networkCount === 0 ? cached ? 'Kur kaynaklarına ulaşılamadı. Son kaydedilen fiyatlar gösteriliyor.' : 'Kur kaynaklarına ulaşılamadı. Varlıklarını kaydedebilirsin; değerler bağlantı gelince hesaplanır.' : Object.values(quotes).some(value => value?.cached) ? 'Bazı fiyatlar son kaydedilen veriden gösteriliyor.' : null
     const snapshot: RateSnapshot = { quotes, fetchedAt: networkCount ? Date.now() : cached?.fetchedAt ?? Date.now(), warning }
-    if (Object.keys(quotes).length) {
-      memory = snapshot
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify(snapshot)) } catch { /* In-memory cache works when local storage is disabled. */ }
-    }
+    if (Object.keys(quotes).length) memory = snapshot
     return snapshot
   }).finally(() => { inFlight = null })
   return inFlight

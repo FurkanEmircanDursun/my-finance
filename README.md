@@ -2,7 +2,7 @@
 
 **Ayın dengesi, senin elinde.** Mizan; kart, kira, nakit giderleri ve kaydedilen geliri takvim ayında bir araya getiren kişisel bütçe uygulamasıdır. Önceki adı My Finance olan aynı uygulamanın yeni kimliğidir. Mevcut kayıtlar, kart kimlikleri ve yedek uyumluluğu korunur.
 
-Ekstre dosyaları cihazda ayrıştırılır; analiz ve sınıflandırma tarayıcıda çalışır, kayıtlar IndexedDB’de saklanır. Hesap zorunlu değildir. Google veya e-posta hesabıyla isteğe bağlı eşitleme açıldığında ayrıştırılmış kayıtlar Firebase’e gönderilir.
+Mizan 2.9’da çalışma alanı Google veya e-posta hesabıyla açılır. Ekstre dosyaları cihazda ayrıştırılır. Ayrıştırılan işlemler, kartlar ve hesap tercihleri Cloud Firestore’da saklanır. Geçiş, dağıtım ve cihaz kabul adımları [2.9 sürüm rehberinde](docs/RELEASE_2_9.md).
 
 ```bash
 cd frontend

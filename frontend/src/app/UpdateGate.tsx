@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowUpRight, RefreshCw, Download } from 'lucide-react'
 import { Brand } from '../ui/Brand'
 import { initialUpdateState, watchUpdates, type UpdateState } from '../platform/updates'
-import { dismissSoftUpdate, softUpdateDismissed } from '../platform/updatesPolicy'
 import { setBackInterceptor } from '../platform/native'
 import './updates.css'
 
@@ -26,10 +25,7 @@ export function UpdateGate({ children }: { children: ReactNode }) {
   }, [state.decision])
   const policy = state.policy
   if (!policy || !state.updateUrl || state.decision === 'none') return <>{children}</>
-  const postpone = () => {
-    setDismissed(policy.latestVersion)
-    try { dismissSoftUpdate(localStorage, policy.latestVersion) } catch { /* Component dismissal remains available. */ }
-  }
+  const postpone = () => setDismissed(policy.latestVersion)
   const retry = async () => {
     if (!refresh.current) return
     setRetrying(true)
@@ -47,8 +43,7 @@ export function UpdateGate({ children }: { children: ReactNode }) {
       {state.status === 'offline' && <p className="mizan-update-offline" role="status">Son doğrulanan güncelleme bilgisi gösteriliyor. Yeniden kontrol için internete bağlan.</p>}
     </div>
   </main>
-  let snoozed = dismissed === policy.latestVersion
-  try { snoozed ||= softUpdateDismissed(localStorage, policy.latestVersion) } catch { /* Device storage is optional. */ }
+  const snoozed = dismissed === policy.latestVersion
   return <>{children}{!snoozed && <section className="mizan-update-suggestion" aria-label="Yeni Mizan sürümü" role="status">
     <span className="mizan-update-symbol"><Download size={22} /></span>
     <div><h2>Mizan’ın yeni sürümü hazır.</h2><p>{policy.message || `${policy.latestVersion} sürümündeki yeniliklerle devam et. Mevcut sürümünü kullanmaya da devam edebilirsin.`}</p></div>

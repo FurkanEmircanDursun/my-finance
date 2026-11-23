@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLongitudinalAnalysis } from './longitudinal'
+import { buildLongitudinalAnalysis, compareMonthlySpending, dailyNetSpending } from './longitudinal'
 import type { Transaction, Statement } from '../domain/types'
 import type { AssetValuationSnapshot } from '../domain/assetsHistory'
 
@@ -16,6 +16,31 @@ function snapshot(day: string, totalMinor: number, overrides: Partial<AssetValua
   return { id: `valuation-${day.slice(0, 7)}`, day, totalMinor, observedAt: Date.parse('2026-04-01T12:00:00Z'), origin: 'manual', rows: [], ...overrides }
 }
 const build = (transactions: Transaction[], statements: Statement[] = []) => buildLongitudinalAnalysis({ transactions, statements, asOf: '2026-03-31' })
+
+describe('daily spending and historical baselines', () => {
+  it('places installments by billed day, includes refunds and stops on the current day', () => {
+    const rows = [
+      tx('2025-12-01', 1500, { billedOn: '2026-03-02' }),
+      tx('2026-03-02', 200, { kind: 'refund' }),
+      tx('2026-03-03', 400, { category: 'rent' }),
+      tx('2026-03-03', 900, { kind: 'payment' }),
+      tx('2026-03-04', 500),
+    ]
+    expect(dailyNetSpending(rows, '2026-03', '2026-03-03', 'market')).toEqual([
+      { date: '2026-03-01', count: 0, net: 0 },
+      { date: '2026-03-02', count: 2, net: 1300 },
+      { date: '2026-03-03', count: 0, net: 0 },
+    ])
+  })
+
+  it('skips unknown months and reports a zero baseline without a percentage', () => {
+    const report = build([tx('2026-01-01', 1000, { category: 'rent' }), tx('2026-03-01', 1750)])
+    expect(compareMonthlySpending(report.monthly, '2026-03', 'market')).toEqual({
+      current: 1750, previous: { value: null, percent: null }, average: { value: 0, percent: null }, historyCount: 1,
+    })
+    expect(compareMonthlySpending(report.monthly, '2026-03', 'all')?.average).toEqual({ value: 1000, percent: 75 })
+  })
+})
 
 describe('long-term calendar ledger', () => {
   it('keeps integer kuruş and excludes card debt payments from spending and recorded surplus', () => {

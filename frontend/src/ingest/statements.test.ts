@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { garantiAdapter } from './banks/garanti'
 import { akbankAdapter } from './banks/akbank'
-import { parseStatementText } from './pipeline'
+import { parseStatementText, statementImportProblem } from './pipeline'
 import { assignIds, descriptionKey, identityKey } from './identity'
 import { reconcile } from './reconcile'
 import { emptySummary } from '../domain/types'
@@ -9,6 +9,48 @@ import { toMinor } from '../core/money'
 import { AKBANK_COLUMNS, GARANTI_COLUMNS, GARANTI_FIRST, instalmentStatement } from './fixtures'
 
 const parse = (text: string, engine = 'pdf-text') => parseStatementText(text, { rules: [], engine, fileName: 'x.pdf' })
+
+describe('statement row and independent-total validation', () => {
+  it('reads a labelled masked card suffix and ignores full or ambiguous numbers', () => {
+    const cover = (cardLine: string) => parse(AKBANK_COLUMNS.replace('Dönem  Borcu', `${cardLine}\nDönem  Borcu`))
+    expect(cover('Kart Numarası: 1234 56** **** 9876').reportedCardLast4).toBe('9876')
+    expect(cover('Kart No: 1234 5678 9012 9876').reportedCardLast4).toBeUndefined()
+    expect(cover('Kart No: 1234 **** **** 9876\nKart No: 1234 **** **** 3333').reportedCardLast4).toBeUndefined()
+  })
+  it.each([
+    [GARANTI_COLUMNS, '02 Eylül 2026 YEREL MARKET', '02.09.2026 YEREL MARKET'],
+    [AKBANK_COLUMNS, '05/09/2026 YEREL', '05.09.2026 YEREL'],
+  ])('keeps dated transactions when the bank changes the date notation', (text, before, after) => {
+    const original = parse(text)
+    const changed = parse(text.replace(before, after))
+    expect(changed.reconciliation.status).toBe('match')
+    expect(changed.skipped).toBe(0)
+    expect(changed.transactions.map(({ id, amount, date }) => ({ id, amount, date })))
+      .toEqual(original.transactions.map(({ id, amount, date }) => ({ id, amount, date })))
+  })
+
+  it('counts numeric-looking bad dates without guessing the missing digit', () => {
+    const result = parse(GARANTI_COLUMNS.replace('02 Eylül 2026 YEREL MARKET', 'O2/09/2026 YEREL MARKET'))
+    expect(result.skipped).toBe(1)
+    expect(statementImportProblem(result, true)?.message).toContain('okunamayan işlem satırları')
+  })
+
+  it.each([' ', '\n'])('keeps Chip-para explanatory notes out of billed transactions', separator => {
+    const original = parse(AKBANK_COLUMNS)
+    const text = AKBANK_COLUMNS.replace('Genel  Toplam', '24.09.2026 ÖRNEK MAĞAZA 20.00 TL chip-para ile' + separator + 'ödediniz.\nGenel  Toplam')
+    const result = parse(text)
+    expect(result.transactions).toEqual(original.transactions)
+    expect(result.skipped).toBe(0)
+  })
+
+  it('detects paired charge and payment errors even when the total debt matches', () => {
+    // Keep the cover fixed and change both sides of the net equation.
+    const result = parse(GARANTI_FIRST + '\n01 Eylül 2026 ÖRNEK MAĞAZA 10,00\n02 Eylül 2026 ÖDEMENİZ İÇİN TEŞEKKÜR EDERİZ 10,00+')
+    expect(result.reconciliation.status).toBe('match')
+    expect(result.printedTotalsMismatch).toBe(true)
+    expect(statementImportProblem(result, true)).not.toBeNull()
+  })
+})
 
 /* ── Garanti ──────────────────────────────────────────────────────────────── */
 

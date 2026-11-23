@@ -1,10 +1,22 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { deliverOnce, deliveryId, dueReminders, istanbulDate, messageFor } from '../src/reminder-plan.js'
+import { cleanupExpiredDeliveries, deliverOnce, deliveryId, dueReminders, istanbulDate, messageFor } from '../src/reminder-plan.js'
 
 const card = { id: 'card-a', bank: 'akbank', name: 'PRIVATE CARD NAME', statementDay: 31, entryDay: 29, remindersEnabled: true }
 const device = { enabled: true, hour: 9, timeZone: 'Europe/Istanbul' }
 const at = new Date('2027-02-28T06:00:00Z')
+
+test('expired receipt cleanup avoids 23 hourly queries and keeps its daily removal limit', async () => {
+  let calls = 0
+  const remove = async size => { calls++; return size }
+  for (let hour = 1; hour < 24; hour++) assert.equal(await cleanupExpiredDeliveries(hour, remove), 0)
+  assert.equal(calls, 0)
+  assert.equal(await cleanupExpiredDeliveries(0, remove), 4800)
+  assert.equal(calls, 24)
+  calls = 0
+  assert.equal(await cleanupExpiredDeliveries(0, async () => ++calls === 1 ? 200 : 7), 207)
+  assert.equal(calls, 2)
+})
 
 test('short February combines different configured days on the last day', () => {
   assert.equal(dueReminders({ cards: [card] }, device, at)[0].kind, 'combined')
@@ -33,7 +45,8 @@ test('disabled devices, cards, wrong hours and deleted profiles never deliver', 
 test('untrusted malformed card days and timezone are ignored', () => {
   assert.equal(dueReminders({ cards: [{ ...card, statementDay: '28', entryDay: 99 }] }, device, at).length, 0)
   assert.equal(dueReminders({ cards: [card] }, { ...device, timeZone: 'America/New_York' }, at).length, 0)
-  assert.equal(dueReminders({ cards: [null, { ...card, bank: 'fake' }] }, device, at).length, 0)
+  assert.equal(dueReminders({ cards: [null, { ...card, id: '' }] }, device, at).length, 0)
+  assert.equal(dueReminders({ cards: [{ ...card, bank: 'other' }] }, device, at).length, 1)
 })
 test('each card appears once and monthly IDs are deterministic and device scoped', () => {
   const reminders = dueReminders({ cards: [card, card] }, device, at)
@@ -43,12 +56,13 @@ test('each card appears once and monthly IDs are deterministic and device scoped
 })
 test('lock screen preview contains no card name, bank or financial amount', () => {
   const reminder = dueReminders({ cards: [card] }, device, at)[0]
-  const message = messageFor('TOKEN', reminder, 'ID')
+  const message = messageFor('TOKEN', reminder, 'ID', 'owner')
   assert.equal(JSON.stringify(message).includes(card.name), false)
   assert.equal(JSON.stringify(message).includes('akbank'), false)
   assert.equal(message.android.notification.visibility, 'private')
   assert.equal(message.android.notification.tag, 'ID')
   assert.equal(message.data.cardId, card.id)
+  assert.equal(message.data.uid, 'owner')
 })
 test('duplicate invocation never calls FCM', async () => {
   let sent = false

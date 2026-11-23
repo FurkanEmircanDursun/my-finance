@@ -173,6 +173,8 @@ export interface Statement {
   /** Display name, e.g. "Garanti BBVA · Ağustos 2026". */
   label: string
   fileName: string
+  /** SHA-256 of the original PDF bytes, scoped to the owning account. */
+  pdfSha256?: string
   bank: string
   /** "Akbank Axess", "Garanti Bonus Platinum" — as printed. */
   accountLabel?: string
@@ -249,11 +251,11 @@ export interface SavingsGoal {
   startingAmount: Money
 }
 
-export type CardBank = 'akbank' | 'garanti'
+export type { CardBank } from './banks'
 
 export interface CreditCard {
   id: string
-  bank: CardBank
+  bank: import('./banks').CardBank
   name: string
   /** Last four digits only; the full card number is never requested. */
   last4?: string
@@ -286,7 +288,7 @@ export interface Profile {
 }
 
 export interface Settings {
-  reminders?: { enabled: boolean; hour: number }
+  reminders?: import('./reminders').ReminderPreferences
   theme: 'light' | 'dark' | 'system'
   /** Contact the local OCR service for scanned PDFs. */
   useLocalOcr: boolean
@@ -360,6 +362,7 @@ export function cardOf(row: { accountLabel?: string; bank: string }): string {
 export interface ParseResult {
   bank: string
   engine: string
+  reportedCardLast4?: string
   accountLabel: string
   transactions: Transaction[]
   skipped: number
@@ -369,10 +372,13 @@ export interface ParseResult {
   label: string
   summary: StatementSummary
   reconciliation: Reconciliation
+  printedTotalsMismatch?: boolean
   ignored: IgnoredRow[]
 }
 
 export interface ImportOutcome {
+  alreadyImported?: boolean
+  reportedCardLast4?: string
   fileName: string
   ok: boolean
   added: number

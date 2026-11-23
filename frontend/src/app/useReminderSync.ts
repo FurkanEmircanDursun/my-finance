@@ -1,17 +1,22 @@
 import { useEffect } from 'react'
 import { App as CapacitorApp } from '@capacitor/app'
 import { defaultReminders } from '../domain/reminders'
-import { isAndroid } from '../platform'
-import { onReminderOpen, REMINDER_DELIVERY_UPDATED, syncReminders } from '../platform/reminders'
+import { clearReminderSession, onReminderOpen, REMINDER_DELIVERY_UPDATED, supportsReminders, syncReminders } from '../platform/reminders'
 import { useStore } from '../store/AppStore'
 
 /** The OS owns delivery; React only maintains the upcoming twelve-month plan. */
 export function useReminderSync(): void {
-  const { state } = useStore()
+  const { state, authReady, authUser, sessionBusy } = useStore()
   const { hydrated, profile, settings } = state
+  const uid = authUser?.uid
   useEffect(() => {
-    if (!hydrated || !isAndroid()) return
-    const refresh = () => { void syncReminders(profile.cards ?? [], settings.reminders ?? defaultReminders) }
+    if (!supportsReminders() || !authReady || sessionBusy) return
+    if (!uid) {
+      void clearReminderSession().catch(() => {})
+      return
+    }
+    if (!hydrated) return
+    const refresh = () => { void syncReminders(profile.cards ?? [], settings.reminders ?? defaultReminders, uid) }
     refresh()
     window.addEventListener(REMINDER_DELIVERY_UPDATED, refresh)
     let disposed = false
@@ -23,7 +28,7 @@ export function useReminderSync(): void {
       else removeResume = () => { void listener.remove() }
     })
     return () => { disposed = true; removeResume?.(); window.removeEventListener(REMINDER_DELIVERY_UPDATED, refresh) }
-  }, [hydrated, profile.cards, settings.reminders])
+  }, [authReady, hydrated, profile.cards, settings.reminders, sessionBusy, uid])
 
   useEffect(() => {
     let disposed = false

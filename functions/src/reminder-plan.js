@@ -25,7 +25,7 @@ export function dueReminders(profile, device, at) {
   const seen = new Set()
   for (const card of profile.cards.slice(0, 100)) {
     if (!card || typeof card.id !== 'string' || !card.id || card.id.length > 200 || seen.has(card.id) ||
-        card.remindersEnabled === false || !['akbank', 'garanti'].includes(card.bank)) continue
+        card.remindersEnabled === false) continue
     seen.add(card.id)
     const statement = validDay(card.statementDay) && Math.min(card.statementDay, lastDay) === date.day
     const entry = validDay(card.entryDay) && Math.min(card.entryDay, lastDay) === date.day
@@ -49,11 +49,23 @@ export function deliveryId(devicePath, reminder) {
   return createHash('sha256').update(`${devicePath}:${reminder.key}`).digest('hex')
 }
 
-export function messageFor(token, reminder, id) {
+/** Keep the previous maximum of 4,800 removals per day in one scheduled run. */
+export async function cleanupExpiredDeliveries(hour, removeBatch) {
+  if (hour !== 0) return 0
+  let removed = 0
+  for (let batch = 0; batch < 24; batch++) {
+    const count = await removeBatch(200)
+    removed += count
+    if (count < 200) break
+  }
+  return removed
+}
+
+export function messageFor(token, reminder, id, uid) {
   return {
     token,
     notification: { title: reminder.title, body: reminder.body },
-    data: { cardId: reminder.cardId, reminderKind: reminder.kind, deliveryId: id },
+    data: { cardId: reminder.cardId, reminderKind: reminder.kind, deliveryId: id, ...(uid ? { uid } : {}) },
     android: {
       priority: 'high',
       ttl: 6 * 60 * 60 * 1000,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowRight, CalendarDays, ChevronDown, CreditCard as CardIcon, FileWarning, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { ArrowRight, CalendarDays, ChevronDown, FileWarning, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
 import { useNow } from '../app/useNow'
@@ -12,6 +12,7 @@ import type { CreditCard } from '../domain/types'
 import { Button, Empty } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
 import { useFeedback } from '../ui/Feedback'
+import { BankLogo } from '../ui/BankLogo'
 import '../styles/cards.css'
 
 export function useCardPeriods(): CardPeriod[] {
@@ -55,7 +56,7 @@ export function CardsView({ onOpenCard }: { onOpenCard: (cardId: string) => void
         const debt = latest?.summary?.totalDebt ?? latest?.reconciliation?.printedDebt ?? null
         return <li key={period.id} className={`card-period-item ${period.status === 'missing' ? 'card-period-item--missing' : ''}`}>
         <button type="button" className="card-period-open" onClick={() => onOpenCard(period.id)}>
-          <span className="card-brand-icon"><CardIcon size={25} strokeWidth={1.5} /></span>
+          <BankLogo bank={period.card?.bank ?? period.bank} />
           <span className="card-period-identity"><span>{period.bank}</span><strong>{period.name}</strong><CardStatementStatus period={period} /></span>
           <span className="card-period-total"><strong className="num">{money2(debt ?? period.netSpend)}</strong><small>{debt === null ? 'Net harcama' : selected === 'all' ? 'Son ekstre borcu' : 'Bankanın dönem borcu'}</small></span><ArrowRight size={18} className="card-period-arrow" />
         </button>

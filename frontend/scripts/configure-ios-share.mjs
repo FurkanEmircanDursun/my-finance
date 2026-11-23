@@ -74,12 +74,12 @@ function settings(target) {
   return objects.XCConfigurationList[target.buildConfigurationList].buildConfigurations.map(({ value }) => objects.XCBuildConfiguration[value].buildSettings)
 }
 for (const build of settings(main.firstTarget)) Object.assign(build, {
-  CODE_SIGN_ENTITLEMENTS: 'App/App.entitlements', CURRENT_PROJECT_VERSION: 28, MARKETING_VERSION: version,
+  CODE_SIGN_ENTITLEMENTS: 'App/App.entitlements', CURRENT_PROJECT_VERSION: 29, MARKETING_VERSION: version,
   OTHER_LDFLAGS: ['"$(inherited)"', '"-ObjC"'], SWIFT_VERSION: '5.0',
 })
 for (const build of settings(extension)) Object.assign(build, {
   APPLICATION_EXTENSION_API_ONLY: 'YES', CODE_SIGN_STYLE: 'Automatic', CODE_SIGN_ENTITLEMENTS: 'ShareExtension/ShareExtension.entitlements',
-  CURRENT_PROJECT_VERSION: 28, MARKETING_VERSION: version, GENERATE_INFOPLIST_FILE: 'NO',
+  CURRENT_PROJECT_VERSION: 29, MARKETING_VERSION: version, GENERATE_INFOPLIST_FILE: 'NO',
   INFOPLIST_FILE: 'ShareExtension/Info.plist', IPHONEOS_DEPLOYMENT_TARGET: '15.0',
   PRODUCT_BUNDLE_IDENTIFIER: 'com.faraday.followfinance.share', SWIFT_VERSION: '5.0', TARGETED_DEVICE_FAMILY: '"1,2"',
 })

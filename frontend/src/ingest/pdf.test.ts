@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLines, type TextGeom } from './extract'
+import { buildLines, readPdfTextLayer, type TextGeom } from './extract'
 import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
 import { detectAdapter } from './banks'
 import { toMinor } from '../core/money'
@@ -42,6 +42,17 @@ describe('EBCDIC statements', () => {
     expect(decoded[0]).toBe('AKBANK AXESS HESAP ÖZETİ')
     expect(decoded[2]).toBe('05/07/2026 TRENDYOL.COM (1,065.00 TL) 3/2.taksit 355.00 355.00x1')
     expect(decoded[4]).toContain('Ödemeniz için Teşekkürler')
+  })
+
+  it('decodes mixed font pages without changing ordinary Unicode text', () => {
+    const rows = AKBANK_EBCDIC.split('\n').map((text, index) => ({
+      text, fontName: 'encoded-table', x: 10, y: 100 - index * 10, w: 350, h: 8,
+    }))
+    const unicode = { text: 'Sayfa bilgileri 123', fontName: 'unicode-label', x: 10, y: 110, w: 90, h: 8 }
+    const result = readPdfTextLayer([[unicode, ...rows], [{ ...rows[0], text: rows[0].text }]])
+    expect(result.engine).toBe('pdf-ebcdic')
+    expect(result.pageText[0]).toContain('Sayfa bilgileri 123\nAKBANK AXESS HESAP ÖZETİ')
+    expect(result.pageText[1]).toBe('AKBANK AXESS HESAP ÖZETİ')
   })
 
   it('is claimed by the Akbank adapter once decoded, and by nobody before', () => {

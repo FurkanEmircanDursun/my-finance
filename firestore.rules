@@ -8,10 +8,12 @@ service cloud.firestore {
     // users/{uid}/statements/{id}: Statement with optional summary,
     // reconciliation and ignored rows. Entity IDs match their document IDs.
     // users/{uid}/rules/{id}: id, merchant, category, createdAt. Its document ID
-    // is merchant-derived; re-learning intentionally replaces id/createdAt.
+    // is merchant-derived. Current clients preserve id and createdAt on
+    // re-learning, while older mobile clients still replace those two fields.
     // users/{uid}/meta/profile: amounts, budgets, goal and optional cards,
     // archivedCards, assets, assetValuations (up to 240 monthly snapshots).
-    // users/{uid}/meta/prefs: theme, periodGrouping only. Device PIN/settings
+    // users/{uid}/meta/prefs: theme, periodGrouping, reminders and onboarding.
+    // Device PIN/settings
     // are never accepted in new cloud writes. Legacy settings/schema documents
     // remain owner-readable/deletable for migration and account deletion.
     // Every sync document has _u: nonnegative safe-integer milliseconds.
@@ -125,17 +127,16 @@ service cloud.firestore {
     }
     function isValidStatement(data, id) {
       return isValidTombstone(data) || (isLive(data) &&
-        data.keys().hasAll(['id', 'label', 'fileName', 'bank', 'transactionCount',
-          'skippedCount', 'periodStart', 'periodEnd', 'dueDate', 'importedAt', 'engine', '_u']) &&
         data.keys().hasOnly(['id', 'label', 'fileName', 'bank', 'transactionCount',
           'skippedCount', 'periodStart', 'periodEnd', 'dueDate', 'importedAt', 'engine',
-          'accountLabel', 'cardId', 'summary', 'reconciliation', 'ignored', '_u']) &&
+          'accountLabel', 'cardId', 'summary', 'reconciliation', 'ignored', 'pdfSha256', '_u']) &&
         validString(data.id, 1, 256) && data.id == id && validString(data.label, 0, 1024) &&
         validString(data.fileName, 0, 1024) && validString(data.bank, 0, 256) &&
         nonNegativeInteger(data.transactionCount) && nonNegativeInteger(data.skippedCount) &&
         nullableDay(data.periodStart) && nullableDay(data.periodEnd) && nullableDay(data.dueDate) &&
         milliseconds(data.importedAt) && validString(data.engine, 0, 256) &&
         optionalString(data, 'accountLabel', 0, 256) && optionalString(data, 'cardId', 1, 256) &&
+        (!('pdfSha256' in data) || (data.pdfSha256 is string && data.pdfSha256.matches('^[0-9a-f]{64}$'))) &&
         (!('summary' in data) || isValidSummary(data.summary)) &&
         (!('reconciliation' in data) || isValidReconciliation(data.reconciliation)) &&
         (!('ignored' in data) || boundedList(data.ignored, 5000)));
@@ -169,15 +170,30 @@ service cloud.firestore {
     function isValidPreferences(data) {
       return isValidTombstone(data) || (isLive(data) &&
         data.keys().hasAll(['theme', 'periodGrouping', '_u']) &&
-        data.keys().hasOnly(['theme', 'periodGrouping', '_u']) &&
-        data.theme in ['light', 'dark', 'system'] && data.periodGrouping in ['calendar', 'statement', null]);
+        data.keys().hasOnly(['theme', 'periodGrouping', 'reminders', 'onboardingSeen', '_u']) &&
+        data.theme in ['light', 'dark', 'system'] && data.periodGrouping in ['calendar', 'statement', null] &&
+        (!('onboardingSeen' in data) || data.onboardingSeen is bool) &&
+        (!('reminders' in data) || isValidReminderPreferences(data.reminders)));
+    }
+    function isValidReminderPreferences(data) {
+      return data is map && data.keys().hasAll(['enabled', 'hour']) &&
+        data.keys().hasOnly(['enabled', 'hour', 'cloudPush']) &&
+        data.enabled is bool && data.hour is int && data.hour >= 0 && data.hour <= 23 &&
+        (!('cloudPush' in data) || data.cloudPush is bool);
+    }
+    function preservesLiveFields(keys) {
+      // Unstamped legacy rows can be adopted. A tombstone ends the life of the
+      // record, so a later explicit restore can create a new live record.
+      return !('_u' in resource.data) || ('_d' in resource.data) ||
+        ('_d' in request.resource.data) ||
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
     }
     function isValidPushDevice(data) {
       return data.keys().hasAll(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
         data.keys().hasOnly(['token', 'enabled', 'hour', 'timeZone', 'updatedAt']) &&
         validString(data.token, 20, 4096) && data.enabled is bool &&
         data.hour is int && data.hour >= 0 && data.hour <= 23 &&
-        data.timeZone == 'Europe/Istanbul' && data.updatedAt == request.time;
+        data.timeZone == 'Europe/Istanbul' && data.updatedAt is timestamp && data.updatedAt == request.time;
     }
 
     // Complete owner collection queries used by onSnapshot/account deletion
@@ -192,7 +208,9 @@ service cloud.firestore {
     }
     match /users/{uid}/rules/{id} {
       allow read, delete: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isValidCategoryRule(request.resource.data);
+      allow create: if isOwner(uid) && isValidCategoryRule(request.resource.data);
+      allow update: if isOwner(uid) && isValidCategoryRule(request.resource.data) &&
+        preservesLiveFields(['merchant']);
     }
     match /users/{uid}/meta/{id} {
       allow read, delete: if isOwner(uid);

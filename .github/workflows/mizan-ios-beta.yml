@@ -1,0 +1,67 @@
+name: Mizan iOS beta
+
+on:
+  push:
+    branches: [codex/mizan-beta-2.9.3]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mizan-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  simulator:
+    runs-on: macos-26
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run ios:sync && npm run ios:validate
+      - name: Check share inbox and build the simulator app
+        run: |
+          swiftc ios/App/Shared/SharedPdfGeneration.swift scripts/test-shared-pdf-generation.swift -o "$RUNNER_TEMP/mizan-share-tests"
+          "$RUNNER_TEMP/mizan-share-tests"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+
+  testflight:
+    if: github.ref == 'refs/heads/codex/mizan-beta-2.9.3' && vars.MIZAN_TESTFLIGHT_UPLOAD == 'true'
+    needs: simulator
+    runs-on: macos-26
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build and upload to App Store Connect
+        env:
+          MIZAN_FIREBASE_WEB_ENV: ${{ secrets.MIZAN_FIREBASE_WEB_ENV }}
+          MIZAN_FIREBASE_IOS_PLIST: ${{ secrets.MIZAN_FIREBASE_IOS_PLIST }}
+          MIZAN_ASC_KEY: ${{ secrets.MIZAN_ASC_KEY }}
+          MIZAN_ASC_KEY_ID: ${{ secrets.MIZAN_ASC_KEY_ID }}
+          MIZAN_ASC_ISSUER_ID: ${{ secrets.MIZAN_ASC_ISSUER_ID }}
+          MIZAN_APPLE_TEAM_ID: ${{ vars.MIZAN_APPLE_TEAM_ID }}
+        run: bash scripts/upload-ios-beta.sh

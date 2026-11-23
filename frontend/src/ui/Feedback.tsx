@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Check, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
-interface Feedback { message: string; undo?: () => void }
+interface Feedback { message: string; undo?: () => string | void }
 const FeedbackContext = createContext<(feedback: Feedback) => void>(() => {})
 const FeedbackHostContext = createContext<(host: HTMLElement) => () => void>(() => () => {})
 
@@ -30,7 +30,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     {children}
     {feedback && createPortal(<div className={`save-feedback${host ? ' save-feedback-inline' : ''}`}>
       <div role="status" className="save-feedback-message"><span className="save-check"><Check size={18} /></span>{feedback.message}</div>
-      {feedback.undo && <button type="button" onClick={() => { feedback.undo?.(); setFeedback({ message: 'Kayıt geri alındı.' }) }}>Geri al</button>}
+      {feedback.undo && <button type="button" onClick={() => setFeedback({ message: feedback.undo?.() ?? 'Kayıt geri alındı.' })}>Geri al</button>}
       <button type="button" aria-label="Bildirimi kapat" onClick={() => setFeedback(null)}><X size={18} /></button>
     </div>, host ?? document.body)}
     </FeedbackHostContext.Provider>

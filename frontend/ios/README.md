@@ -29,13 +29,13 @@ be provisioned from this Windows workspace.
 The registered Firebase iOS configuration belongs at
 `ios/App/App/GoogleService-Info.plist`. `ios:configure` validates its bundle ID,
 copies it to the synchronized Firebase resource folder, and configures the Google
-reversed client URL scheme. Without that file, Capacitor excludes native Firebase
-Authentication so the offline app and PDF import can still launch.
+reversed client URL scheme. Native Google sign-in requires this file. The app
+can still receive a PDF before sign-in and offer e-mail authentication.
 
 ## Behavior
 
 - Android PDF SEND, SEND_MULTIPLE and content-URI VIEW open Mizan, including cold
-  starts; the private queue waits for the unlocked import UI.
+  starts. The private queue waits for Firebase sign-in and the unlocked import UI.
 - iOS lists the share activity as **Mizan**, using the containing app's display
   name; the extension itself is titled **Mizan’a Gönder**. This is the system's
   naming behavior since iOS 13 ([Apple sharing guidance](https://developer.apple.com/videos/play/tech-talks/210/?time=348)).

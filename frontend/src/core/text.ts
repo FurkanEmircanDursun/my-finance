@@ -61,6 +61,7 @@ export function fold(input: string): string {
 }
 
 const normalCache = new Map<string, string>()
+export function clearMerchantCache(): void { normalCache.clear() }
 const MAX_CACHE = 4000
 
 /**

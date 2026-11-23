@@ -162,18 +162,14 @@ def extract_text(pdf_bytes: bytes) -> Tuple[str, int]:
     import pymupdf
     from PIL import Image
 
-    engine = get_engine()
     document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
 
     try:
-        page_count = min(document.page_count, MAX_PAGES)
-        if document.page_count > MAX_PAGES:
-            logger.warning(
-                "PDF has %d pages; only the first %d are processed",
-                document.page_count,
-                MAX_PAGES,
-            )
+        page_count = document.page_count
+        if page_count > MAX_PAGES:
+            raise HTTPException(status_code=413, detail=f"PDF {MAX_PAGES} sayfa sınırını aşıyor.")
 
+        engine = get_engine()
         all_lines: List[str] = []
 
         for index in range(page_count):

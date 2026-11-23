@@ -11,7 +11,11 @@
 .card-period-item { background:var(--bg-raised); border-radius:16px; overflow:hidden; }
 .card-period-open { display:flex; align-items:center; gap:18px; text-align:left; width:100%; padding:24px; transition:background 160ms var(--ease); }
 .card-period-open:hover { background:var(--bg-hover); }
-.card-brand-icon { width:52px; height:44px; border-radius:10px; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent-text); flex-shrink:0; }
+.card-brand-icon { width:104px; height:48px; border-radius:10px; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent-text); flex-shrink:0; }
+.card-brand-icon--logo { background:#fff; border:1px solid #e5e7ea; }
+.card-brand-icon img { width:85%; height:28px; object-fit:contain; }
+.card-context-title { display:flex; align-items:center; gap:14px; min-width:0; }
+.card-context-title>div { min-width:0; }
 .card-period-identity { flex:1; min-width:0; }
 .card-period-identity>span:first-child { display:block; font-size:12px; color:var(--text-muted); }
 .card-period-identity>strong { display:block; font-size:18px; font-weight:550; letter-spacing:-.02em; margin:3px 0 9px; overflow-wrap:anywhere; }
@@ -21,7 +25,7 @@
 .card-statement-status--ready { color:var(--positive); }
 .card-statement-status--upcoming,.card-statement-status--untracked { color:var(--text-muted); }
 .card-period-total { text-align:right; }
-.card-period-total>strong { display:block; font-size:20px; font-weight:550; white-space:nowrap; letter-spacing:-.02em; }
+.card-period-total>strong { display:block; font-size:20px; font-weight:550; overflow-wrap:anywhere; letter-spacing:-.02em; }
 .card-period-total>small { display:block; color:var(--text-muted); font-size:12px; margin-top:4px; }
 .card-period-arrow { flex-shrink:0; color:var(--text-muted); }
 .card-period-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 18px 8px 24px; border-top:1px solid var(--line); }
@@ -69,12 +73,13 @@
   .cards-page .dashboard-title h1,.card-detail-page .dashboard-title h1 { font-size:26px; }
   .cards-page .dashboard-title button,.card-detail-page .dashboard-title button { font-size:12px; padding-inline:12px; }
   .cards-missing-notice { padding:16px; }
-  .card-period-open { gap:12px; padding:20px 17px; flex-wrap:wrap; }
-  .card-brand-icon { width:42px; height:37px; }
-  .card-period-identity { flex-basis:calc(100% - 80px); }
+  .card-period-open { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:12px; padding:20px 17px; }
+  .card-brand-icon { width:84px; height:42px; }
+  .card-period-identity { grid-column:2 / -1; }
   .card-period-identity>strong { font-size:17px; }
-  .card-period-total { text-align:left; margin-left:54px; flex:1; }
+  .card-period-total { text-align:left; grid-column:2; }
   .card-period-total>strong { font-size:21px; }
+  .card-context-title .card-brand-icon { width:72px; }
   .card-period-footer { align-items:flex-start; flex-direction:column; gap:3px; padding:12px 12px 10px 17px; }
   .card-period-footer>div { justify-content:space-between; width:100%; gap:3px; }
   .card-inline-action { padding-inline:7px; }

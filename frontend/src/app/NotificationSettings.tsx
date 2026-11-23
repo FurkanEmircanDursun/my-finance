@@ -3,7 +3,7 @@ import { Bell, BellRing } from 'lucide-react'
 import { defaultReminders } from '../domain/reminders'
 import {
   getReminderStatus, REMINDERS_UPDATED, requestReminderPermission,
-  sendTestReminder, syncReminders, type ReminderStatus,
+  sendTestReminder, type ReminderStatus,
 } from '../platform/reminders'
 import { useStore } from '../store/AppStore'
 import { Button, Field } from '../ui/primitives'
@@ -41,10 +41,8 @@ export function NotificationSettings() {
         return
       }
       dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, enabled: true } } })
-      await syncReminders(state.profile.cards ?? [], { ...preferences, enabled: true })
-      const next = await getReminderStatus()
-      setStatus(next)
-      if (!next.error) setMessage('Hatırlatmalar açıldı. Kartlarının ekstre ve kayıt günlerinde haber vereceğiz.')
+      setStatus(await getReminderStatus())
+      setMessage('Hatırlatmalar açıldı. Kartlarının ekstre ve kayıt günlerinde haber vereceğiz.')
     } catch {
       setError('Bildirimler açılamadı. Telefonunun bildirim ayarlarını kontrol edip yeniden dene.')
     } finally { setBusy(false) }
@@ -74,13 +72,13 @@ export function NotificationSettings() {
         </div>
       </div>
       {status && !status.supported ? (
-        <p className="text-label text-muted">Otomatik bildirimler Android uygulamasında kullanılabilir.</p>
+        <p className="text-label text-muted">Otomatik bildirimler Android ve iOS uygulamalarında kullanılabilir.</p>
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
             {active ? (
               <Button disabled={busy} onClick={() => {
-                dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, enabled: false } } })
+                dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, enabled: false, cloudPush: false } } })
                 setMessage('Hatırlatmalar kapatıldı.'); setError('')
               }}>Hatırlatmaları kapat</Button>
             ) : (

@@ -83,9 +83,19 @@ describe('physical card import and explicit save lifecycle', () => {
 
     const outcomes = await render().run([file], first.cardId)
 
-    expect(outcomes![0]).toMatchObject({ ok: false, added: 0, error: expect.stringContaining('doğrulanamadı') })
+    expect(outcomes![0]).toMatchObject({ ok: false, added: 0, error: expect.stringContaining('Hiçbir hareket kaydedilmedi') })
     expect(harness.state!.transactions).toEqual(before.transactions)
     expect(harness.state!.statements).toEqual(before.statements)
+  })
+
+  it('rejects a PDF with unreadable cover totals without recording movements', async () => {
+    const partial = { ...parsed, reconciliation: { ...parsed.reconciliation, status: 'unverified' as const } }
+    harness.parseFile.mockResolvedValue(partial)
+    const pdf = new File(['%PDF-1.7 incomplete'], 'incomplete.pdf', { type: 'application/pdf' })
+    const outcome = (await render().run([pdf]))?.[0]
+    expect(outcome).toMatchObject({ ok: false, added: 0, error: expect.stringContaining('önceki bakiyesi okunamadı') })
+    expect(harness.state!.transactions).toEqual([])
+    expect(harness.state!.statements).toEqual([])
   })
   it('keeps identical purchases from a second physical card when the user selects new card', async () => {
     const first = await render().run([file])

@@ -1,12 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { clsx } from 'clsx'
-import { ArrowLeft, ChevronDown, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Trash2, Upload } from 'lucide-react'
 import { useSheets } from '../app/sheets'
 import { cardBankFromName, legacyCardKey } from '../domain/cardLifecycle'
 import { Badge, Button, Empty } from '../ui/primitives'
 import { LedgerEquation, carriedSentence } from '../ui/ledger'
 import { RewardsCard } from '../ui/rewards'
 import { SummaryFacts } from '../ui/statements'
+import { StatementDelete } from '../ui/StatementDelete'
 import { count, money2 } from '../core/money'
 import { dayLabel, fullDayLabel } from '../core/date'
 import { categoryColor, categoryLabel } from '../domain/categories'
@@ -26,6 +27,7 @@ import { cardOf, type Transaction } from '../domain/types'
 export function StatementView({ statementId, onBack }: { statementId: string; onBack: () => void }) {
   const { state } = useStore()
   const { openImport } = useSheets()
+  const [deleting, setDeleting] = useState(false)
   const statement = state.statements.find(item => item.id === statementId)
 
   const ledger = useMemo(
@@ -49,14 +51,18 @@ export function StatementView({ statementId, onBack }: { statementId: string; on
   const cardId = statement.cardId ?? (cardBankFromName(statement.bank) ? legacyCardKey(statement.bank, cardOf(statement)) : undefined)
   const difference = ledger.status === 'mismatch' ? ledger.delta : null
   const status = ledger.status === 'match' ? 'Doğrulandı' : difference !== null ? 'Tutarlar uyuşmuyor' : 'Doğrulanamadı'
-  const retry = <Button type="button" onClick={() => openImport(cardId)}><Upload size={16} /> PDF’yi yeniden yükle</Button>
+  const retry = <Button type="button" onClick={() => openImport(cardId, statement.id)}><Upload size={16} /> PDF ile düzelt</Button>
 
   return <div className="statement-page">
     {back}
     <header className="dashboard-title statement-heading">
       <div><h1>Ekstre Detayı</h1><p>{ledger.card}{range && <> · {range}</>}</p></div>
-      {ledger.status === 'match' && retry}
+      <div className="flex flex-wrap gap-2">
+        {ledger.status === 'match' && retry}
+        <Button type="button" onClick={() => setDeleting(true)}><Trash2 size={16} /> Ekstreyi sil</Button>
+      </div>
     </header>
+    <StatementDelete statementId={deleting ? statement.id : undefined} onClose={() => setDeleting(false)} />
     <section className="statement-hero" aria-label="Ekstre özeti">
       <dl>
         <div><dt>Bankanın dönem borcu</dt><dd className="num statement-debt">{ledger.printedDebt === null ? '—' : money2(ledger.printedDebt)}</dd></div>

@@ -12,7 +12,7 @@ export function useCloudServices(): void {
   const uid = !sessionBusy && authUser && !authUser.isAnonymous ? authUser.uid : null
   const syncReady = sync.lastSyncedAt !== null && sync.pending === 0 && sync.status !== 'decision' && sync.status !== 'error'
   useEffect(() => {
-    if (!state.hydrated || !authReady || !isAndroid()) return
+    if (!state.hydrated || !authReady || !isAndroid() || sessionBusy) return
     const refresh = () => { void syncCloudPush(uid, state.settings.reminders ?? defaultReminders, syncReady) }
     refresh()
     window.addEventListener('online', refresh)
@@ -28,5 +28,5 @@ export function useCloudServices(): void {
       window.removeEventListener('online', refresh)
       window.removeEventListener(PUSH_TOKEN_UPDATED, refresh)
     }
-  }, [state.hydrated, authReady, uid, state.profile.cards, state.settings.reminders, syncReady])
+  }, [state.hydrated, authReady, uid, state.settings.reminders, syncReady, sessionBusy])
 }

@@ -3,7 +3,7 @@ import { FieldPath, FieldValue, Timestamp, getFirestore } from 'firebase-admin/f
 import { getMessaging } from 'firebase-admin/messaging'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { logger } from 'firebase-functions'
-import { deliveryId, deliverOnce, dueReminders, istanbulDate, messageFor, TIME_ZONE } from './reminder-plan.js'
+import { cleanupExpiredDeliveries, deliveryId, deliverOnce, dueReminders, istanbulDate, messageFor, TIME_ZONE } from './reminder-plan.js'
 
 initializeApp()
 const db = getFirestore()
@@ -28,6 +28,7 @@ export const monthlyStatementReminders = onSchedule({
     let query = db.collectionGroup('pushDevices').where('hour', '==', hour).orderBy(FieldPath.documentId()).limit(100)
     if (cursor) query = query.startAfter(cursor)
     const page = await query.get()
+    const accounts = new Map()
     for (const deviceDoc of page.docs) {
       // Only the user-owned path supported by the client is eligible.
       const path = deviceDoc.ref.path.split('/')
@@ -39,14 +40,25 @@ export const monthlyStatementReminders = onSchedule({
         continue
       }
       if (typeof device.token !== 'string' || device.token.length < 20 || device.token.length > 4096) continue
-      const profile = (await db.doc(`users/${path[1]}/meta/profile`).get()).data()
+      const uid = path[1]
+      if (!accounts.has(uid)) {
+        const [profileDoc, prefsDoc] = await db.getAll(
+          db.doc(`users/${uid}/meta/profile`), db.doc(`users/${uid}/meta/prefs`),
+          { fieldMask: ['cards', '_d', 'reminders'] },
+        )
+        accounts.set(uid, { profile: profileDoc.data(), accountPrefs: prefsDoc.data() })
+      }
+      const { profile, accountPrefs } = accounts.get(uid)
+      const preferences = accountPrefs?.reminders
+      if (accountPrefs?._d || (preferences && (preferences.enabled !== true || preferences.cloudPush !== true || preferences.hour !== hour))) continue
       for (const reminder of dueReminders(profile, device, scheduled)) {
         const id = deliveryId(deviceDoc.ref.path, reminder)
         const receipt = db.doc(`users/${path[1]}/notificationDeliveries/${id}`)
         const result = await deliverOnce({
           claim: async () => {
             // Re-read opt-out before claiming each notification, without logging tokens or account data.
-            if (!(await deviceDoc.ref.get()).data()?.enabled) return false
+            const latest = (await deviceDoc.ref.get()).data()
+            if (latest?.enabled !== true || latest.token !== device.token || latest.hour !== hour) return false
             try {
               await receipt.create({ status: 'claimed', createdAt: FieldValue.serverTimestamp(), expireAt: Timestamp.fromMillis(now.getTime() + 45 * DAY_MS) })
               return true
@@ -58,7 +70,7 @@ export const monthlyStatementReminders = onSchedule({
           send: (message) => messaging.send(message),
           finish: async (_id, status) => { await receipt.update({ status, completedAt: FieldValue.serverTimestamp() }) },
           invalidate: () => deviceDoc.ref.delete(),
-        }, id, messageFor(device.token, reminder, id))
+        }, id, messageFor(device.token, reminder, id, uid))
         if (result === 'sent') sent++
         if (result === 'failed') failed++
       }
@@ -66,12 +78,16 @@ export const monthlyStatementReminders = onSchedule({
     cursor = page.size === 100 ? page.docs.at(-1) : undefined
   } while (cursor)
 
-  // Bounded cleanup uses this same job; no extra scheduler or TTL service is required.
-  const expired = await db.collectionGroup('notificationDeliveries').where('expireAt', '<', Timestamp.now()).limit(200).get()
-  if (expired.size) {
+  // Daily cleanup in the existing job. No extra Scheduler job or billed TTL deletes.
+  const cutoff = Timestamp.fromDate(now)
+  const removed = await cleanupExpiredDeliveries(hour, async size => {
+    const expired = await db.collectionGroup('notificationDeliveries').where('expireAt', '<', cutoff).limit(size).get()
+    if (!expired.size) return 0
     const batch = db.batch()
     expired.docs.forEach((item) => batch.delete(item.ref))
     await batch.commit()
-  }
-  logger.info('Monthly reminder delivery finished', { sent, failed })
+    return expired.size
+  })
+  if (failed) logger.warn('Monthly reminder delivery finished with failures', { sent, failed, removed })
+  else if (sent || removed) logger.info('Monthly reminder delivery finished', { sent, removed })
 })

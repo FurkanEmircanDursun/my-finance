@@ -5,6 +5,7 @@ import {
 import { clsx } from 'clsx'
 import { Badge, Button, Empty, Segmented } from '../ui/primitives'
 import { ConfirmDialog, Modal } from '../ui/Modal'
+import { StatementDelete } from '../ui/StatementDelete'
 import {
   ReconciliationBadge, ReconciliationTable, SummaryFacts, worstStatus, type ReconStatus,
 } from '../ui/statements'
@@ -208,18 +209,7 @@ export function ArchiveSheet({
         )}
       </div>
 
-      <ConfirmDialog
-        open={deleting !== null}
-        title="Ekstreyi sil"
-        message={`${deleting?.label ?? ''} ve bu ekstreden gelen ${count(deleting?.transactionCount ?? 0)} işlem silinir. Önce JSON yedeği almak iyi olur.`}
-        confirmLabel="Ekstreyi sil"
-        destructive
-        onCancel={() => setDeleting(null)}
-        onConfirm={() => {
-          if (deleting) dispatch({ type: 'removeStatement', statementId: deleting.id })
-          setDeleting(null)
-        }}
-      />
+      <StatementDelete statementId={deleting?.id} onClose={() => setDeleting(null)} />
     </Modal>
   )
 }

@@ -1,10 +1,9 @@
 import { MoneySetting, settingAmount, settingAmountText } from '../ui/MoneySetting'
 import { useEffect, useState, type ReactNode } from 'react'
 import { trackScreen } from '../platform/analytics'
-import { ArrowLeft, ChevronDown, CreditCard, History, Lock, LockOpen, ShieldCheck, Target, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, CreditCard, History, Lock, LockOpen, ShieldCheck, Target } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Badge, Button, Field, Segmented, TextInput } from '../ui/primitives'
-import { ConfirmDialog } from '../ui/Modal'
 import { money, count } from '../core/money'
 import { todayKey, monthOf, monthLabel, monthDiff } from '../core/date'
 import { hashPin, randomSalt, verifyPin, PIN_LENGTH } from '../core/pin'
@@ -19,9 +18,8 @@ import { CloudServicesSettings } from './CloudServicesSettings'
 /** Full-page preferences keep long-lived settings outside transient sheets. */
 export function SettingsPage({ onClose }: { onClose: () => void }) {
   useEffect(() => { trackScreen('settings') }, [])
-  const { state, dispatch, authUser, cloudAvailable, clearLocalData } = useStore()
+  const { state, dispatch } = useStore()
   const { openArchive, openAccount, openCards } = useSheets()
-  const [resetOpen, setResetOpen] = useState(false)
 
   const { profile, settings, transactions, statements, rules } = state
 
@@ -46,23 +44,14 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         </Block>
 
         {/* ── Kilit ───────────────────────────────────────────────────────── */}
-        <Block title="Uygulama kilidi">
+        <Block title="Uygulama kilidi" note="PIN bu oturum boyunca uygulama arka plana geçtiğinde sorulur. Uygulama kapandığında PIN sıfırlanır.">
           <AppLock />
         </Block>
 
         {/* ── Hesap ───────────────────────────────────────────────────────── */}
 
         {/* ── Veri ────────────────────────────────────────────────────────── */}
-        <Block
-          title="Veri"
-          note={
-            authUser
-              ? 'Bu cihazda saklanır ve hesabınla bulutta eşitlenir.'
-              : cloudAvailable
-                ? 'Her şey bu cihazda saklanır; bulut senkronu kapalı.'
-                : 'Her şey bu cihazda saklanır, hiçbir sunucuya gönderilmez.'
-          }
-        >
+        <Block title="Veri" note="Kayıtların Firebase hesabında saklanır.">
           <p className="text-body text-muted">
             {count(transactions.length)} işlem · {count(statements.length)} ekstre
           </p>
@@ -76,10 +65,6 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             >
               <History size={16} />
               Geçmiş, dışa aktar, geri yükle
-            </Button>
-            <Button variant="danger" onClick={() => setResetOpen(true)}>
-              <Trash2 size={16} />
-              Bu cihazdaki verileri sil
             </Button>
           </div>
         </Block>
@@ -119,7 +104,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
               </label>
               {settings.useLocalOcr && (
                 <div className="mt-3">
-                  <Field label="Servis adresi">
+                  <Field label="Servis adresi" hint="Bu oturum için geçerlidir.">
                     <TextInput
                       value={settings.ocrEndpoint}
                       onChange={(e) =>
@@ -148,21 +133,10 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         </Disclosure>
 
         <p className="pt-2 text-center text-label text-faint">
-          Mizan {__APP_VERSION__} · {authUser ? 'bulutla eşitleniyor' : 'veriler bu cihazda'}
+          Mizan {__APP_VERSION__}
         </p>
       </div>
 
-      <ConfirmDialog
-        open={resetOpen}
-        title="Bu cihazdaki verileri sil"
-        message="Bu cihazdaki ekstreler, işlemler, kurallar ve profil kaldırılır; açık hesaptan çıkış yapılır. Hesabındaki bulut verileri korunur. Eşitlenmemiş yerel kayıtlar geri alınamaz; önce JSON yedeği al."
-        confirmLabel="Yalnızca cihazı temizle"
-        destructive
-        onCancel={() => setResetOpen(false)}
-        onConfirm={() => {
-          void clearLocalData().then(() => { setResetOpen(false); onClose() }).catch(() => { setResetOpen(false) })
-        }}
-      />
     </div>
   )
 }
@@ -479,8 +453,7 @@ function AppLock() {
       </div>
 
       <p className="text-label text-faint">
-        PIN yalnızca bu cihazda tuzlanmış özet olarak saklanır; bulut senkronu açıkken bile PIN ve özeti
-        hiçbir yere gönderilmez.
+        PIN bu oturumun belleğinde tutulur ve çıkışta temizlenir.
       </p>
     </div>
   )

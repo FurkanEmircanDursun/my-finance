@@ -4,6 +4,7 @@ import { useEffect, useId, useState, type FormEvent } from 'react'
 import { CalendarDays, CreditCard as CreditCardIcon, Pencil, Plus, Trash2 } from 'lucide-react'
 import { uid } from '../core/hash'
 import { cardBankLabel, cardDisplayName, isCardDay, nextCardDate } from '../domain/cards'
+import { cardBanks } from '../domain/banks'
 import type { CardBank, CreditCard } from '../domain/types'
 import { useStore } from '../store/AppStore'
 import { Modal } from '../ui/Modal'
@@ -18,7 +19,8 @@ export function CardEditor({ initial, onSave, onCancel, submitLabel, existingCar
 }) {
   const id = useId()
   const [bank, setBank] = useState<CardBank>(initial?.bank ?? 'akbank')
-  const [name, setName] = useState(initial?.name ?? 'Akbank Axess')
+  const suggestedName = (bank: CardBank) => bank === 'akbank' ? 'Akbank Axess' : bank === 'garanti' ? 'Garanti Bonus' : bank === 'other' ? '' : cardBankLabel(bank)
+  const [name, setName] = useState(initial?.name ?? suggestedName('akbank'))
   const [last4, setLast4] = useState(initial?.last4 ?? '')
   const [statementDay, setStatementDay] = useState(initial?.statementDay ? String(initial.statementDay) : '')
   const [entryDay, setEntryDay] = useState(initial?.entryDay ? String(initial.entryDay) : '')
@@ -50,10 +52,9 @@ export function CardEditor({ initial, onSave, onCancel, submitLabel, existingCar
         <select className="h-11 w-full rounded-[var(--radius)] border border-line bg-raised px-3 text-body text-ink disabled:opacity-70" value={bank} disabled={Boolean(initial)} onChange={(event) => {
           const value = event.target.value as CardBank
           setBank(value)
-          if (name === 'Akbank Axess' || name === 'Garanti Bonus') setName(value === 'akbank' ? 'Akbank Axess' : 'Garanti Bonus')
+          if (name === suggestedName(bank)) setName(suggestedName(value))
         }}>
-          <option value="akbank">Akbank</option>
-          <option value="garanti">Garanti BBVA</option>
+          {cardBanks.map(id => <option key={id} value={id}>{cardBankLabel(id)}</option>)}
         </select>
       </Field>
       <Field label="Kart adı" hint="Örneğin: Ev harcamaları veya Bonus kartım">
@@ -101,7 +102,7 @@ export function CardsSheet({ open, onClose }: { open: boolean; onClose: () => vo
         {cards.length === 0 && <div className="flex flex-col items-center gap-3 py-8 text-center">
           <CreditCardIcon size={32} className="text-muted" />
           <p className="text-title font-semibold text-ink">İlk kartını ekle</p>
-          <p className="max-w-xs text-body text-muted">Akbank ve Garanti BBVA kartlarını ekleyebilir, her biri için ayrı tarih belirleyebilirsin.</p>
+          <p className="max-w-xs text-body text-muted">Kartlarını ekleyip her biri için ayrı kesim ve hatırlatma tarihi belirleyebilirsin.</p>
         </div>}
         <ul className="divide-y divide-line">
           {cards.map((card) => <li key={card.id} className="py-5 first:pt-0">

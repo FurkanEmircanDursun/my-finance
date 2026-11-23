@@ -7,7 +7,8 @@ import { ReconciliationBadge } from '../ui/statements'
 import { useSheets } from './sheets'
 import { useStore } from '../store/AppStore'
 import { useImport } from '../hooks/useImport'
-import { count } from '../core/money'
+import { fullDayLabel } from '../core/date'
+import { count, money2 } from '../core/money'
 import type { ImportOutcome } from '../domain/types'
 import { cardDisplayName } from '../domain/cards'
 import { importCardChoices, importedCardDraft, legacyCardKey } from '../domain/cardLifecycle'
@@ -27,7 +28,7 @@ const NEW_CARD = '__new__'
 
 type OnFinished = (outcomes: ImportOutcome[], cardId: string) => void
 
-function usePicker(onFinished?: OnFinished, initialCardId?: string, initialFiles: File[] = [], autoStart = false) {
+function usePicker(onFinished?: OnFinished, initialCardId?: string, initialFiles: File[] = [], autoStart = false, repairStatementId?: string) {
   const { state } = useStore()
   const choices = importCardChoices(state.profile.cards ?? [], state.statements)
   const [cardId, setCardId] = useState(() => {
@@ -39,23 +40,36 @@ function usePicker(onFinished?: OnFinished, initialCardId?: string, initialFiles
   const [queue, setQueue] = useState<File[]>(initialFiles)
   const [rejected, setRejected] = useState(false)
   const autoStarted = useRef(false)
+  const [reviewItems, setReviewItems] = useState<readonly ImportOutcome[] | null>(null)
+  const pendingReview = useRef<((approved: boolean) => void) | null>(null)
+  const requestReview = useCallback((items: readonly ImportOutcome[]) => new Promise<boolean>(resolve => {
+    pendingReview.current = resolve
+    setReviewItems(items)
+  }), [])
+  const finishReview = (approved: boolean) => {
+    pendingReview.current?.(approved)
+    pendingReview.current = null
+    setReviewItems(null)
+  }
+  useEffect(() => () => { pendingReview.current?.(false) }, [])
 
   const onDrop = useCallback((accepted: File[], rejections: unknown[]) => {
     setRejected(rejections.length > 0)
     setQueue((prev) => {
-      const seen = new Set(prev.map((f) => `${f.name}:${f.size}`))
-      return [...prev, ...accepted.filter((f) => !seen.has(`${f.name}:${f.size}`))]
+      return [...prev, ...accepted]
     })
   }, [])
 
-  const dropzone = useDropzone({ onDrop, accept: ACCEPT, multiple: true, disabled: progress.running, noClick: true, noKeyboard: true })
+  const dropzone = useDropzone({ onDrop, accept: repairStatementId ? { 'application/pdf': ['.pdf'] } : ACCEPT, multiple: true, disabled: progress.running, noClick: true, noKeyboard: true })
 
   const start = useCallback(async () => {
     if (progress.running) return
-    const outcomes = await run(queue, cardId === NEW_CARD ? undefined : cardId || undefined, cardId === NEW_CARD)
-    setQueue([])
-    if (outcomes) onFinished?.(outcomes, cardId)
-  }, [run, queue, cardId, onFinished, progress.running])
+    const outcomes = await run(queue, cardId === NEW_CARD ? undefined : cardId || undefined, cardId === NEW_CARD, repairStatementId, requestReview)
+    if (outcomes) {
+      setQueue([])
+      onFinished?.(outcomes, cardId)
+    }
+  }, [run, queue, cardId, onFinished, progress.running, repairStatementId, requestReview])
   useEffect(() => {
     if (!autoStart || autoStarted.current || !queue.length) return
     // StrictMode can mount an effect twice. Cancel its first scheduled start.
@@ -63,7 +77,7 @@ function usePicker(onFinished?: OnFinished, initialCardId?: string, initialFiles
     return () => window.clearTimeout(timer)
   }, [autoStart, queue.length, start])
 
-  return { dropzone, queue, setQueue, rejected, progress, start, choices, cardId, setCardId }
+  return { dropzone, queue, setQueue, rejected, progress, start, choices, cardId, setCardId, reviewItems, finishReview }
 }
 
 /* ── The panel itself ────────────────────────────────────────────────────── */
@@ -74,15 +88,45 @@ function Picker({
   initialCardId,
   initialFiles,
   autoStart,
+  repairStatementId,
 }: {
   onFinished?: OnFinished
   primaryLabel: string
   initialCardId?: string
   initialFiles?: File[]
   autoStart?: boolean
+  repairStatementId?: string
 }) {
-  const { dropzone, queue, setQueue, rejected, progress, start, choices, cardId, setCardId } = usePicker(onFinished, initialCardId, initialFiles, autoStart)
+  const { dropzone, queue, setQueue, rejected, progress, start, choices, cardId, setCardId, reviewItems, finishReview } = usePicker(onFinished, initialCardId, initialFiles, autoStart, repairStatementId)
   const { getRootProps, getInputProps, isDragActive } = dropzone
+  const reviewHeading = useRef<HTMLHeadingElement>(null)
+  useEffect(() => { if (reviewItems) reviewHeading.current?.focus() }, [reviewItems])
+
+  if (reviewItems) {
+    return (
+      <section aria-labelledby="import-review-heading" className="space-y-4">
+        <h2 id="import-review-heading" ref={reviewHeading} tabIndex={-1} className="text-title font-semibold text-ink">Kaydetmeden önce kontrol et</h2>
+        <p className="text-body text-muted">Dosyanın sana ve seçili karta ait olduğunu PDF üzerinden kontrol et. Uygulama kart sahibini doğrulayamaz.</p>
+        {repairStatementId && <p className="text-body text-muted">Onayladığında bu ekstrenin işlem listesi PDF’deki doğrulanmış işlemlerle güncellenir.</p>}
+        <ul className="space-y-2">
+          {reviewItems.map(({ fileName, statement, error, reportedCardLast4 }, index) => (
+            <li key={index} className="break-words rounded-[var(--radius)] bg-sunken px-3 py-2.5 text-body">
+              <p className="font-semibold text-ink">{fileName}</p>
+              {statement ? <>
+                <p className="text-muted">{statement.bank} · {statement.accountLabel || 'Genel hareketler'}{statement.periodEnd && ` · ${fullDayLabel(statement.periodEnd)}`}</p>
+                {reportedCardLast4 && <p className="text-muted">PDF’deki kart · •••• {reportedCardLast4}</p>}
+                <p className="text-muted">{count(statement.transactionCount)} işlem{statement.summary?.totalDebt != null && ` · Dönem borcu ${money2(statement.summary.totalDebt)}`}</p>
+              </> : <p className={error ? 'text-negative' : 'text-muted'}>{error ?? 'Daha önce eklenmiş.'}</p>}
+            </li>
+          ))}
+        </ul>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => finishReview(false)}>Dosyalara dön</Button>
+          <Button type="button" variant="primary" onClick={() => finishReview(true)}>{repairStatementId ? 'Onayla ve güncelle' : 'Onayla ve kaydet'}</Button>
+        </div>
+      </section>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -103,7 +147,7 @@ function Picker({
           {progress.total > 1 && <span>Dosya {progress.done + 1} / {progress.total}</span>}
         </div> : <>
           <Button type="button" onClick={dropzone.open}><Upload size={18} /> Dosya seç</Button>
-          <p className="text-body text-muted">{isDragActive ? 'Ekstreni şimdi bırak' : 'PDF, TXT veya CSV'}</p>
+          <p className="text-body text-muted">{isDragActive ? 'Ekstreni şimdi bırak' : repairStatementId ? 'Bankanın özgün PDF ekstresi' : 'PDF, TXT veya CSV'}</p>
         </>}
       </div>
 
@@ -113,15 +157,15 @@ function Picker({
       {rejected && (
         <p className="flex items-center gap-2 text-body text-negative">
           <AlertCircle size={16} className="shrink-0" />
-          Yalnızca PDF, TXT ve CSV okunabilir.
+          {repairStatementId ? 'Bu adımda yalnızca PDF seçebilirsin.' : 'Yalnızca PDF, TXT ve CSV okunabilir.'}
         </p>
       )}
 
       {queue.length > 0 && !progress.running && (
         <div className="space-y-2">
-          {queue.map((file) => (
+          {queue.map((file, index) => (
             <div
-              key={`${file.name}:${file.size}`}
+              key={index}
               className="flex items-center justify-between gap-3 rounded-[var(--radius)] bg-sunken px-3 py-2.5"
             >
               <span className="flex min-w-0 items-center gap-2.5">
@@ -179,7 +223,7 @@ export function FirstRun() {
         </p>
       </div>
 
-      <Picker primaryLabel="Analizi başlat" onFinished={outcomes => setFailedImports(outcomes.filter(outcome => !outcome.ok))} />
+      <Picker primaryLabel="Dosyaları incele" onFinished={outcomes => setFailedImports(outcomes.filter(outcome => !outcome.ok))} />
       {failedImports.map(outcome => (
         <p key={outcome.fileName} role="alert" className="text-body text-negative">{outcome.fileName} · {outcome.error}</p>
       ))}
@@ -218,7 +262,7 @@ export function FirstRun() {
 
 /* ── Sheet ───────────────────────────────────────────────────────────────── */
 
-export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { open: boolean; onClose: () => void; initialCardId?: string; sharedFiles?: File[] }) {
+export function ImportSheet({ open, onClose, initialCardId, sharedFiles, repairStatementId }: { open: boolean; onClose: () => void; initialCardId?: string; sharedFiles?: File[]; repairStatementId?: string }) {
   const { state } = useStore()
   const { openStatement } = useSheets()
   const [result, setResult] = useState<ImportOutcome[] | null>(null)
@@ -264,8 +308,10 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
           <ul className="space-y-3">
             {result
               .filter((outcome) => outcome.ok)
-              .map((outcome) => (
-                <li key={outcome.fileName} className="rounded-[var(--radius-lg)] bg-sunken p-4">
+              .map((outcome, index) => outcome.alreadyImported ? (
+                <li key={index} className="text-body text-muted">{outcome.fileName} · Bu PDF daha önce eklenmiş.</li>
+              ) : (
+                <li key={index} className="rounded-[var(--radius-lg)] bg-sunken p-4">
                   <p className="break-words text-body font-semibold text-ink">
                     {outcome.statement?.label ?? outcome.fileName}
                   </p>
@@ -299,7 +345,7 @@ export function ImportSheet({ open, onClose, initialCardId, sharedFiles }: { ope
           </Button>
         </div>
       ) : (
-        <Picker primaryLabel="Ekstreyi işle" onFinished={finished} initialCardId={lastCardId ?? initialCardId} initialFiles={sharedFiles} autoStart={Boolean(sharedFiles?.length) && !reviewShared} />
+        <Picker primaryLabel="Dosyaları incele" onFinished={finished} initialCardId={lastCardId ?? initialCardId} initialFiles={sharedFiles} autoStart={Boolean(sharedFiles?.length) && !reviewShared} repairStatementId={repairStatementId} />
       )}
     </Modal>
   )
