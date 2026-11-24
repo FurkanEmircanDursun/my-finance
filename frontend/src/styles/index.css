@@ -2,159 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
- * Design tokens.
- *
- * One palette, expressed as semantic roles, defined for light on :root and
- * overridden for dark. Components never name a raw colour, so re-skinning the
- * product later means editing this block and nothing else.
- *
- * Colour carries meaning only. Positive means money stayed, negative means a
- * ceiling was crossed, accent marks the single primary action on a screen.
- * Nothing is tinted for decoration; category colours live in charts and dots,
- * never in text.
- */
 @layer base {
-  :root {
-    color-scheme: light;
-
-    --bg: #f6f5f0;
-    --bg-raised: #fffefa;
-    --bg-sunken: #eeeee7;
-    --bg-hover: #e9ede5;
-    --bg-active: #dce3d9;
-
-    --line: #dce3d9;
-    --line-strong: #929e94;
-
-    --text: #202925;
-    --text-muted: #4c5c52;
-    --text-faint: #536359;
-    --text-inverse: #fffefa;
-
-    --accent: #155a4d;
-    --accent-hover: #104639;
-    --accent-soft: #e4eee8;
-    --accent-text: #155244;
-
-    --positive: #286345;
-    --positive-soft: #e9f2e9;
-    --negative: #a03236;
-    --negative-soft: #faeaea;
-    --warning: #7d4f10;
-    --warning-soft: #fbf0dc;
-
-    --grid: #e2e7de;
-
-    --radius: 12px;
-    --radius-lg: 16px;
-
-    --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.22), 0 2px 8px -2px rgb(0 0 0 / 0.08);
-
-    /* Interaction timing. Changes commit as soon as the action runs. */
-    --ease: cubic-bezier(0.2, 0, 0, 1);
-    --duration: 180ms;
-    --motion-press: 120ms;
-    --motion-reveal: 160ms;
-    --motion-sheet: 220ms;
-    --ease-out-quick: cubic-bezier(.23, 1, .32, 1);
-
-    /*
-     * Safe areas, named once.
-     *
-     * Android 15 forces edge-to-edge: the app draws behind the status bar and
-     * behind the gesture pill whether it asks to or not. These are 0 on a
-     * desktop browser, so the same rules serve both targets.
-     */
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
-
-    /* Height of the phone tab bar, so content can clear it without guessing. */
-    --tabbar-height: 64px;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) {
-      color-scheme: dark;
-
-      --bg: #171f1b;
-      --bg-raised: #202b25;
-      --bg-sunken: #26322b;
-      --bg-hover: #2b3830;
-      --bg-active: #35483d;
-
-      --line: #3b4b42;
-      --line-strong: #72867a;
-
-      --text: #f1f4ed;
-      --text-muted: #c0cec3;
-      --text-faint: #a7baad;
-      --text-inverse: #171f1b;
-
-      --accent: #a4d8c1;
-      --accent-hover: #b5e7d1;
-      --accent-soft: #293d34;
-      --accent-text: #c4e8d6;
-
-      --positive: #9fdabb;
-      --positive-soft: #243b30;
-      --negative: #f29797;
-      --negative-soft: #442b2a;
-      --warning: #f3c379;
-      --warning-soft: #3b3123;
-
-      --grid: #2b3830;
-
-      --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
-    }
-  }
-
-  :root[data-theme='dark'] {
-    color-scheme: dark;
-
-    --bg: #171f1b;
-    --bg-raised: #202b25;
-    --bg-sunken: #26322b;
-    --bg-hover: #2b3830;
-    --bg-active: #35483d;
-
-    --line: #3b4b42;
-    --line-strong: #72867a;
-
-    --text: #f1f4ed;
-    --text-muted: #c0cec3;
-    --text-faint: #a7baad;
-    --text-inverse: #171f1b;
-
-    --accent: #a4d8c1;
-    --accent-hover: #b5e7d1;
-    --accent-soft: #293d34;
-    --accent-text: #c4e8d6;
-
-    --positive: #9fdabb;
-    --positive-soft: #243b30;
-    --negative: #f29797;
-    --negative-soft: #442b2a;
-    --warning: #f3c379;
-    --warning-soft: #3b3123;
-
-    --grid: #2b3830;
-
-    --shadow-overlay: 0 16px 40px -12px rgb(0 0 0 / 0.6), 0 2px 8px -2px rgb(0 0 0 / 0.4);
-  }
-
   * {
     box-sizing: border-box;
     border-color: var(--line);
   }
 
-  /*
-   * min-height, not height: a fixed 100% on #root clips the app to one viewport
-   * and takes the sticky header out of the page's own scroll context, so the
-   * header scrolls away once the content grows past the first screen.
-   */
   html,
   body,
   #root {
@@ -163,104 +16,161 @@
 
   body {
     margin: 0;
-    background: var(--bg);
+    background-color: var(--bg);
+    background-image: var(--mesh-bg);
+    background-attachment: fixed;
     color: var(--text);
     font-family: 'DM Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-    /* 15px body. The old 11px `2xs` was the default here and made every level of
-       the hierarchy the same size, which is the same as having no hierarchy. */
     font-size: 15px;
-    line-height: 1.5;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     font-feature-settings: 'cv05' 1, 'ss01' 1;
-
-    /*
-     * Inside a WebView the rubber-band overscroll at the top reads as a broken
-     * pull-to-refresh — the page detaches and springs back having done nothing.
-     * There is no remote data to refresh here, so contain it.
-     */
     overscroll-behavior-y: contain;
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Every figure in this product is a number in a column; align them. */
+  button,
+  a,
+  input,
+  select,
+  summary {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  a {
+    touch-action: manipulation;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--accent-text);
+  }
+
+  input,
+  textarea {
+    caret-color: var(--accent);
+  }
+
+  /* Strict tabular numerals for every financial figure & table column */
   .num,
   table td,
   table th {
-    font-variant-numeric: tabular-nums;
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   :focus-visible {
     outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 4px;
+    outline-offset: 3px;
+    border-radius: 6px;
   }
 
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: var(--line-strong);
-    border: 3px solid var(--bg);
+    border: 2px solid transparent;
+    background-clip: content-box;
     border-radius: 999px;
   }
   ::-webkit-scrollbar-thumb:hover {
     background: var(--text-faint);
+    background-clip: content-box;
   }
 }
 
 @layer components {
-  /*
-   * A raised surface, used only for things that are genuinely lifted off the
-   * page: sheets, and the two headline tiles. Ordinary content sections sit
-   * directly on the background and are separated by space, not by a frame —
-   * a border now means "you can touch this", which is information rather than
-   * decoration.
-   */
   .surface {
-    background: var(--bg-raised);
+    background-color: var(--bg-raised);
+    background-image: var(--surface-sheen);
     border: 1px solid var(--line);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .bento-card {
+    position: relative;
+    min-width: 0;
+    background-color: var(--bg-raised);
+    background-image: var(--surface-sheen);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: 22px 24px;
+    transition: border-color var(--dur-micro) var(--ease-smooth), box-shadow var(--dur-micro) var(--ease-smooth), transform var(--dur-micro) var(--ease-smooth);
+  }
+
+  .bento-card--interactive:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .bento-hero {
+    position: relative;
+    overflow: hidden;
+    min-width: 0;
+    background: var(--hero-surface);
+    color: var(--hero-surface-text);
+    border: 1px solid var(--hero-surface-line);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+    padding: 26px 28px;
+  }
+
+  .bento-hero::before {
+    content: '';
+    position: absolute;
+    inset: -40% -20% auto auto;
+    width: 340px;
+    height: 340px;
+    background: radial-gradient(circle, rgba(43, 212, 155, 0.22) 0%, rgba(43, 212, 155, 0) 70%);
+    pointer-events: none;
+  }
+
+  .bento-hero--gold::before {
+    background: radial-gradient(circle, rgba(226, 194, 125, 0.24) 0%, rgba(226, 194, 125, 0) 70%);
   }
 
   .divider {
     border-top: 1px solid var(--line);
   }
 
-  /*
-   * Hide amounts.
-   *
-   * Every figure in the app already carries `.num` for tabular alignment, so
-   * one rule covers the lot — the hero, the tiles, the tables, the charts'
-   * own labels — without a single component needing to know the mode exists.
-   * A finance app open on a train is the case this is for; the PIN lock
-   * guards the app, this guards the glance over your shoulder.
-   */
-  :root[data-private='on'] .num {
-    filter: blur(7px);
-    /* Blur alone still leaks the digit count through the width, and it stays
-       selectable. Neither is what "hidden" should mean. */
+  /* Optical Privacy Veil */
+  :root[data-private='on'] .num,
+  :root[data-private='on'] .recharts-wrapper,
+  :root[data-private='on'] .spending-pulse,
+  :root[data-private='on'] .analysis-chart,
+  :root[data-private='on'] .assets-distribution {
+    filter: blur(8px);
     user-select: none;
     pointer-events: none;
+    transition: filter var(--dur-micro) var(--ease-smooth);
   }
 
-  /* Anything a finger drags must not also pan the page underneath it. */
   .no-pan {
     touch-action: none;
   }
 
-  /* Recharts injects inline styles for its default tooltip; ours replaces it. */
+  /* Recharts Base Harmonization */
   .recharts-default-tooltip {
     display: none !important;
   }
 
   .recharts-cartesian-axis-tick text {
     fill: var(--text-faint);
-    font-size: 12px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
   }
 
   .recharts-cartesian-grid line {
@@ -270,11 +180,8 @@
   .recharts-surface:focus {
     outline: none;
   }
-
 }
 
-/* Keep vendor selectors outside Tailwind layers: Recharts creates them at runtime.
-   SVG outlines use bounding boxes; trace the actual pie slice instead. */
 .recharts-pie:focus,
 .recharts-pie-sector:focus,
 .recharts-sector:focus {
@@ -286,7 +193,7 @@
 .recharts-pie-sector:focus-within .recharts-sector,
 .recharts-sector:focus {
   stroke: var(--accent);
-  stroke-width: 3px;
+  stroke-width: 2.5px;
   stroke-linejoin: round;
 }
 
@@ -299,56 +206,163 @@
   }
 
   .fade-in {
-    animation: fade-in var(--duration) var(--ease) both;
+    animation: mizan-fade-in var(--dur-reveal) var(--ease-smooth) both;
   }
 
   .rise-in {
-    animation: rise-in var(--duration) var(--ease) both;
+    animation: mizan-rise-in var(--dur-reveal) var(--ease-smooth) both;
+  }
+
+  .stagger-item {
+    animation: mizan-rise-in var(--dur-reveal) var(--ease-smooth) both;
+    animation-delay: min(calc(var(--stagger-i, 0) * 45ms), 270ms);
   }
 
   .sheet-in {
-    animation: sheet-in var(--duration) var(--ease) both;
-  }
-
-  /*
-   * Tab changes move in the direction the finger did. A screen that arrives
-   * from the same side no matter which way you swiped breaks the illusion that
-   * the tabs are laid out side by side, which is the whole reason swiping
-   * between them is guessable in the first place.
-   */
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+    animation: mizan-sheet-in var(--dur-sheet) var(--ease-smooth) both;
   }
 }
 
-@keyframes rise-in {
+/* Brand Mark Stroke-Draw & Fulcrum Ignition */
+.mizan-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.mizan-brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.mizan-wordmark {
+  font-size: 1.45rem;
+  font-weight: 680;
+  letter-spacing: -0.042em;
+  color: var(--text);
+}
+
+.mizan-brand__subtitle {
+  margin-top: 3px;
+  font-size: 0.6875rem;
+  font-weight: 560;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.mizan-mark--animated .mizan-mark__beam {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: mizan-beam-draw 580ms var(--ease-smooth) 60ms forwards;
+}
+
+.mizan-mark--animated .mizan-mark__fulcrum {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  transform: scale(0.3);
+  animation: mizan-fulcrum-pop 420ms var(--ease-spring) 280ms forwards;
+}
+
+/* Shimmer Skeleton */
+.mizan-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line);
+}
+
+.mizan-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.065) 45%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.065) 55%,
+    transparent 100%
+  );
+  animation: mizan-shimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+:root[data-theme='light'] .mizan-skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+}
+
+/* Keyframes */
+@keyframes mizan-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mizan-rise-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
-    transform: none;
+    transform: translateY(0);
   }
 }
 
-/* Sheets come from the bottom on a phone; the transform is overridden to a
-   horizontal slide at the breakpoint where the sheet docks to the right. */
-@keyframes sheet-in {
+@keyframes mizan-sheet-in {
   from {
-    transform: translateY(16px);
     opacity: 0;
+    transform: translateY(20px) scale(0.985);
   }
   to {
-    transform: none;
     opacity: 1;
+    transform: translateY(0) scale(1);
   }
+}
+
+@keyframes mizan-beam-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes mizan-fulcrum-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes mizan-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+@keyframes mizan-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(4px); }
+}
+
+@keyframes mizan-check-draw {
+  from { stroke-dashoffset: 32; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes mizan-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -356,6 +370,15 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .mizan-mark--animated .mizan-mark__beam {
+    stroke-dashoffset: 0;
+  }
+  .mizan-mark--animated .mizan-mark__fulcrum {
+    opacity: 1;
+    transform: none;
   }
 }

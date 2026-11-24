@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { hapticTap } from '../platform/haptics'
 
 interface Feedback { message: string; undo?: () => string | void }
 const FeedbackContext = createContext<(feedback: Feedback) => void>(() => {})
@@ -16,7 +17,7 @@ export function FeedbackHost() {
   return <div ref={ref} className="feedback-slot" />
 }
 
-/** Persistent, dismissible feedback keeps undo available without a time limit. */
+/** Persistent, dismissible frosted feedback toast with spring checkmark and instant Undo. */
 export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [hosts, setHosts] = useState<HTMLElement[]>([])
@@ -29,9 +30,30 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     <FeedbackHostContext.Provider value={registerHost}>
     {children}
     {feedback && createPortal(<div className={`save-feedback${host ? ' save-feedback-inline' : ''}`}>
-      <div role="status" className="save-feedback-message"><span className="save-check"><Check size={18} /></span>{feedback.message}</div>
-      {feedback.undo && <button type="button" onClick={() => setFeedback({ message: feedback.undo?.() ?? 'Kayıt geri alındı.' })}>Geri al</button>}
-      <button type="button" aria-label="Bildirimi kapat" onClick={() => setFeedback(null)}><X size={18} /></button>
+      <div role="status" className="save-feedback-message">
+        <span className="save-check"><Check size={16} strokeWidth={2.5} /></span>
+        <span>{feedback.message}</span>
+      </div>
+      {feedback.undo && (
+        <button
+          type="button"
+          className="save-feedback__undo"
+          onClick={() => {
+            hapticTap()
+            setFeedback({ message: feedback.undo?.() ?? 'Kayıt geri alındı.' })
+          }}
+        >
+          Geri al
+        </button>
+      )}
+      <button
+        type="button"
+        className="save-feedback__close"
+        aria-label="Bildirimi kapat"
+        onClick={() => setFeedback(null)}
+      >
+        <X size={16} />
+      </button>
     </div>, host ?? document.body)}
     </FeedbackHostContext.Provider>
   </FeedbackContext.Provider>

@@ -2,31 +2,26 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <!-- viewport-fit=cover is what makes env(safe-area-inset-*) report anything
-         other than 0. Without it the app draws under the Android 15 status bar
-         and the gesture pill with no way to know they are there. -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="dark light" />
     <meta
       name="description"
       content="Mizan ile ayının dengesini gör. Kart, kira, nakit giderlerin ve gelirin tek yerde. Ekstre dosyaların cihazında işlenir; hesapla eşitleme isteğe bağlıdır."
     />
     <title>Mizan — Ayın dengesi</title>
-    <meta name="theme-color" content="#f6f5f0" />
+    <meta name="theme-color" content="#07090C" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F3F5F8" media="(prefers-color-scheme: light)" />
     <meta name="application-name" content="Mizan" />
     <meta name="apple-mobile-web-app-title" content="Mizan" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-
-
   </head>
   <body>
-    <!-- Operate: a clear monthly answer, fast entry, visible account, optional depth.
-         Offline font assets and semantic themes are bundled with the app. -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

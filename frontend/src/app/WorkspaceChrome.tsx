@@ -1,7 +1,8 @@
-import { Eye, EyeOff, Plus, Settings2 } from 'lucide-react'
+import { Eye, EyeOff, Monitor, Moon, Plus, Settings2, Sun, Upload } from 'lucide-react'
 import { Fragment, type MouseEvent } from 'react'
 import { Brand, BrandMark } from '../ui/Brand'
 import { hapticTap } from '../platform/haptics'
+import { useStore } from '../store/AppStore'
 import { AccountPanel } from './AccountPanel'
 import { ScopeButton } from './ScopeButton'
 import { useSheets } from './sheets'
@@ -17,52 +18,217 @@ function follow(event: MouseEvent<HTMLAnchorElement>, view: ViewId, onSelect: Na
 
 function NavLink({ item, view, onSelect }: { item: NavItem; view: ViewId; onSelect: Navigate }) {
   const { id, label, icon: Icon } = item
-  return <a href={routeHash(id)} onClick={event => follow(event, id, onSelect)}
-    aria-current={view === id ? 'page' : navigationSection(view) === id ? 'location' : undefined}>
-    <Icon size={19} aria-hidden="true" /><span>{label}</span>
-  </a>
+  return (
+    <a
+      href={routeHash(id)}
+      onClick={(event) => follow(event, id, onSelect)}
+      aria-current={
+        view === id ? 'page' : navigationSection(view) === id ? 'location' : undefined
+      }
+    >
+      <Icon size={18} aria-hidden="true" />
+      <span>{label}</span>
+    </a>
+  )
 }
 
 export function WorkspaceRail({ view, onSelect }: { view: ViewId; onSelect: Navigate }) {
-  return <aside className="workspace-rail">
-    <a href={routeHash('overview')} onClick={event => follow(event, 'overview', onSelect)} className="workspace-brand" aria-label="Mizan ana sayfa"><Brand size={31} /></a>
-    <nav aria-label="Ana gezinme" className="workspace-nav">
-      {NAV.map(item => <NavLink key={item.id} item={item} view={view} onSelect={onSelect} />)}
-    </nav>
-    <nav aria-label="Uygulama tercihleri" className="workspace-nav workspace-rail-settings">
-      <NavLink item={{ id: 'settings', label: 'Ayarlar', icon: Settings2 }} view={view} onSelect={onSelect} />
-    </nav>
-  </aside>
-}
-
-export function WorkspaceToolbar({ view, privateMode, onTogglePrivate }: { view: ViewId; privateMode: boolean; onTogglePrivate: () => void }) {
+  const { state, dispatch } = useStore()
   const sheets = useSheets()
-  const showPeriod = view === 'overview' || view === 'transactions' || view === 'cards' || view === 'card-detail' || view === 'spending'
-  return <header className="workspace-toolbar">
-    <div className="workspace-toolbar-context">
-      <a href={routeHash('overview')} className="mobile-brand" aria-label="Mizan ana sayfa"><BrandMark size={28} /></a>
-      {showPeriod && <ScopeButton />}
-    </div>
-    <div className="toolbar-actions">
-      <button type="button" className="toolbar-icon" onClick={onTogglePrivate} aria-label={privateMode ? 'Tutarları göster' : 'Tutarları gizle'} aria-pressed={privateMode}>
-        {privateMode ? <EyeOff size={19} /> : <Eye size={19} />}
+  const theme = state.settings.theme
+
+  const setTheme = (next: 'system' | 'light' | 'dark') => {
+    hapticTap()
+    dispatch({ type: 'setSettings', settings: { theme: next } })
+  }
+
+  return (
+    <aside className="workspace-rail">
+      <a
+        href={routeHash('overview')}
+        onClick={(event) => follow(event, 'overview', onSelect)}
+        className="workspace-brand"
+        aria-label="Mizan ana sayfa"
+      >
+        <Brand size={34} subtitle="Finans Kokpiti" />
+      </a>
+
+      <button
+        type="button"
+        className="primary-button workspace-rail-cta"
+        onClick={() => {
+          hapticTap()
+          sheets.openEntry()
+        }}
+      >
+        <Plus size={17} aria-hidden="true" />
+        İşlem ekle
       </button>
-      <AccountPanel onOpen={sheets.openAccount} compact />
-      <button type="button" onClick={sheets.openSettings} aria-label="Ayarlar" className="toolbar-icon toolbar-settings"><Settings2 size={19} /></button>
-      <button type="button" className="primary-button workspace-add" onClick={() => { hapticTap(); sheets.openEntry() }}>
-        <Plus size={18} aria-hidden="true" /> İşlem ekle
-      </button>
-    </div>
-  </header>
+
+      <nav aria-label="Ana gezinme" className="workspace-nav">
+        <span className="workspace-nav-label">Çalışma Alanı</span>
+        {NAV.map((item) => (
+          <NavLink key={item.id} item={item} view={view} onSelect={onSelect} />
+        ))}
+      </nav>
+
+      <div className="workspace-rail-footer">
+        <nav aria-label="Uygulama tercihleri" className="workspace-nav" style={{ marginTop: 0 }}>
+          <NavLink
+            item={{ id: 'settings', label: 'Ayarlar', icon: Settings2 }}
+            view={view}
+            onSelect={onSelect}
+          />
+        </nav>
+
+        <div className="workspace-theme-switch" role="group" aria-label="Tema seçimi">
+          <button
+            type="button"
+            aria-pressed={theme === 'dark'}
+            aria-label="Koyu tema"
+            title="Koyu tema"
+            onClick={() => setTheme('dark')}
+          >
+            <Moon size={13} /> Koyu
+          </button>
+          <button
+            type="button"
+            aria-pressed={theme === 'light'}
+            aria-label="Açık tema"
+            title="Açık tema"
+            onClick={() => setTheme('light')}
+          >
+            <Sun size={13} /> Açık
+          </button>
+          <button
+            type="button"
+            aria-pressed={theme === 'system'}
+            aria-label="Sistem teması"
+            title="Sistem teması"
+            onClick={() => setTheme('system')}
+          >
+            <Monitor size={13} /> Oto
+          </button>
+        </div>
+      </div>
+    </aside>
+  )
 }
 
-export function BottomNav({ view, onSelect, onAdd }: { view: ViewId; onSelect: Navigate; onAdd: () => void }) {
-  return <nav className="workspace-bottom-nav" aria-label="Mobil gezinme">
-    {NAV.map((item, index) => <Fragment key={item.id}>
-      {index === 2 && <button type="button" className="workspace-mobile-add" aria-label="İşlem ekle" onClick={() => { hapticTap(); onAdd() }}>
-        <Plus size={23} aria-hidden="true" />
-      </button>}
-      <NavLink item={item} view={view} onSelect={onSelect} />
-    </Fragment>)}
-  </nav>
+export function WorkspaceToolbar({
+  view,
+  privateMode,
+  onTogglePrivate,
+}: {
+  view: ViewId
+  privateMode: boolean
+  onTogglePrivate: () => void
+}) {
+  const sheets = useSheets()
+  const showPeriod =
+    view === 'overview' ||
+    view === 'transactions' ||
+    view === 'cards' ||
+    view === 'card-detail' ||
+    view === 'spending'
+
+  return (
+    <header className="workspace-toolbar">
+      <div className="workspace-toolbar-context">
+        <a
+          href={routeHash('overview')}
+          className="mobile-brand"
+          aria-label="Mizan ana sayfa"
+        >
+          <BrandMark size={30} />
+        </a>
+        {showPeriod && <ScopeButton />}
+      </div>
+
+      <div className="toolbar-actions">
+        <button
+          type="button"
+          className="toolbar-icon"
+          onClick={() => {
+            hapticTap()
+            onTogglePrivate()
+          }}
+          aria-label={privateMode ? 'Tutarları göster' : 'Tutarları gizle'}
+          aria-pressed={privateMode}
+          title={privateMode ? 'Tutarları göster' : 'Gizlilik modu'}
+        >
+          {privateMode ? <EyeOff size={17} /> : <Eye size={17} />}
+        </button>
+
+        <AccountPanel onOpen={sheets.openAccount} compact />
+
+        <button
+          type="button"
+          onClick={() => {
+            hapticTap()
+            sheets.openSettings()
+          }}
+          aria-label="Ayarlar"
+          className="toolbar-icon toolbar-settings"
+        >
+          <Settings2 size={17} />
+        </button>
+
+        <button
+          type="button"
+          className="quiet-button workspace-add"
+          onClick={() => {
+            hapticTap()
+            sheets.openImport()
+          }}
+        >
+          <Upload size={15} aria-hidden="true" /> Ekstre yükle
+        </button>
+
+        <button
+          type="button"
+          className="primary-button workspace-add"
+          onClick={() => {
+            hapticTap()
+            sheets.openEntry()
+          }}
+        >
+          <Plus size={16} aria-hidden="true" /> İşlem ekle
+        </button>
+      </div>
+    </header>
+  )
+}
+
+export function BottomNav({
+  view,
+  onSelect,
+  onAdd,
+}: {
+  view: ViewId
+  onSelect: Navigate
+  onAdd: () => void
+}) {
+  return (
+    <nav className="workspace-bottom-nav" aria-label="Mobil gezinme">
+      {NAV.map((item, index) => (
+        <Fragment key={item.id}>
+          {index === 2 && (
+            <button
+              type="button"
+              className="workspace-mobile-add"
+              aria-label="İşlem ekle"
+              onClick={() => {
+                hapticTap()
+                onAdd()
+              }}
+            >
+              <Plus size={22} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          )}
+          <NavLink item={item} view={view} onSelect={onSelect} />
+        </Fragment>
+      ))}
+    </nav>
+  )
 }

@@ -4,12 +4,13 @@ import { money, percent, signedPercent } from '../core/money'
 import { NATURE_LABEL } from '../domain/categories'
 import type { CategoryStat, HealthReport, Insight, NatureStat } from '../analytics/types'
 import { Badge, Meter } from './primitives'
+import { RadialGauge } from './motion'
+import { RollingNumber } from './MoneyValue'
 
 /* ── Trend indicator ─────────────────────────────────────────────────────── */
 
 export function TrendPill({
   value,
-  /** For spending, an increase is bad; set false for metrics where up is good. */
   inverse = true,
   suffix,
 }: {
@@ -19,7 +20,7 @@ export function TrendPill({
 }) {
   if (value === null || !Number.isFinite(value)) {
     return (
-      <span className="inline-flex items-center gap-1 text-label text-faint">
+      <span className="inline-flex items-center gap-1 rounded-full border border-line bg-sunken px-2.5 py-0.5 text-label text-faint">
         <Minus size={11} /> karşılaştırma yok
       </span>
     )
@@ -33,13 +34,13 @@ export function TrendPill({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1 text-label font-semibold',
-        bad ? 'text-negative' : good ? 'text-positive' : 'text-muted',
+        'num inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-label font-semibold',
+        bad ? 'bg-negative-soft text-negative' : good ? 'bg-positive-soft text-positive' : 'bg-sunken text-muted',
       )}
     >
       {rising ? <ArrowUpRight size={12} /> : falling ? <ArrowDownRight size={12} /> : <Minus size={11} />}
       {signedPercent(value)}
-      {suffix && <span className="font-normal text-faint">{suffix}</span>}
+      {suffix && <span className="font-normal opacity-80">{suffix}</span>}
     </span>
   )
 }
@@ -54,10 +55,10 @@ const SEVERITY_ICON = {
 } as const
 
 const SEVERITY_CLASS = {
-  critical: 'text-negative',
-  warning: 'text-warning',
-  info: 'text-muted',
-  positive: 'text-positive',
+  critical: 'text-negative bg-negative-soft',
+  warning: 'text-warning bg-warning-soft',
+  info: 'text-accent-text bg-accent-soft',
+  positive: 'text-positive bg-positive-soft',
 } as const
 
 export function InsightRow({
@@ -70,8 +71,10 @@ export function InsightRow({
   const Icon = SEVERITY_ICON[insight.severity]
 
   return (
-    <div className="flex gap-3 border-b border-line py-3 last:border-b-0 last:pb-0 first:pt-0">
-      <Icon size={15} className={clsx('mt-0.5 shrink-0', SEVERITY_CLASS[insight.severity])} />
+    <div className="flex gap-3.5 border-b border-line py-3.5 last:border-b-0 last:pb-0 first:pt-0">
+      <span className={clsx('mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl', SEVERITY_CLASS[insight.severity])}>
+        <Icon size={15} />
+      </span>
       <div className="min-w-0 flex-1">
         <p className="text-body font-semibold leading-snug text-ink">{insight.title}</p>
         <p className="mt-1 text-label leading-relaxed text-muted">{insight.body}</p>
@@ -79,10 +82,10 @@ export function InsightRow({
           <button
             type="button"
             onClick={() => onAction(insight.action!.view)}
-            className="mt-1.5 inline-flex items-center gap-1 text-label font-semibold text-accent hover:underline"
+            className="mt-2 inline-flex items-center gap-1 text-label font-semibold text-accent-text hover:underline"
           >
             {insight.action.label}
-            <ArrowRight size={11} />
+            <ArrowRight size={12} />
           </button>
         )}
       </div>
@@ -98,27 +101,32 @@ const BAND_TONE = {
   weak: 'negative',
 } as const
 
-export function HealthPanel({ health }: { health: HealthReport }) {
-  const color =
-    health.band === 'strong' ? 'var(--positive)' : health.band === 'fair' ? 'var(--warning)' : 'var(--negative)'
+const BAND_SMART = {
+  strong: 'safe',
+  fair: 'caution',
+  weak: 'critical',
+} as const
 
+export function HealthPanel({ health }: { health: HealthReport }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <div className="num text-figure font-semibold leading-none tracking-tight" style={{ color }}>
-            {health.score}
-            <span className="text-title font-normal text-faint">/100</span>
+    <div className="space-y-5">
+      <div className="flex items-center justify-between gap-4 rounded-[var(--radius-lg)] border border-line bg-sunken p-4">
+        <div className="flex items-center gap-4">
+          <RadialGauge value={health.score} max={100} size={74} strokeWidth={6} tone={BAND_SMART[health.band]}>
+            <RollingNumber value={health.score} className="text-title font-bold text-ink" />
+          </RadialGauge>
+          <div>
+            <Badge tone={BAND_TONE[health.band]}>{health.label}</Badge>
+            <p className="mt-1.5 text-label text-muted">Ağırlıklı bileşen ortalaması</p>
           </div>
-          <p className="mt-1.5 text-label text-muted">Ağırlıklı bileşen ortalaması</p>
         </div>
-        <Badge tone={BAND_TONE[health.band]}>{health.label}</Badge>
+        <span className="num text-label text-faint">/ 100</span>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-3.5">
         {health.components.map((component) => (
           <div key={component.id}>
-            <div className="mb-1 flex items-baseline justify-between gap-2">
+            <div className="mb-1.5 flex items-baseline justify-between gap-2">
               <span className="text-label font-semibold text-ink">{component.label}</span>
               <span className="num text-label text-muted">
                 {Math.round(component.score)}
@@ -155,7 +163,7 @@ export function CategoryList({
   const max = Math.max(...list.map((c) => c.total), 1)
 
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-1.5">
       {list.map((stat) => {
         const active = activeId === stat.id
         const Row = onSelect ? 'button' : 'div'
@@ -164,22 +172,22 @@ export function CategoryList({
             <Row
               {...(onSelect ? { type: 'button' as const, onClick: () => onSelect(stat.id) } : {})}
               className={clsx(
-                'w-full rounded px-2 py-1.5 text-left transition-colors',
+                'w-full rounded-[var(--radius)] px-2.5 py-2 text-left transition-colors',
                 onSelect && 'hover:bg-hover',
-                active && 'bg-hover',
+                active && 'bg-accent-soft',
               )}
             >
               <div className="flex items-baseline justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: stat.color }} />
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: stat.color }} />
                   <span className="truncate text-label font-semibold text-ink">{stat.label}</span>
                 </span>
                 <span className="num shrink-0 text-label font-semibold text-ink">{money(stat.total)}</span>
               </div>
-              <div className="mt-1.5 flex items-center gap-2">
-                <div className="h-1 flex-1 overflow-hidden rounded-full bg-sunken">
+              <div className="mt-2 flex items-center gap-2.5">
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-sunken">
                   <div
-                    className="h-full rounded-full"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${(stat.total / max) * 100}%`, background: stat.color }}
                   />
                 </div>
@@ -208,11 +216,12 @@ export function NatureSplit({ natures }: { natures: NatureStat[] }) {
   if (!natures.length) return null
 
   return (
-    <div className="space-y-2">
-      <div className="flex h-2 w-full overflow-hidden rounded-full bg-sunken">
+    <div className="space-y-2.5">
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-sunken">
         {natures.map((n) => (
           <div
             key={n.nature}
+            className="h-full rounded-full"
             style={{ width: `${n.share * 100}%`, background: NATURE_BAR_COLOR[n.nature] }}
             title={`${NATURE_LABEL[n.nature]} · ${percent(n.share * 100)}`}
           />
@@ -221,7 +230,7 @@ export function NatureSplit({ natures }: { natures: NatureStat[] }) {
       <div className="flex flex-wrap gap-x-4 gap-y-1">
         {natures.map((n) => (
           <span key={n.nature} className="flex items-center gap-1.5 text-label text-muted">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: NATURE_BAR_COLOR[n.nature] }} />
+            <span className="h-2 w-2 rounded-full" style={{ background: NATURE_BAR_COLOR[n.nature] }} />
             {NATURE_LABEL[n.nature]}
             <span className="num font-semibold text-ink">{percent(n.share * 100)}</span>
           </span>

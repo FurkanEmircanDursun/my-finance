@@ -3,10 +3,6 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react
 
 /* ── Layout ──────────────────────────────────────────────────────────────── */
 
-/**
- * A raised, self-contained block. Reserved for the one or two headline figures
- * on a screen; ordinary content uses `Section`, which draws no box at all.
- */
 export function Card({
   children,
   className,
@@ -19,18 +15,6 @@ export function Card({
   return <div className={clsx('surface', padded && 'p-5', className)}>{children}</div>
 }
 
-/**
- * A titled block of content, separated from its neighbours by space rather than
- * by a frame.
- *
- * The previous version wrapped every section in a bordered card, so a screen was
- * a stack of boxes containing boxes and the border carried no information. Here
- * a border means one thing: you can touch this. Sections are quiet; rows and
- * tiles are the things that look pressable.
- *
- * `description` is deliberately rare — a section that needs a sentence to
- * explain what it is usually needs a better title.
- */
 export function Section({
   title,
   description,
@@ -47,12 +31,12 @@ export function Section({
   return (
     <section className={clsx('flex flex-col', className)}>
       {(title || actions) && (
-        <header className="mb-3 flex items-baseline justify-between gap-3">
+        <header className="mb-3.5 flex items-baseline justify-between gap-3">
           <div className="min-w-0">
             {title && <h2 className="text-title font-semibold text-ink">{title}</h2>}
-            {description && <p className="mt-1 text-label text-faint">{description}</p>}
+            {description && <p className="mt-1 text-label text-muted">{description}</p>}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
         </header>
       )}
       <div className="min-w-0 flex-1">{children}</div>
@@ -61,16 +45,9 @@ export function Section({
 }
 
 export function Grid({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={clsx('grid gap-3', className)}>{children}</div>
+  return <div className={clsx('grid gap-3.5', className)}>{children}</div>
 }
 
-/**
- * One tappable line in a list — a category, a subscription, an instalment plan.
- *
- * Rows are the workhorse of this interface: almost every drill-down starts with
- * one. They carry the hairline that says "pressable", a 44px minimum height for
- * a thumb, and nothing else.
- */
 export function Row({
   children,
   onClick,
@@ -104,21 +81,17 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md'
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-semibold whitespace-nowrap transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40'
+  'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100'
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-inverse hover:bg-accent-hover border border-transparent',
-  secondary: 'bg-raised text-ink border border-line hover:bg-hover',
+  primary: 'bg-accent text-inverse hover:bg-accent-hover border border-transparent shadow-glow',
+  secondary: 'bg-raised text-ink border border-line hover:bg-hover hover:border-line-strong',
   ghost: 'bg-transparent text-muted hover:text-ink hover:bg-hover border border-transparent',
-  // Destructive work is never the accent colour: the loudest button on a screen
-  // should be the one you are meant to press.
-  danger: 'bg-transparent text-negative border border-line hover:bg-negative-soft',
+  danger: 'bg-negative-soft text-negative border border-transparent hover:border-negative/30',
 }
 
-// 44px is the smallest target a thumb hits reliably, and this app ships as an
-// Android build too. `sm` exists for inline actions inside an already dense row.
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3 text-label',
+  sm: 'h-9 px-3.5 text-label',
   md: 'h-11 px-4 text-body',
 }
 
@@ -148,8 +121,8 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={clsx(
-        'inline-flex h-11 w-11 items-center justify-center rounded-[var(--radius)] text-muted',
-        'transition-colors duration-200 hover:bg-hover hover:text-ink',
+        'inline-flex h-11 w-11 items-center justify-center rounded-full text-muted',
+        'transition-all duration-200 hover:bg-hover hover:text-ink active:scale-95',
         className,
       )}
       {...props}
@@ -162,11 +135,11 @@ export function IconButton({
 type Tone = 'neutral' | 'accent' | 'positive' | 'negative' | 'warning'
 
 const TONE_CLASS: Record<Tone, string> = {
-  neutral: 'bg-sunken text-muted',
-  accent: 'bg-accent-soft text-accent-text',
-  positive: 'bg-positive-soft text-positive',
-  negative: 'bg-negative-soft text-negative',
-  warning: 'bg-warning-soft text-warning',
+  neutral: 'bg-sunken text-muted border-line',
+  accent: 'bg-accent-soft text-accent-text border-accent-border',
+  positive: 'bg-positive-soft text-positive border-transparent',
+  negative: 'bg-negative-soft text-negative border-transparent',
+  warning: 'bg-warning-soft text-warning border-transparent',
 }
 
 export function Badge({
@@ -183,7 +156,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-label font-semibold leading-tight',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-label font-semibold leading-tight',
         TONE_CLASS[tone],
         className,
       )}
@@ -194,11 +167,6 @@ export function Badge({
   )
 }
 
-/**
- * A headline figure. The label sits under the number, not above it: the number
- * is what the eye should land on first, and the caption then reads as its
- * explanation rather than as a form field's name.
- */
 export function Stat({
   label,
   value,
@@ -228,13 +196,13 @@ export function Stat({
     </>
   )
 
-  if (!onClick) return <div className="surface p-5">{body}</div>
+  if (!onClick) return <div className="bento-card">{body}</div>
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="surface p-5 text-left transition-colors duration-200 hover:bg-hover"
+      className="bento-card bento-card--interactive text-left"
     >
       {body}
     </button>
@@ -261,14 +229,14 @@ export function Meter({
 
   return (
     <div
-      className={clsx('h-1.5 w-full overflow-hidden rounded-full bg-sunken', className)}
+      className={clsx('mizan-progress-track', className)}
       role="progressbar"
       aria-valuenow={Math.round(pct)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
       <div
-        className="h-full rounded-full transition-[width] duration-500 ease-out"
+        className="mizan-progress-fill"
         style={{ width: `${pct}%`, background: color }}
       />
     </div>
@@ -289,7 +257,7 @@ export function Segmented<T extends string>({
   className?: string
 }) {
   return (
-    <div className={clsx('inline-flex rounded-[var(--radius)] bg-sunken p-1', className)}>
+    <div className={clsx('inline-flex rounded-[var(--radius)] border border-line bg-sunken p-1', className)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -297,8 +265,10 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
           className={clsx(
-            'rounded-[6px] px-3 py-1.5 text-label font-semibold transition-colors duration-200',
-            value === option.value ? 'bg-raised text-ink shadow-sm' : 'text-muted hover:text-ink',
+            'rounded-[9px] px-3.5 py-1.5 text-label font-semibold transition-all duration-200',
+            value === option.value
+              ? 'bg-raised text-ink shadow-card'
+              : 'text-muted hover:text-ink',
           )}
         >
           {option.label}
@@ -308,10 +278,6 @@ export function Segmented<T extends string>({
   )
 }
 
-/**
- * A choice among a few, shown as a pill. Selected is the filled one; the state is
- * also in `aria-pressed`, so it is not carried by colour alone.
- */
 export function Chip({
   selected,
   onClick,
@@ -327,10 +293,10 @@ export function Chip({
       onClick={onClick}
       aria-pressed={selected}
       className={clsx(
-        'inline-flex min-h-11 items-center rounded-full border px-4 text-body font-semibold transition-colors duration-200',
+        'inline-flex min-h-10 items-center rounded-full border px-4 text-label font-semibold transition-all duration-200 active:scale-95',
         selected
-          ? 'border-accent bg-accent-soft text-accent-text'
-          : 'border-line bg-raised text-ink hover:bg-hover',
+          ? 'border-accent-border bg-accent-soft text-accent-text'
+          : 'border-line bg-raised text-ink hover:bg-hover hover:border-line-strong',
       )}
     >
       {children}
@@ -342,8 +308,8 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={clsx(
-        'h-11 w-full rounded-[var(--radius)] border border-line bg-raised px-3 text-body text-ink',
-        'placeholder:text-faint focus:border-accent focus:outline-none',
+        'h-11 w-full rounded-[var(--radius)] border border-line bg-sunken px-3.5 text-body text-ink transition-all duration-200',
+        'placeholder:text-faint hover:border-line-strong focus:border-accent focus:bg-raised focus:outline-none focus:ring-2 focus:ring-accent/20',
         className,
       )}
       {...props}
@@ -362,7 +328,7 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-body text-muted">{label}</span>
+      <span className="mb-1.5 block text-label font-semibold text-muted">{label}</span>
       {children}
       {hint && <span className="mt-1.5 block text-label text-faint">{hint}</span>}
     </label>
@@ -371,11 +337,6 @@ export function Field({
 
 /* ── States ──────────────────────────────────────────────────────────────── */
 
-/**
- * An empty state is a title and, at most, one thing to do. The explanatory
- * paragraph that used to sit between them told people what they had already
- * worked out from the title.
- */
 export function Empty({
   icon,
   title,
@@ -392,18 +353,22 @@ export function Empty({
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-3 text-center',
-        compact ? 'py-8' : 'py-16',
+        'flex flex-col items-center justify-center gap-3.5 rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-sunken/50 px-6 text-center',
+        compact ? 'py-8' : 'py-14',
       )}
     >
-      {icon && <div className="text-faint">{icon}</div>}
+      {icon && (
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-line bg-raised text-accent-text shadow-card">
+          {icon}
+        </div>
+      )}
       <p className="text-title font-semibold text-ink">{title}</p>
-      {description && <p className="max-w-xs text-body text-muted">{description}</p>}
-      {action}
+      {description && <p className="max-w-sm text-body text-muted">{description}</p>}
+      {action && <div className="mt-1">{action}</div>}
     </div>
   )
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('animate-pulse rounded-[var(--radius)] bg-sunken', className)} />
+  return <div className={clsx('mizan-skeleton', className)} />
 }

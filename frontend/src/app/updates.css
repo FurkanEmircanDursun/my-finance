@@ -1,21 +1,164 @@
-.mizan-update-required { min-height: 100dvh; background: var(--bg); color: var(--text); padding: calc(var(--safe-top) + 30px) max(24px, calc((100vw - 1140px) / 2)) calc(var(--safe-bottom) + 35px); }
-.mizan-update-content { max-width: 550px; margin: clamp(55px, 12vh, 130px) auto 0; }
-.mizan-update-symbol { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 16px; background: var(--accent-soft); color: var(--accent-text); flex-shrink: 0; }
-.mizan-update-content h1 { font-size: clamp(30px, 4vw, 43px); line-height: 1.15; letter-spacing: -.035em; font-weight: 550; margin-top: 26px; text-wrap: balance; }
-.mizan-update-content>p { color: var(--text-muted); font-size: 15px; line-height: 1.8; margin-top: 20px; overflow-wrap: anywhere; }
-.mizan-update-content>.primary-button { margin-top: 30px; min-height: 48px; padding-inline: 24px; }
-.mizan-update-content>.mizan-update-version { font-size: 12px; margin-top: 19px; }
-.mizan-update-content>.text-button { margin-top: 10px; min-height: 44px; }
-.mizan-update-content>.mizan-update-offline { font-size: 12px; max-width: 42ch; }
-.mizan-update-suggestion { position: fixed; z-index: 70; left: max(250px, calc((100vw - 1000px) / 2)); right: 25px; bottom: 25px; display: flex; align-items: center; gap: 18px; max-width: 950px; padding: 20px 22px; background: var(--bg-raised); color: var(--text); box-shadow: var(--shadow-overlay); border-radius: 16px; }
-.mizan-update-suggestion>.mizan-update-symbol { width: 45px; height: 45px; border-radius: 12px; }
-.mizan-update-suggestion>div:nth-child(2) { flex: 1; min-width: 0; }
-.mizan-update-suggestion h2 { font-size: 15px; font-weight: 600; line-height: 1.4; }
-.mizan-update-suggestion p { font-size: 13px; line-height: 1.65; color: var(--text-muted); margin-top: 5px; overflow-wrap: anywhere; }
-.mizan-update-actions { display: flex; flex-shrink: 0; gap: 9px; }
-.mizan-update-actions>button,.mizan-update-actions>a { min-height: 44px; font-size: 13px; }
-.update-refreshing { animation: update-refresh 800ms linear infinite; }
-@keyframes update-refresh { to { transform: rotate(360deg); } }
-@media(max-width: 900px) { .mizan-update-suggestion { flex-wrap: wrap; left: 225px; } .mizan-update-actions { margin-left: 63px; } }
-@media(max-width: 639px) { .mizan-update-required { padding: calc(var(--safe-top) + 24px) 24px calc(var(--safe-bottom) + 30px); } .mizan-update-content { margin-top: 58px; } .mizan-update-suggestion { left: 16px; right: 16px; bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 14px); gap: 13px; padding: 18px; } .mizan-update-suggestion p { font-size: 12px; } .mizan-update-actions { margin: 0; width: 100%; } .mizan-update-actions>button,.mizan-update-actions>a { flex: 1; } }
-@media(prefers-reduced-motion: reduce) { .update-refreshing { animation: none; } }
+.mizan-update-required {
+  min-height: 100dvh;
+  background: var(--bg);
+  background-image: var(--mesh-bg);
+  color: var(--text);
+  padding: calc(var(--safe-top) + 30px) max(24px, calc((100vw - 1140px) / 2)) calc(var(--safe-bottom) + 35px);
+}
+
+.mizan-update-content {
+  max-width: 540px;
+  margin: clamp(50px, 11vh, 120px) auto 0;
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  background-color: var(--bg-raised);
+  background-image: var(--surface-sheen);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-overlay);
+}
+
+.mizan-update-symbol {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+
+.mizan-update-content h1 {
+  font-size: clamp(1.75rem, 3.6vw, 2.4rem);
+  line-height: 1.14;
+  letter-spacing: -0.038em;
+  font-weight: 700;
+  margin-top: 22px;
+  text-wrap: balance;
+}
+
+.mizan-update-content > p {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  margin-top: 14px;
+  overflow-wrap: anywhere;
+}
+
+.mizan-update-content > .primary-button {
+  margin-top: 24px;
+  min-height: 48px;
+  padding-inline: 24px;
+}
+
+.mizan-update-content > .mizan-update-version {
+  font-size: 0.78rem;
+  margin-top: 16px;
+}
+
+.mizan-update-content > .text-button {
+  margin-top: 8px;
+  min-height: 42px;
+}
+
+.mizan-update-content > .mizan-update-offline {
+  font-size: 0.78rem;
+  max-width: 44ch;
+}
+
+.mizan-update-suggestion {
+  position: fixed;
+  z-index: 70;
+  left: max(260px, calc((100vw - 980px) / 2));
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 940px;
+  padding: 18px 20px;
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--accent-border);
+  color: var(--text);
+  box-shadow: var(--shadow-overlay);
+  border-radius: var(--radius-lg);
+}
+
+.mizan-update-suggestion > .mizan-update-symbol {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+}
+
+.mizan-update-suggestion > div:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+
+.mizan-update-suggestion h2 {
+  font-size: 0.9375rem;
+  font-weight: 660;
+  line-height: 1.35;
+}
+
+.mizan-update-suggestion p {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.mizan-update-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.mizan-update-actions > button,
+.mizan-update-actions > a {
+  min-height: 42px;
+  font-size: 0.8125rem;
+}
+
+.update-refreshing {
+  animation: update-refresh 800ms linear infinite;
+}
+
+@keyframes update-refresh {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .mizan-update-suggestion {
+    flex-wrap: wrap;
+    left: 224px;
+  }
+}
+
+@media (max-width: 799px) {
+  .mizan-update-required {
+    padding: calc(var(--safe-top) + 20px) 16px calc(var(--safe-bottom) + 28px);
+  }
+  .mizan-update-content {
+    margin-top: 32px;
+    padding: 22px;
+  }
+  .mizan-update-suggestion {
+    left: 14px;
+    right: 14px;
+    bottom: calc(var(--tabbar-height) + var(--safe-bottom) + 14px);
+    gap: 12px;
+    padding: 16px;
+  }
+  .mizan-update-actions {
+    width: 100%;
+  }
+  .mizan-update-actions > button,
+  .mizan-update-actions > a {
+    flex: 1;
+  }
+}

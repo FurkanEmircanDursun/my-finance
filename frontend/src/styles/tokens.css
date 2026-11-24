@@ -1,0 +1,231 @@
+/*
+ * Mizan 2026 — Obsidian Equilibrium Design Tokens
+ * Single source of truth for Obsidian Studio (Dark) & Alabaster Vault (Light).
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces — Alabaster Vault */
+  --bg: #F3F5F8;
+  --bg-raised: #FFFFFF;
+  --bg-elevated: #F8FAFC;
+  --bg-sunken: #E9EDF3;
+  --bg-hover: #EDF1F7;
+  --bg-active: #E1E7F0;
+  --bg-glass: rgba(255, 255, 255, 0.80);
+  --bg-glass-strong: rgba(255, 255, 255, 0.92);
+  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.65) 100%);
+  --hero-surface: linear-gradient(145deg, #0E161E 0%, #0A1016 58%, #0C1A17 100%);
+  --hero-surface-text: #F4F7FA;
+  --hero-surface-muted: #9AA8B8;
+  --hero-surface-line: rgba(255, 255, 255, 0.11);
+  --hero-surface-well: rgba(255, 255, 255, 0.055);
+  --hero-surface-well-hover: rgba(255, 255, 255, 0.10);
+
+  /* Hairline Borders */
+  --line: rgba(15, 23, 42, 0.085);
+  --line-strong: rgba(15, 23, 42, 0.16);
+  --line-specular: rgba(255, 255, 255, 0.95);
+
+  /* Ink */
+  --text: #0B1117;
+  --text-muted: #4A5668;
+  --text-faint: #677487;
+  --text-inverse: #FFFFFF;
+
+  /* Precision Jade Accent */
+  --accent: #0B7A5C;
+  --accent-hover: #086149;
+  --accent-soft: rgba(11, 122, 92, 0.095);
+  --accent-border: rgba(11, 122, 92, 0.24);
+  --accent-text: #09684E;
+  --accent-glow: rgba(11, 122, 92, 0.18);
+
+  /* Champagne Gold Prestige Accent */
+  --gold: #9E7628;
+  --gold-soft: rgba(158, 118, 40, 0.11);
+  --gold-border: rgba(158, 118, 40, 0.28);
+
+  /* Semantic Financial Signals */
+  --positive: #0D8A5A;
+  --positive-soft: rgba(13, 138, 90, 0.10);
+  --negative: #D93848;
+  --negative-soft: rgba(217, 56, 72, 0.095);
+  --warning: #B86E08;
+  --warning-soft: rgba(184, 110, 8, 0.105);
+
+  /* Chart Grid */
+  --grid: rgba(15, 23, 42, 0.07);
+
+  /* Ambient Canvas Mesh */
+  --mesh-bg:
+    radial-gradient(62% 45% at 88% -8%, rgba(11, 122, 92, 0.075), transparent 68%),
+    radial-gradient(50% 38% at 6% 4%, rgba(99, 132, 224, 0.055), transparent 65%);
+
+  /* Geometry */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius: 13px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+
+  /* Depth & Elevation */
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(15, 23, 42, 0.08);
+  --shadow-elevated: 0 12px 32px -12px rgba(15, 23, 42, 0.14), 0 2px 6px -1px rgba(15, 23, 42, 0.06);
+  --shadow-overlay: 0 24px 64px -16px rgba(15, 23, 42, 0.24), 0 4px 14px -4px rgba(15, 23, 42, 0.10);
+  --shadow-glow: 0 10px 28px -8px rgba(11, 122, 92, 0.34);
+  --inset-specular: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* Motion Physics (MOTION.md) */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.22, 1.22, 0.36, 1);
+  --ease-ios: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-out-quick: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration: 240ms;
+  --dur-press: 120ms;
+  --dur-micro: 200ms;
+  --dur-reveal: 360ms;
+  --dur-sheet: 320ms;
+  --dur-gauge: 680ms;
+  --motion-press: 120ms;
+  --motion-reveal: 280ms;
+  --motion-sheet: 320ms;
+
+  /* Edge-to-Edge Safe Areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --tabbar-height: 70px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    /* Surfaces — Obsidian Studio */
+    --bg: #07090C;
+    --bg-raised: #0E131A;
+    --bg-elevated: #151C26;
+    --bg-sunken: #0A0E14;
+    --bg-hover: #19222E;
+    --bg-active: #202B3A;
+    --bg-glass: rgba(14, 19, 26, 0.76);
+    --bg-glass-strong: rgba(14, 19, 26, 0.92);
+    --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.036) 0%, rgba(255, 255, 255, 0.005) 100%);
+    --hero-surface: linear-gradient(145deg, #111A22 0%, #0B1016 55%, #0B1916 100%);
+    --hero-surface-text: #F4F7FA;
+    --hero-surface-muted: #94A3B8;
+    --hero-surface-line: rgba(255, 255, 255, 0.10);
+    --hero-surface-well: rgba(255, 255, 255, 0.045);
+    --hero-surface-well-hover: rgba(255, 255, 255, 0.085);
+
+    /* Hairline Borders */
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.155);
+    --line-specular: rgba(255, 255, 255, 0.13);
+
+    /* Ink */
+    --text: #F3F6FA;
+    --text-muted: #95A2B4;
+    --text-faint: #6A778A;
+    --text-inverse: #06100C;
+
+    /* Precision Jade Accent */
+    --accent: #2BD49B;
+    --accent-hover: #44E4AE;
+    --accent-soft: rgba(43, 212, 155, 0.12);
+    --accent-border: rgba(43, 212, 155, 0.28);
+    --accent-text: #5EE8B8;
+    --accent-glow: rgba(43, 212, 155, 0.22);
+
+    /* Champagne Gold Prestige Accent */
+    --gold: #E2C27D;
+    --gold-soft: rgba(226, 194, 125, 0.13);
+    --gold-border: rgba(226, 194, 125, 0.28);
+
+    /* Semantic Financial Signals */
+    --positive: #34D399;
+    --positive-soft: rgba(52, 211, 153, 0.12);
+    --negative: #FB7185;
+    --negative-soft: rgba(251, 113, 133, 0.13);
+    --warning: #FBBF24;
+    --warning-soft: rgba(251, 191, 36, 0.12);
+
+    /* Chart Grid */
+    --grid: rgba(255, 255, 255, 0.06);
+
+    /* Ambient Canvas Mesh */
+    --mesh-bg:
+      radial-gradient(62% 45% at 88% -8%, rgba(43, 212, 155, 0.085), transparent 68%),
+      radial-gradient(50% 40% at 6% 4%, rgba(96, 140, 255, 0.055), transparent 65%);
+
+    /* Depth & Elevation */
+    --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -18px rgba(0, 0, 0, 0.72);
+    --shadow-elevated: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 20px 44px -18px rgba(0, 0, 0, 0.84);
+    --shadow-overlay: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 32px 72px -16px rgba(0, 0, 0, 0.88);
+    --shadow-glow: 0 12px 32px -8px rgba(43, 212, 155, 0.36);
+    --inset-specular: inset 0 1px 0 rgba(255, 255, 255, 0.065);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #07090C;
+  --bg-raised: #0E131A;
+  --bg-elevated: #151C26;
+  --bg-sunken: #0A0E14;
+  --bg-hover: #19222E;
+  --bg-active: #202B3A;
+  --bg-glass: rgba(14, 19, 26, 0.76);
+  --bg-glass-strong: rgba(14, 19, 26, 0.92);
+  --surface-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.036) 0%, rgba(255, 255, 255, 0.005) 100%);
+  --hero-surface: linear-gradient(145deg, #111A22 0%, #0B1016 55%, #0B1916 100%);
+  --hero-surface-text: #F4F7FA;
+  --hero-surface-muted: #94A3B8;
+  --hero-surface-line: rgba(255, 255, 255, 0.10);
+  --hero-surface-well: rgba(255, 255, 255, 0.045);
+  --hero-surface-well-hover: rgba(255, 255, 255, 0.085);
+
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.155);
+  --line-specular: rgba(255, 255, 255, 0.13);
+
+  --text: #F3F6FA;
+  --text-muted: #95A2B4;
+  --text-faint: #6A778A;
+  --text-inverse: #06100C;
+
+  --accent: #2BD49B;
+  --accent-hover: #44E4AE;
+  --accent-soft: rgba(43, 212, 155, 0.12);
+  --accent-border: rgba(43, 212, 155, 0.28);
+  --accent-text: #5EE8B8;
+  --accent-glow: rgba(43, 212, 155, 0.22);
+
+  --gold: #E2C27D;
+  --gold-soft: rgba(226, 194, 125, 0.13);
+  --gold-border: rgba(226, 194, 125, 0.28);
+
+  --positive: #34D399;
+  --positive-soft: rgba(52, 211, 153, 0.12);
+  --negative: #FB7185;
+  --negative-soft: rgba(251, 113, 133, 0.13);
+  --warning: #FBBF24;
+  --warning-soft: rgba(251, 191, 36, 0.12);
+
+  --grid: rgba(255, 255, 255, 0.06);
+
+  --mesh-bg:
+    radial-gradient(62% 45% at 88% -8%, rgba(43, 212, 155, 0.085), transparent 68%),
+    radial-gradient(50% 40% at 6% 4%, rgba(96, 140, 255, 0.055), transparent 65%);
+
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -18px rgba(0, 0, 0, 0.72);
+  --shadow-elevated: 0 1px 0 rgba(255, 255, 255, 0.06) inset, 0 20px 44px -18px rgba(0, 0, 0, 0.84);
+  --shadow-overlay: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 32px 72px -16px rgba(0, 0, 0, 0.88);
+  --shadow-glow: 0 12px 32px -8px rgba(43, 212, 155, 0.36);
+  --inset-specular: inset 0 1px 0 rgba(255, 255, 255, 0.065);
+}

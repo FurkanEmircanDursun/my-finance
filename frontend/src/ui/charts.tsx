@@ -1,45 +1,63 @@
-import { useMemo, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import {
-  Area, AreaChart, Bar, BarChart, Cell, ComposedChart, Line, Pie, PieChart,
-  ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ComposedChart,
+  Line,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Sector,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts'
-import { money, moneyCompact } from '../core/money'
+import { money, money2, moneyCompact } from '../core/money'
+import { hapticTap } from '../platform/haptics'
 import type { CommitmentMonth, DailyPoint, MonthlyPoint, WeekdayPoint } from '../analytics/types'
 import type { ForecastPoint } from '../analytics/forecast'
 import type { GoalPoint } from '../analytics/goal'
 
-/**
- * Thin wrappers over Recharts.
- *
- * Every chart in the product shares one axis style, one tooltip and one colour
- * source, so a chart never re-declares presentation. Series colours come from
- * the category definitions or from the CSS variables, never from a literal.
- */
-
-/*
- * The tick colour is set here, as a prop, not in the stylesheet. Recharts writes
- * `fill="transparent"` onto each tick label (it reads the axis `stroke`), and a
- * presentation attribute outranks anything in a CSS `@layer` — so the rule in
- * index.css that was meant to colour them never applied, and every chart in the
- * app drew without a single axis label.
- */
 const AXIS = {
   stroke: 'transparent',
-  tick: { fill: 'var(--text-faint)', fontSize: 12 },
+  tick: { fill: 'var(--text-faint)', fontSize: 11 },
   tickLine: false,
   axisLine: false,
 } as const
 
-function TooltipShell({ title, rows }: { title: string; rows: Array<{ label: string; value: ReactNode; color?: string }> }) {
+function prefersMotion(): boolean {
   return (
-    <div className="rounded border border-line bg-raised px-2.5 py-2 shadow-overlay">
-      <p className="mb-1 text-label font-semibold text-ink">{title}</p>
-      <div className="space-y-0.5">
+    typeof window !== 'undefined' &&
+    !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
+export function ChartTooltipShell({
+  title,
+  rows,
+}: {
+  title?: string
+  rows: Array<{ label: string; value: ReactNode; color?: string }>
+}) {
+  return (
+    <div className="mizan-chart-tooltip">
+      {title && <p className="mizan-chart-tooltip__title">{title}</p>}
+      <div className="mizan-chart-tooltip__rows">
         {rows.map((row) => (
-          <div key={row.label} className="flex items-center gap-2 text-label">
-            {row.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />}
-            <span className="text-muted">{row.label}</span>
-            <span className="num ml-auto font-semibold text-ink">{row.value}</span>
+          <div key={row.label} className="mizan-chart-tooltip__row">
+            {row.color && (
+              <span
+                className="mizan-chart-tooltip__dot"
+                style={{ background: row.color }}
+              />
+            )}
+            <span className="mizan-chart-tooltip__label">{row.label}</span>
+            <span className="mizan-chart-tooltip__value num">{row.value}</span>
           </div>
         ))}
       </div>
@@ -47,31 +65,225 @@ function TooltipShell({ title, rows }: { title: string; rows: Array<{ label: str
   )
 }
 
-/* ── Daily spend ─────────────────────────────────────────────────────────── */
+/* ── Exploding Active Donut Shape ────────────────────────────────────────── */
 
-export function DailySpendChart({ data, height = 200 }: { data: DailyPoint[]; height?: number }) {
-  // Long ranges get thinned so the SVG stays under a few hundred nodes.
+interface ActiveSliceProps {
+  cx: number
+  cy: number
+  innerRadius: number
+  outerRadius: number
+  startAngle: number
+  endAngle: number
+  fill: string
+}
+
+function ActiveDonutSector(props: unknown) {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } =
+    props as ActiveSliceProps
+  return (
+    <g>
+      {/* Subtle outer halo arc */}
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={outerRadius + 9}
+        outerRadius={outerRadius + 12}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        fillOpacity={0.35}
+        cornerRadius={4}
+      />
+      {/* Exploded / scaled active slice */}
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={Math.max(0, innerRadius - 2)}
+        outerRadius={outerRadius + 6}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        stroke="var(--bg-raised)"
+        strokeWidth={2.5}
+        cornerRadius={6}
+      />
+    </g>
+  )
+}
+
+/* ── Interactive Exploding Donut Chart ───────────────────────────────────── */
+
+export interface DonutSlice {
+  id: string
+  label: string
+  value: number
+  color: string
+}
+
+export function InteractiveDonutChart({
+  data,
+  height = 228,
+  activeId,
+  onSelect,
+  totalLabel = 'Toplam',
+  privateMode = false,
+}: {
+  data: DonutSlice[]
+  height?: number
+  activeId?: string | null
+  onSelect?: (id: string | null) => void
+  totalLabel?: string
+  privateMode?: boolean
+}) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [localActiveId, setLocalActiveId] = useState<string | null>(null)
+  const [animate] = useState(prefersMotion)
+
+  const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data])
+  const controlled = activeId !== undefined
+  const selectedId = controlled ? activeId : localActiveId
+  const focusedId = hoveredId ?? selectedId
+  const activeIndex = useMemo(
+    () => (focusedId ? data.findIndex((d) => d.id === focusedId) : -1),
+    [data, focusedId],
+  )
+  const activeSlice = activeIndex >= 0 ? data[activeIndex] : null
+
+  const handleClick = (sliceId: string) => {
+    hapticTap()
+    const next = selectedId === sliceId ? null : sliceId
+    if (!controlled) setLocalActiveId(next)
+    onSelect?.(next)
+  }
+
+  const shareText = activeSlice && total > 0
+    ? (() => {
+        const pct = (activeSlice.value / total) * 100
+        return pct < 0.1
+          ? '<%0,1'
+          : `%${pct.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`
+      })()
+    : null
+
+  return (
+    <div className="mizan-donut" style={{ height }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="label"
+            innerRadius="64%"
+            outerRadius="85%"
+            paddingAngle={data.length > 1 ? 2.5 : 0}
+            cornerRadius={5}
+            stroke="var(--bg-raised)"
+            strokeWidth={2}
+            activeIndex={activeIndex >= 0 ? activeIndex : undefined}
+            activeShape={ActiveDonutSector}
+            isAnimationActive={animate}
+            animationDuration={560}
+            animationEasing="ease-out"
+            onMouseEnter={(_entry, index) => {
+              const target = data[index]
+              if (target) setHoveredId(target.id)
+            }}
+            onMouseLeave={() => setHoveredId(null)}
+            onClick={(_entry, index) => {
+              const target = data[index]
+              if (target) handleClick(target.id)
+            }}
+          >
+            {data.map((slice) => (
+              <Cell
+                key={slice.id}
+                fill={slice.color}
+                fillOpacity={!focusedId || focusedId === slice.id ? 1 : 0.28}
+                cursor="pointer"
+              />
+            ))}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+
+      {/* Dynamic Center Readout */}
+      <div
+        key={activeSlice?.id ?? 'total'}
+        className="mizan-donut__center"
+        aria-live="polite"
+      >
+        <span className="mizan-donut__center-label">
+          {activeSlice ? activeSlice.label : totalLabel}
+        </span>
+        <span className="mizan-donut__center-value num">
+          {privateMode ? '—' : money2(activeSlice ? activeSlice.value : total)}
+        </span>
+        {shareText && !privateMode && (
+          <span className="mizan-donut__center-share num">
+            <span
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: activeSlice?.color }}
+            />
+            {shareText}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Backwards-compatible alias for CategoryDonut consumers. */
+export function CategoryDonut({
+  data,
+  height = 216,
+  activeId,
+  onSelect,
+}: {
+  data: DonutSlice[]
+  height?: number
+  activeId?: string | null
+  onSelect?: (id: string) => void
+}) {
+  return (
+    <InteractiveDonutChart
+      data={data}
+      height={height}
+      activeId={activeId}
+      onSelect={(id) => {
+        if (id) onSelect?.(id)
+      }}
+    />
+  )
+}
+
+/* ── Daily Spend Area Chart ──────────────────────────────────────────────── */
+
+export function DailySpendChart({ data, height = 210 }: { data: DailyPoint[]; height?: number }) {
+  const gradId = useId().replace(/:/g, '')
+  const [animate] = useState(prefersMotion)
   const step = data.length > 400 ? Math.ceil(data.length / 400) : 1
   const series = step === 1 ? data : data.filter((_, i) => i % step === 0)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+      <AreaChart data={series} margin={{ top: 8, right: 6, bottom: 0, left: -6 }}>
         <defs>
-          <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.32} />
+            <stop offset="68%" stopColor="var(--accent)" stopOpacity={0.05} />
             <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
           </linearGradient>
         </defs>
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="label" {...AXIS} minTickGap={28} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
+        <YAxis {...AXIS} width={54} tickFormatter={(v: number) => moneyCompact(v)} />
         <Tooltip
-          cursor={{ stroke: 'var(--line-strong)' }}
+          cursor={{ stroke: 'var(--accent-border)', strokeWidth: 1.5, strokeDasharray: '3 3' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as DailyPoint
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label}
                 rows={[
                   { label: 'Harcama', value: money(point.amount, { decimals: true }), color: 'var(--accent)' },
@@ -85,16 +297,18 @@ export function DailySpendChart({ data, height = 200 }: { data: DailyPoint[]; he
           type="monotone"
           dataKey="amount"
           stroke="var(--accent)"
-          strokeWidth={1.5}
-          fill="url(#spendFill)"
-          isAnimationActive={false}
+          strokeWidth={2.2}
+          fill={`url(#${gradId})`}
+          activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--bg-raised)', strokeWidth: 2 }}
+          isAnimationActive={animate}
+          animationDuration={500}
         />
         <Line
           type="monotone"
           dataKey="trend"
           stroke="var(--text-faint)"
           strokeWidth={1.5}
-          strokeDasharray="3 3"
+          strokeDasharray="4 4"
           dot={false}
           isAnimationActive={false}
         />
@@ -103,32 +317,40 @@ export function DailySpendChart({ data, height = 200 }: { data: DailyPoint[]; he
   )
 }
 
-/* ── Monthly cash flow ───────────────────────────────────────────────────── */
+/* ── Monthly Cash Flow Chart ─────────────────────────────────────────────── */
 
 export function MonthlyFlowChart({
   data,
-  height = 220,
+  height = 230,
   showIncome = false,
 }: {
   data: MonthlyPoint[]
   height?: number
-  /** Overlays a line for income — off by default since not every screen needs it. */
   showIncome?: boolean
 }) {
+  const gradId = useId().replace(/:/g, '')
+  const [animate] = useState(prefersMotion)
   const hasIncome = showIncome && data.some((d) => d.income > 0)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="28%">
+      <ComposedChart data={data} margin={{ top: 10, right: 6, bottom: 0, left: -6 }} barCategoryGap="28%">
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.95} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.45} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="label" {...AXIS} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
+        <YAxis {...AXIS} width={54} tickFormatter={(v: number) => moneyCompact(v)} />
         <Tooltip
-          cursor={{ fill: 'var(--bg-hover)' }}
+          cursor={{ fill: 'var(--accent-soft)' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as MonthlyPoint
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label + (point.partial ? ' (kısmi dönem)' : '')}
                 rows={[
                   { label: 'Harcama', value: money(point.spend), color: 'var(--accent)' },
@@ -140,12 +362,12 @@ export function MonthlyFlowChart({
             )
           }}
         />
-        <Bar dataKey="spend" radius={[3, 3, 0, 0]} maxBarSize={64} isAnimationActive={false}>
+        <Bar dataKey="spend" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={animate} animationDuration={480}>
           {data.map((point) => (
             <Cell
               key={point.month}
-              fill="var(--accent)"
-              fillOpacity={point.partial ? 0.4 : 1}
+              fill={`url(#${gradId})`}
+              fillOpacity={point.partial ? 0.45 : 1}
             />
           ))}
         </Bar>
@@ -154,9 +376,11 @@ export function MonthlyFlowChart({
             type="monotone"
             dataKey="income"
             stroke="var(--positive)"
-            strokeWidth={1.5}
-            dot={{ r: 2.5, fill: 'var(--positive)', strokeWidth: 0 }}
-            isAnimationActive={false}
+            strokeWidth={2.2}
+            dot={{ r: 3, fill: 'var(--positive)', stroke: 'var(--bg-raised)', strokeWidth: 1.5 }}
+            activeDot={{ r: 5, fill: 'var(--positive)', stroke: 'var(--bg-raised)', strokeWidth: 2 }}
+            isAnimationActive={animate}
+            animationDuration={540}
           />
         )}
       </ComposedChart>
@@ -164,128 +388,59 @@ export function MonthlyFlowChart({
   )
 }
 
-/* ── Category donut ──────────────────────────────────────────────────────── */
+/* ── Commitments Ladder ──────────────────────────────────────────────────── */
 
-export interface DonutSlice {
-  id: string
-  label: string
-  value: number
-  color: string
-}
-
-export function CategoryDonut({
-  data,
-  height = 180,
-  activeId,
-  onSelect,
-}: {
-  data: DonutSlice[]
-  height?: number
-  activeId?: string | null
-  onSelect?: (id: string) => void
-}) {
-  const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data])
-
-  return (
-    <div className="relative" style={{ height }}>
-      <ResponsiveContainer width="100%" height={height}>
-        <PieChart>
-          <Pie
-            data={data}
-            dataKey="value"
-            nameKey="label"
-            innerRadius="62%"
-            outerRadius="94%"
-            paddingAngle={1}
-            stroke="var(--bg-raised)"
-            strokeWidth={2}
-            isAnimationActive={false}
-            onClick={(slice: any) => onSelect?.(slice?.payload?.id)}
-          >
-            {data.map((slice) => (
-              <Cell
-                key={slice.id}
-                fill={slice.color}
-                fillOpacity={!activeId || activeId === slice.id ? 1 : 0.28}
-                cursor={onSelect ? 'pointer' : undefined}
-              />
-            ))}
-          </Pie>
-          <Tooltip
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null
-              const slice = payload[0].payload as DonutSlice
-              return (
-                <TooltipShell
-                  title={slice.label}
-                  rows={[
-                    { label: 'Tutar', value: money(slice.value), color: slice.color },
-                    { label: 'Pay', value: `%${((slice.value / total) * 100).toFixed(1)}`, color: undefined },
-                  ]}
-                />
-              )
-            }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
-
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-label text-faint">Toplam</span>
-        <span className="num text-title font-semibold text-ink">{money(total)}</span>
-      </div>
-    </div>
-  )
-}
-
-/* ── Commitments ladder ──────────────────────────────────────────────────── */
-
-export function CommitmentChart({ data, height = 200 }: { data: CommitmentMonth[]; height?: number }) {
+export function CommitmentChart({ data, height = 220 }: { data: CommitmentMonth[]; height?: number }) {
+  const [animate] = useState(prefersMotion)
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="30%">
+      <BarChart data={data} margin={{ top: 10, right: 6, bottom: 0, left: -6 }} barCategoryGap="30%">
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="label" {...AXIS} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
+        <YAxis {...AXIS} width={54} tickFormatter={(v: number) => moneyCompact(v)} />
         <Tooltip
-          cursor={{ fill: 'var(--bg-hover)' }}
+          cursor={{ fill: 'var(--accent-soft)' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as CommitmentMonth
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label}
                 rows={[
                   { label: 'Taksit', value: money(point.installments), color: 'var(--accent)' },
-                  { label: 'Düzenli ödeme', value: money(point.recurring), color: 'var(--warning)' },
+                  { label: 'Düzenli ödeme', value: money(point.recurring), color: 'var(--gold)' },
                   { label: 'Toplam', value: money(point.total) },
                 ]}
               />
             )
           }}
         />
-        <Bar dataKey="installments" stackId="c" fill="var(--accent)" maxBarSize={48} isAnimationActive={false} />
-        <Bar dataKey="recurring" stackId="c" fill="var(--warning)" radius={[3, 3, 0, 0]} maxBarSize={48} isAnimationActive={false} />
+        <Bar dataKey="installments" stackId="c" fill="var(--accent)" maxBarSize={42} isAnimationActive={animate} animationDuration={460} />
+        <Bar dataKey="recurring" stackId="c" fill="var(--gold)" radius={[6, 6, 0, 0]} maxBarSize={42} isAnimationActive={animate} animationDuration={520} />
       </BarChart>
     </ResponsiveContainer>
   )
 }
 
-/* ── Weekday profile ─────────────────────────────────────────────────────── */
+/* ── Weekday Profile ─────────────────────────────────────────────────────── */
 
-export function WeekdayChart({ data, height = 160 }: { data: WeekdayPoint[]; height?: number }) {
+export function WeekdayChart({ data, height = 170 }: { data: WeekdayPoint[]; height?: number }) {
+  const [animate] = useState(prefersMotion)
   const max = Math.max(...data.map((d) => d.total), 1)
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }} barCategoryGap="26%">
+      <BarChart data={data} margin={{ top: 8, right: 6, bottom: 0, left: -6 }} barCategoryGap="26%">
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="short" {...AXIS} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
+        <YAxis {...AXIS} width={54} tickFormatter={(v: number) => moneyCompact(v)} />
         <Tooltip
-          cursor={{ fill: 'var(--bg-hover)' }}
+          cursor={{ fill: 'var(--accent-soft)' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as WeekdayPoint
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label}
                 rows={[
                   { label: 'Toplam', value: money(point.total), color: 'var(--accent)' },
@@ -296,12 +451,12 @@ export function WeekdayChart({ data, height = 160 }: { data: WeekdayPoint[]; hei
             )
           }}
         />
-        <Bar dataKey="total" radius={[3, 3, 0, 0]} maxBarSize={56} isAnimationActive={false}>
+        <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={48} isAnimationActive={animate} animationDuration={460}>
           {data.map((point) => (
             <Cell
               key={point.index}
-              fill={point.index >= 5 ? 'var(--warning)' : 'var(--accent)'}
-              fillOpacity={0.35 + 0.65 * (point.total / max)}
+              fill={point.index >= 5 ? 'var(--gold)' : 'var(--accent)'}
+              fillOpacity={0.38 + 0.62 * (point.total / max)}
             />
           ))}
         </Bar>
@@ -310,39 +465,42 @@ export function WeekdayChart({ data, height = 160 }: { data: WeekdayPoint[]; hei
   )
 }
 
-/* ── Cash-flow forecast ───────────────────────────────────────────────────── */
+/* ── Cash-Flow Forecast ──────────────────────────────────────────────────── */
 
 export function CashFlowChart({
   points,
-  height = 220,
+  height = 230,
   negative,
 }: {
   points: ForecastPoint[]
   height?: number
-  /** Red when the projection dips below zero at any point in the window, green otherwise. */
   negative: boolean
 }) {
+  const gradId = useId().replace(/:/g, '')
+  const [animate] = useState(prefersMotion)
   const tone = negative ? 'var(--negative)' : 'var(--positive)'
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+      <AreaChart data={points} margin={{ top: 10, right: 6, bottom: 0, left: -6 }}>
         <defs>
-          <linearGradient id="cashFlowFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={tone} stopOpacity={0.22} />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={tone} stopOpacity={0.30} />
+            <stop offset="72%" stopColor={tone} stopOpacity={0.04} />
             <stop offset="100%" stopColor={tone} stopOpacity={0} />
           </linearGradient>
         </defs>
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="label" {...AXIS} minTickGap={28} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
-        <ReferenceLine y={0} stroke="var(--line-strong)" strokeDasharray="3 3" />
+        <YAxis {...AXIS} width={56} tickFormatter={(v: number) => moneyCompact(v)} />
+        <ReferenceLine y={0} stroke="var(--line-strong)" strokeDasharray="4 4" />
         <Tooltip
-          cursor={{ stroke: 'var(--line-strong)' }}
+          cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as ForecastPoint
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label}
                 rows={[
                   { label: 'Bakiye', value: money(point.balance), color: tone },
@@ -357,49 +515,49 @@ export function CashFlowChart({
           type="monotone"
           dataKey="balance"
           stroke={tone}
-          strokeWidth={1.5}
-          fill="url(#cashFlowFill)"
-          isAnimationActive={false}
+          strokeWidth={2.4}
+          fill={`url(#${gradId})`}
+          activeDot={{ r: 5, fill: tone, stroke: 'var(--bg-raised)', strokeWidth: 2 }}
+          isAnimationActive={animate}
+          animationDuration={520}
         />
       </AreaChart>
     </ResponsiveContainer>
   )
 }
 
-/* ── Savings goal trajectory ─────────────────────────────────────────────── */
+/* ── Savings Goal Trajectory ─────────────────────────────────────────────── */
 
-/**
- * Two lines: the straight-line pace a goal needs (dashed, always drawn in
- * full) and what was actually saved (solid, stops at the current month —
- * `null` after that point breaks the line rather than drawing a fake zero).
- */
 export function GoalTrajectoryChart({
   points,
-  height = 220,
+  height = 230,
   onPace,
 }: {
   points: GoalPoint[]
   height?: number
-  /** Colours the actual line — green while ahead of pace, red while behind. */
   onPace: boolean
 }) {
+  const [animate] = useState(prefersMotion)
+  const actualTone = onPace ? 'var(--positive)' : 'var(--negative)'
+
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ComposedChart data={points} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+      <ComposedChart data={points} margin={{ top: 10, right: 6, bottom: 0, left: -6 }}>
+        <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
         <XAxis dataKey="label" {...AXIS} minTickGap={24} />
-        <YAxis {...AXIS} width={52} tickFormatter={(v: number) => moneyCompact(v)} />
+        <YAxis {...AXIS} width={56} tickFormatter={(v: number) => moneyCompact(v)} />
         <Tooltip
-          cursor={{ stroke: 'var(--line-strong)' }}
+          cursor={{ stroke: 'var(--line-strong)', strokeDasharray: '3 3' }}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null
             const point = payload[0].payload as GoalPoint
             return (
-              <TooltipShell
+              <ChartTooltipShell
                 title={point.label}
                 rows={[
                   { label: 'Gereken birikim', value: money(point.required), color: 'var(--text-faint)' },
                   ...(point.actual !== null
-                    ? [{ label: 'Gerçekleşen', value: money(point.actual), color: onPace ? 'var(--positive)' : 'var(--negative)' }]
+                    ? [{ label: 'Gerçekleşen', value: money(point.actual), color: actualTone }]
                     : []),
                 ]}
               />
@@ -410,7 +568,7 @@ export function GoalTrajectoryChart({
           type="monotone"
           dataKey="required"
           stroke="var(--text-faint)"
-          strokeWidth={1.5}
+          strokeWidth={1.6}
           strokeDasharray="4 4"
           dot={false}
           isAnimationActive={false}
@@ -418,11 +576,13 @@ export function GoalTrajectoryChart({
         <Line
           type="monotone"
           dataKey="actual"
-          stroke={onPace ? 'var(--positive)' : 'var(--negative)'}
-          strokeWidth={2}
-          dot={{ r: 2.5, strokeWidth: 0, fill: onPace ? 'var(--positive)' : 'var(--negative)' }}
+          stroke={actualTone}
+          strokeWidth={2.5}
+          dot={{ r: 3.5, strokeWidth: 2, stroke: 'var(--bg-raised)', fill: actualTone }}
+          activeDot={{ r: 5.5, fill: actualTone, stroke: 'var(--bg-raised)', strokeWidth: 2 }}
           connectNulls={false}
-          isAnimationActive={false}
+          isAnimationActive={animate}
+          animationDuration={540}
         />
       </ComposedChart>
     </ResponsiveContainer>

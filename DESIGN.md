@@ -1,191 +1,158 @@
 ---
-name: Mizan
-description: "Ay Özeti, işlemler ve ekstreler için kişisel finans arayüzü."
-colors:
-  bg: "#f6f5f0"
-  bg-raised: "#fffefa"
-  bg-sunken: "#eeeee7"
-  bg-hover: "#e9ede5"
-  bg-active: "#dce3d9"
-  line: "#dce3d9"
-  line-strong: "#929e94"
-  text: "#202925"
-  text-muted: "#4c5c52"
-  text-faint: "#536359"
-  text-inverse: "#fffefa"
-  accent: "#155a4d"
-  accent-hover: "#104639"
-  accent-soft: "#e4eee8"
-  accent-text: "#155244"
-  positive: "#286345"
-  positive-soft: "#e9f2e9"
-  negative: "#a03236"
-  negative-soft: "#faeaea"
-  warning: "#7d4f10"
-  warning-soft: "#fbf0dc"
-  grid: "#e2e7de"
-  dark-bg: "#171f1b"
-  dark-bg-raised: "#202b25"
-  dark-bg-sunken: "#26322b"
-  dark-bg-hover: "#2b3830"
-  dark-bg-active: "#35483d"
-  dark-line: "#3b4b42"
-  dark-line-strong: "#72867a"
-  dark-text: "#f1f4ed"
-  dark-text-muted: "#c0cec3"
-  dark-text-faint: "#a7baad"
-  dark-text-inverse: "#171f1b"
-  dark-accent: "#a4d8c1"
-  dark-accent-hover: "#b5e7d1"
-  dark-accent-soft: "#293d34"
-  dark-accent-text: "#c4e8d6"
-  dark-positive: "#9fdabb"
-  dark-positive-soft: "#243b30"
-  dark-negative: "#f29797"
-  dark-negative-soft: "#442b2a"
-  dark-warning: "#f3c379"
-  dark-warning-soft: "#3b3123"
-  dark-grid: "#2b3830"
+name: Mizan 2026 — Obsidian Equilibrium
+version: "3.0"
+description: "2026 flagship personal finance design system: Obsidian Studio (Dark-First) and Alabaster Vault (Light Mode)."
+brand:
+  monogram: "Architectural Balanced M + Precision Fulcrum Diamond"
+  wordmark: "Mizan"
+  tagline: "Ayın dengesi, senin elinde."
+palette:
+  dark:
+    bg-base: "#07090C"
+    bg-raised: "#0E131A"
+    bg-elevated: "#151C26"
+    bg-sunken: "#0A0E14"
+    bg-hover: "#1A222E"
+    bg-active: "#212B3A"
+    bg-glass: "rgba(14, 19, 26, 0.78)"
+    line: "rgba(255, 255, 255, 0.08)"
+    line-strong: "rgba(255, 255, 255, 0.16)"
+    line-specular: "rgba(255, 255, 255, 0.13)"
+    text: "#F3F6FA"
+    text-muted: "#95A2B4"
+    text-faint: "#6A778A"
+    text-inverse: "#06100C"
+    accent: "#2BD49B"
+    accent-hover: "#43E3AE"
+    accent-soft: "rgba(43, 212, 155, 0.12)"
+    accent-border: "rgba(43, 212, 155, 0.28)"
+    accent-text: "#5CE6B6"
+    gold: "#E2C27D"
+    gold-soft: "rgba(226, 194, 125, 0.13)"
+    positive: "#34D399"
+    positive-soft: "rgba(52, 211, 153, 0.12)"
+    negative: "#FB7185"
+    negative-soft: "rgba(251, 113, 133, 0.13)"
+    warning: "#FBBF24"
+    warning-soft: "rgba(251, 191, 36, 0.12)"
+    grid: "rgba(255, 255, 255, 0.06)"
+  light:
+    bg-base: "#F3F5F8"
+    bg-raised: "#FFFFFF"
+    bg-elevated: "#F8FAFC"
+    bg-sunken: "#E9EDF3"
+    bg-hover: "#EEF2F7"
+    bg-active: "#E1E7F0"
+    bg-glass: "rgba(255, 255, 255, 0.82)"
+    line: "rgba(15, 23, 42, 0.08)"
+    line-strong: "rgba(15, 23, 42, 0.16)"
+    line-specular: "rgba(255, 255, 255, 0.9)"
+    text: "#0B1117"
+    text-muted: "#4B5768"
+    text-faint: "#687486"
+    text-inverse: "#FFFFFF"
+    accent: "#0B7A5C"
+    accent-hover: "#086149"
+    accent-soft: "rgba(11, 122, 92, 0.09)"
+    accent-border: "rgba(11, 122, 92, 0.24)"
+    accent-text: "#09684E"
+    gold: "#9E7628"
+    gold-soft: "rgba(158, 118, 40, 0.10)"
+    positive: "#0D8A5A"
+    positive-soft: "rgba(13, 138, 90, 0.10)"
+    negative: "#D93848"
+    negative-soft: "rgba(217, 56, 72, 0.09)"
+    warning: "#B86E08"
+    warning-soft: "rgba(184, 110, 8, 0.10)"
+    grid: "rgba(15, 23, 42, 0.07)"
 typography:
-  page-title:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "2.25rem"
-    fontWeight: 720
-    lineHeight: 1.14
-    letterSpacing: "-0.036em"
-  phone-title:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.875rem"
-    fontWeight: 720
-    lineHeight: 1.14
-    letterSpacing: "-0.036em"
-  section-title:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.125rem"
-    fontWeight: 700
-    lineHeight: 1.5
-    letterSpacing: "-0.018em"
-  amount:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.875rem"
-    fontWeight: 700
-    lineHeight: 1.16
-    letterSpacing: "-0.025em"
-  body:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "15px"
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: "0"
-  label:
-    fontFamily: "DM Sans Variable, ui-sans-serif, system-ui, sans-serif"
-    fontSize: ".875rem"
-    fontWeight: 650
-    lineHeight: 1.5
-    letterSpacing: "0"
-rounded:
-  control: "12px"
-  panel: "16px"
-  compact-control: "8px"
-spacing:
-  control-gap: "8px"
-  desktop-gutter: "36px"
-  tablet-gutter: "18px"
-  phone-gutter: "14px"
-  month-work-gap: "28px"
-components:
-  button-primary:
-    backgroundColor: "{colors.accent}"
-    textColor: "{colors.text-inverse}"
-    rounded: "{rounded.control}"
-    padding: "0 18px"
-    height: "44px"
-  button-secondary:
-    backgroundColor: "{colors.bg-raised}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.control}"
-    padding: "0 14px"
-    height: "44px"
-  button-ghost:
-    backgroundColor: "transparent"
-    textColor: "{colors.accent-text}"
-    rounded: "{rounded.control}"
-    height: "44px"
-  input:
-    backgroundColor: "{colors.bg-raised}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.control}"
-    padding: "0 12px"
-    height: "44px"
-  panel:
-    backgroundColor: "{colors.bg-raised}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.panel}"
-    padding: "8px 18px"
-  navigation-active:
-    backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.accent-text}"
-    rounded: "{rounded.control}"
-    height: "46px"
-  remainder:
-    backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.text}"
-    rounded: "{rounded.panel}"
-    padding: "18px 20px"
-  statement-recovery:
-    backgroundColor: "{colors.warning-soft}"
-    textColor: "{colors.warning}"
-    padding: "12px 20px"
+  fontFamily: "'DM Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+  monoFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+  scale:
+    display: { size: "clamp(2.25rem, 4.2vw, 3.25rem)", weight: 680, tracking: "-0.04em", lineHeight: 1.05 }
+    page-title: { size: "clamp(1.75rem, 2.4vw, 2.25rem)", weight: 680, tracking: "-0.036em", lineHeight: 1.12 }
+    figure: { size: "clamp(1.375rem, 2vw, 1.75rem)", weight: 660, tracking: "-0.028em", lineHeight: 1.14 }
+    section: { size: "1.0625rem", weight: 640, tracking: "-0.018em", lineHeight: 1.3 }
+    body: { size: "0.9375rem", weight: 430, tracking: "0", lineHeight: 1.55 }
+    label: { size: "0.75rem", weight: 580, tracking: "0.005em", lineHeight: 1.35 }
+    micro: { size: "0.6875rem", weight: 620, tracking: "0.06em", lineHeight: 1.2 }
+radii:
+  xs: "8px"
+  sm: "10px"
+  md: "14px"
+  lg: "20px"
+  xl: "26px"
+  pill: "9999px"
 ---
 
-# Mizan tasarım sistemi
+# Mizan 2026 Design Constitution
 
-## Ay merkezli düzen
+## 1. Philosophy — Anti-Template High-Craft Fintech
 
-Mizan, kaydedilen ayın durumunu ilk ekranda dört açık tutarla gösterir. Ay Özeti, İşlemler, Kartlar ve Analiz her iki yerleşimde aynı sırada. Varlıklar, Gelecek ve harcama ayrıntıları Analiz’den açılır. Ayarlar masaüstünde yan menünün sonunda, telefonda üst çubukta. Hesap ve senkronizasyon, dönem seçici ve tutarları gizleme ilgili bağlamda üst çubuktan erişilir.
+Mizan is rebuilt around **Obsidian Equilibrium**: a precision personal-finance cockpit modeled after the tactile discipline of Apple Wallet/Card, Copilot Money, Revolut Metal, and Linear.
 
-Ay merkezli yön ile iş merkezli yön aynı sentetik kayıtlarla masaüstünde ve dar telefonda beş görev için 13’er eylem gerektirdi. Ay merkezli yön, ayın durumunu doğrudan gösterdiği için eşitlik kuralıyla seçildi.
+### Core Mandates
+1. **Zero Template Aesthetics:** No generic Material cards, flat gray boxes, loud neon gradients, or mismatched accent hues across screens. Every surface shares one unified design token contract (`frontend/src/styles/tokens.css`).
+2. **Dark-First Luxury + Flawless Light Mode:**
+   - **Obsidian Studio (Dark):** Layered dark graphite surfaces (`#07090C` → `#0E131A` → `#151C26`) separated by crisp 1px translucent borders (`rgba(255,255,255,0.08)`), subtle top-edge specular rims, and whispered ambient emerald/indigo mesh illumination.
+   - **Alabaster Vault (Light):** Cool architectural porcelain (`#F3F5F8`) with crisp white elevated bento panels (`#FFFFFF`), 1px obsidian-tinted hairlines, and soft diffused elevation shadows.
+3. **Truthful Financial Clarity:** Every visual flourish serves comprehension. Net spending excludes card debt repayments; remaining income never masquerades as a bank balance; statement reconciliation errors surface immediately with actionable recovery controls.
+4. **Precision Numeric Craft:**
+   - Every currency figure, percentage, date index, and table column enforces `font-variant-numeric: tabular-nums lining-nums`.
+   - Hero and primary KPI currency figures render fractional kuruş (`,50`) at reduced scale/opacity while preserving exact screen-reader copy.
+   - Privacy mode (`data-private="on"`) veils all `.num` figures and charts with a clean optical frost blur.
 
-**Tasarım ilkeleri**
+---
 
-- Önce kişinin sorduğu tutarı ve o tutarın kaynağını göster.
-- İlişkili ayrıntıları ilgili ekrandan aç. Günlük gezinme dört hedefle sınırlı kalsın.
-- Birincil eylemler ve seçili durumlar için koyu yeşil, doğrulama ve hatalar için metinle birlikte durum rengi kullan.
-- Katlanmış M, Türkçe DM Sans Variable ve tabular rakamlar ürün kimliğini taşır.
+## 2. Brand Identity — The Equilibrium Monogram
 
-## Finansal etiketler
+Mizan's new emblem fuses the architectural letter **M** with a **precision balance scale (terazi/mizan)**:
 
-| Etiket | Ekrandaki anlamı |
-| --- | --- |
-| Kaydedilen gelir | Seçilen kapsamdaki gelir kayıtları |
-| Net harcama | Harcama eksi iadeler, kart borcu ödemeleri hariç |
-| Gelirden kalan | Kaydedilen gelir eksi net harcama. Gelir kaydı yoksa çizgi görünür. |
-| Bankanın dönem borcu | Seçili ayda kesilmiş ve borcu okunmuş ekstrelerde yazan tutar. Tüm dönemler görünümünde kullanıcı borç için bir ay seçer. |
-| Kart detayındaki net harcama | O kartın seçili takvim ayına ait kayıtları. Ekstrenin belge kapsamı ayrı gösterilir. |
+- **Geometry (64×64 grid):**
+  - Squircle vault backdrop (`rx="18"`), obsidian graphite gradient (`#0D1219` → `#07090C`) with a subtle champagne-platinum rim.
+  - Two vertical architectural pillars (`x=17`, `x=47`) representing inflows and outflows, united by a taut V-beam converging at center (`32, 35`).
+  - A luminous **Jade Equilibrium Fulcrum** diamond (`#2EE6A6` → `#10B981`) suspended symmetrically beneath the vertex (`32, 46`), anchoring visual balance.
+- **Usage:** Identical vector geometry across Web favicon (`public/favicon.svg`), PWA manifest icons (`192/512/maskable`), Apple Touch Icon, Android Adaptive Icon (`ic_launcher_foreground.xml` + `ic_launcher_background.xml`), Android Launch Splash (`mizan_splash_mark.xml`), iOS AppIcon/Splash, and in-app animated `<BrandMark />`.
 
-Takvim ayı ve ekstre mutabakatı kendi kapsamlarında hesaplanır. Ekstre detayında bankanın dönem borcu, son ödeme tarihi ve doğrulama durumu başta yer alır. Tutarlar uyuşmuyorsa okunan fark TL olarak belirtilir ve aynı kart seçilerek dosya yeniden açılabilir. Satırlar tür başlıkları ve ara toplamlarla bölünür. Ekstre hesabı, belge alanları ve bonus hareketleri ayrıca erişilebilir.
+---
 
-## Yerleşim ve bileşenler
+## 3. Surface & Depth Hierarchy
 
-- Masaüstünde 204 px sabit yan menü, 1160 px içerik sınırı ve 36 px içerik kenar boşluğu kullanılır. 1023 px ve altında yan menü 170 px, kenar boşluğu 23 px olur. Ay Özeti’nde tutarlar tek yatay satırda, son işlemler ve ekstreler iki sütundadır.
-- 800 px altında alt gezinme ve ortada 44 px işlem eylemi kullanılır. 640 px altında metrikler dikey satırlara, ekstre ayrıntıları tek sütuna geçer. Üst ve alt çubuklar güvenli alanı, sayfa da odak gezinmesi için çubukların yüksekliğini hesaba katar.
-- Masaüstünde sayfa başlığı 36 px, telefonda 30 px. Ana tutar 30 px, işlem satırları 14–15 px, destek metni 13–14 px. Temel kontrol köşesi 12 px, panel köşesi 16 px. İçerik yüzeylerinde çizgi veya ton, diyalog ve geri bildirim katmanlarında yumuşak gölge kullanılır.
-- İşlem Ekle, gelir/gider seçimini, tutarı ve gider kategorilerini gösterir. Açıklama, tarih ve ödeme yöntemi **Ayrıntılar** içinde açılır. Kaydetme koruması tekrarlanan dokunuşları önler. Geri al, kapatılana veya başka bir sonuç gösterilene kadar erişilebilir.
-- PDF seçimi, sürükle bırak ve cihaz paylaşımı aynı içe aktarma iş akışını kullanır. İşlem sırasında dosya adı ve ayrıştırıcının bildirdiği aşama görünür. Hata ve dosya seçimi aynı panelde sürer. Başarılı sonuçtan kaydedilen ekstre açılabilir.
-- Analiz zaman aralığını bağımsız seçer ve grafiklerle birlikte sayısal değerleri erişilebilir tutar. Varlıklarda miktar, fiyat zamanı ve değer ayrı gösterilir. Gelecek ödemeler, taksitler ve hedefler için ayrı bir görünüm sunar. Ayarlar hesap, görünüm, yedek ve cihaz seçeneklerine erişim sağlar.
-- Girişteki örnek bütçe yalnızca deneme içindir. Örnek kayıtlar cihazın finansal geçmişine yazılmaz. Gerçek kayda geçerken örnek görünüm kapanır.
+| Layer | Role | Dark Surface | Light Surface | Border / Rim |
+|---|---|---|---|---|
+| **L0 Canvas** | Page backdrop + ambient mesh glow | `#07090C` | `#F3F5F8` | None |
+| **L1 Bento Surface** | Primary modular cards & panels | `#0E131A` + 3% top sheen | `#FFFFFF` | `1px solid var(--line)` + subtle inset top specular |
+| **L2 Elevated Well** | Interactive cards, active tiles, dropdowns | `#151C26` | `#F8FAFC` | `1px solid var(--line-strong)` |
+| **L3 Frosted Glass** | Sticky toolbar, floating mobile dock, tooltips, modals | `rgba(14,19,26,0.78)` + `blur(20px)` | `rgba(255,255,255,0.82)` + `blur(20px)` | `1px solid var(--line-strong)` |
+| **Hero Vault Card** | Balance Hero, Assets Hero, Card Detail Hero | Obsidian + radial jade/gold aura | Deep slate/alabaster hero accent | `1px solid var(--accent-border)` |
 
-## Hareket ve erişilebilirlik
+---
 
-| Değişken | Değer | Kullanım |
-| --- | --- | --- |
-| `--motion-press` | 120 ms | Basma tepkisi |
-| `--motion-reveal` | 160 ms | Ay verileri ve açılan kartın başlığı |
-| `--motion-sheet` | 220 ms | Sheet, kayıt sonucu ve bütçe çubuğu |
-| `--ease-out-quick` | `cubic-bezier(.23, 1, .32, 1)` | Hızlı başlayıp yavaşlayan geri bildirim |
+## 4. Layout & Bento-Grid Architecture
 
-Ay değişiminde gezinme ve dönem seçici sabit kalır. Geçişler hesap, kaydetme veya gezinme akışını bekletmez. Azaltılmış hareket tercihinde seçim, odak ve işlem sonucu metinle görünmeye devam eder.
+- **Desktop (≥ 1024px):** Fixed 240px frosted sidebar rail (`WorkspaceRail`), centered `max-width: 1240px` workspace canvas with `32px–40px` breathing gutters, 12-column Bento grid on Dashboard (`7/5` asymmetric visual rhythm), sticky frosted top toolbar.
+- **Tablet (800px–1023px):** Compact 204px sidebar rail, fluid 2-column Bento stacking.
+- **Mobile (< 800px):** Full-bleed edge-to-edge canvas respecting `env(safe-area-inset-*)`, sticky translucent header bar, floating frosted glass **Bottom Dock** with 4 daily destinations (`Ay Özeti`, `İşlemler`, `Kartlar`, `Analiz`) and an elevated central jade **Quick Add (+)** jewel button.
+- **Touch Targets:** Minimum `44×44px` hit areas on every interactive element across web, Android, and iOS.
 
-Diyaloglar destekleyen tarayıcılarda yerel `showModal()` kullanır. Eski WebView’lerde klavye odağını ve arka plan ayrımını sağlayan yedek uygulanır. Android geri tuşu önce etkin diyalogdan çıkar. iOS sayfa hareketi WKWebView geçmişine bağlıdır ve diyalog kapalıyken etkindir. Gerçek tarayıcı geçmişinde sayfa değiştiğinde, önceki sayfanın diyalogları kapanır. Klavye için görsel viewport kullanılır. Tablolar başlıklarını korur ve yatay kaydırma gerektiğinde klavyeyle ulaşılabilir.
+---
 
-`frontend/src/styles/index.css` çalışma anındaki semantik renk ve hareket değişkenlerini, `workspace.css` responsive bileşimi, `frontend/src/ui/modal.css` diyalog davranışının görsel kurallarını tanımlar. Düzenlenebilir prototip teslimindeki üç bileşen ve token’lar sentetik finans verisiyle hazırlanmıştır.
+## 5. Signature Components & Data Visualization
+
+1. **Interactive Exploding Donut (`InteractiveDonutChart`):** Smooth arc entry; tapping or hovering a slice scales/explodes its outer radius with an ambient ring halo, dims sibling slices, triggers subtle haptic feedback, and dynamically updates the center readout with slice name, exact TL amount, and percentage share.
+2. **Touch-to-Scrub Flow & Trend Charts:** Multi-stop gradient spline areas and rounded-cap bar series. Hovering or scrubbing across points updates the live tabular header readout in real time.
+3. **Smart Semantic Gauges (`RadialGauge` & `BudgetRibbon`):** Smoothly animated linear and circular progress gauges transitioning seamlessly across thresholds:
+   - `< 75%` → Jade Safe (`var(--positive)`)
+   - `75% – 95%` → Amber Caution (`var(--warning)`)
+   - `> 95%` → Crimson Critical (`var(--negative)`)
+4. **Physical Metallic Card Tiles (`PhysicalCard`):** Tactile brushed-obsidian credit cards per Turkish bank (Akbank, Garanti BBVA, İş Bankası, Yapı Kredi, Ziraat, Enpara, QNB, VakıfBank, Halkbank, TEB, DenizBank, Kuveyt Türk, Dünya Katılım) with EMV metallic chip, contactless emblem, masked `•••• 1234` tabular digits, specular sheen sweep, and statement reconciliation status.
+5. **Custom Shimmer Skeletons & Empty States:** Bespoke directional sheen skeletons tailored to each screen's layout, plus purposeful empty states with clear focal iconography and primary actions.
+
+---
+
+## 6. Accessibility & Preservation Guarantees
+
+- Strict WCAG AA contrast (≥ 4.5:1 body text, ≥ 3:1 UI controls and chart elements) verified in both **Obsidian Studio (Dark)** and **Alabaster Vault (Light)**.
+- Native `<dialog>` `showModal()` with full keyboard focus trapping, `Escape` dismissal, visual-viewport keyboard offset tracking, and legacy WKWebView fallback.
+- Every chart retains an accessible collapsible numerical data table (`<details>`) and ARIA labels.
+- Zero changes to business logic, financial calculation formulas, Firebase/Firestore sync, IndexedDB migration, or bank statement parsers.

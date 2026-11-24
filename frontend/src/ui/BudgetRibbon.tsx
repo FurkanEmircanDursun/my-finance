@@ -1,25 +1,118 @@
-import { ArrowUpRight, Plus } from 'lucide-react'
+import { ArrowUpRight, Plus, ShieldAlert, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { money2 } from '../core/money'
-import { MoneyValue } from './MoneyValue'
+import { MoneyValue, RollingNumber } from './MoneyValue'
+import { AnimatedProgress, RadialGauge, resolveBudgetTone } from './motion'
 
-export function BudgetRibbon({ limit, spend, scoped, onEdit }: {
-  limit: number; spend: number; scoped: boolean; onEdit: () => void
+export function BudgetRibbon({
+  limit,
+  spend,
+  scoped,
+  onEdit,
+}: {
+  limit: number
+  spend: number
+  scoped: boolean
+  onEdit: () => void
 }) {
-  const used = limit ? Math.max(0, spend / limit * 100) : 0
+  const ratio = limit > 0 ? Math.max(0, spend / limit) : 0
+  const usedPct = Math.round(ratio * 100)
   const over = spend > limit && limit > 0
-  return <section className={`mizan-budget ${over ? 'is-over' : ''}`} aria-labelledby="budget-title">
-    <div className="mizan-panel-heading"><h2 id="budget-title">Aylık harcama alanın</h2><button className="mizan-icon-button" onClick={onEdit} aria-label="Aylık harcama limitini düzenle"><ArrowUpRight size={20} /></button></div>
-    {limit > 0 ? <>
-      <div className="budget-remaining"><MoneyValue value={Math.abs(limit - spend)} /><span>{over ? 'limit üzerinde' : 'kullanılabilir'}</span></div>
-      <div className="mizan-ribbon" role="progressbar" aria-label="Aylık limit kullanımı" aria-valuenow={Math.round(Math.min(100, used))} aria-valuemin={0} aria-valuemax={100} aria-valuetext={`Yüzde ${Math.round(used)} kullanıldı`}>
-        <span style={{ transform: `scaleX(${Math.min(1, used / 100)})` }} />
+  const tone = resolveBudgetTone(ratio)
+
+  return (
+    <section
+      className={`bento-card mizan-budget-card ${over ? 'mizan-budget-card--over' : ''}`}
+      aria-labelledby="budget-title"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <span className="text-micro font-semibold uppercase text-faint">Bütçe Kapasitesi</span>
+          <h2 id="budget-title" className="mt-0.5 text-title font-semibold text-ink">
+            Aylık harcama alanın
+          </h2>
+        </div>
+        <button
+          type="button"
+          className="toolbar-icon"
+          onClick={onEdit}
+          aria-label="Aylık harcama limitini düzenle"
+        >
+          <SlidersHorizontal size={16} />
+        </button>
       </div>
-      <div className="budget-ribbon-labels"><span className="num">%{Math.round(used)} kullanıldı</span><span className="num">{money2(limit)} limit</span></div>
-      <p>{over ? 'Limitini veya bu ayın kayıtlarını gözden geçir.' : 'Her kayıtta güncellenir. Planın hep gözünün önünde.'}</p>
-    </> : <>
-      <p className="budget-empty-title">Kendi dengeni kur.</p>
-      <p>{scoped ? 'Bir aylık limit belirle. Harcadıkça kalan alanını gör.' : 'Limitini görmek için tek ay ve tüm hesapları seç.'}</p>
-      <button className="quiet-button" onClick={onEdit}><Plus size={16} /> Limit belirle</button>
-    </>}
-  </section>
+
+      {limit > 0 ? (
+        <>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div
+                className={`text-[clamp(1.65rem,2.6vw,2.15rem)] font-bold leading-none tracking-[-0.035em] ${
+                  over ? 'text-negative' : 'text-ink'
+                }`}
+              >
+                <MoneyValue value={Math.abs(limit - spend)} />
+              </div>
+              <div className="mt-2 flex items-center gap-1.5 text-label font-semibold">
+                {over ? (
+                  <span className="inline-flex items-center gap-1 text-negative">
+                    <ShieldAlert size={14} /> Limit üzerinde
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-positive">
+                    <ShieldCheck size={14} /> Kullanılabilir alan
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <RadialGauge value={Math.min(100, usedPct)} max={100} size={78} strokeWidth={7} tone={tone}>
+              <RollingNumber
+                value={usedPct}
+                suffix="%"
+                className="text-body font-bold text-ink"
+              />
+            </RadialGauge>
+          </div>
+
+          <div className="mt-5 space-y-2">
+            <AnimatedProgress
+              value={spend}
+              max={limit}
+              tone={tone}
+              height={8}
+              label="Aylık limit kullanımı"
+            />
+            <div className="flex items-center justify-between gap-2 text-label text-muted">
+              <span className="num">%{usedPct} kullanıldı</span>
+              <span className="num font-semibold text-ink">{money2(limit)} limit</span>
+            </div>
+          </div>
+
+          <p className="mt-4 text-label leading-relaxed text-muted">
+            {over
+              ? 'Limitini veya bu ayın kayıtlarını gözden geçir.'
+              : 'Her kayıtta anlık güncellenir. Harcama hızın dengede.'}
+          </p>
+        </>
+      ) : (
+        <div className="mt-5 flex flex-1 flex-col justify-between gap-4">
+          <div>
+            <p className="text-[1.35rem] font-semibold tracking-[-0.03em] text-ink">
+              Kendi dengeni kur.
+            </p>
+            <p className="mt-2 max-w-[30ch] text-label leading-relaxed text-muted">
+              {scoped
+                ? 'Aylık bir harcama sınırı belirle; her işlemde kalan payını canlı takip et.'
+                : 'Limitini görmek için üstten tek bir ay seç.'}
+            </p>
+          </div>
+          <div>
+            <button type="button" className="quiet-button" onClick={onEdit}>
+              <Plus size={15} /> Limit belirle <ArrowUpRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
 }

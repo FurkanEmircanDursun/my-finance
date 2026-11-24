@@ -6,6 +6,7 @@ import { useStore } from '../store/AppStore'
 import { toMajor } from '../core/money'
 import { entryAmount } from '../domain/entry'
 import { CATEGORIES } from '../domain/categories'
+import { hapticImpact } from '../platform/haptics'
 
 export function BudgetSheet({
   open,
@@ -25,8 +26,10 @@ export function BudgetSheet({
   )
   const validValue = (raw: string) => !raw.trim() || entryAmount(raw) !== null
   const valid = validValue(total) && Object.values(drafts).every(validValue)
+
   const save = () => {
     if (!valid) return
+    hapticImpact()
     dispatch({
       type: 'setProfile',
       profile: {
@@ -39,6 +42,7 @@ export function BudgetSheet({
     })
     onClose()
   }
+
   return (
     <Modal
       open={open}
@@ -52,7 +56,9 @@ export function BudgetSheet({
       }
     >
       <div className="budget-editor">
-        <Target size={24} />
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-accent-border bg-accent-soft text-accent-text">
+          <Target size={20} />
+        </span>
         <Field
           label="Toplam aylık harcama limiti (TL)"
           hint="Örnek: 30.000. Takibi kapatmak için boş bırak."
@@ -66,12 +72,19 @@ export function BudgetSheet({
           />
         </Field>
       </div>
+
       <details className="category-budget-editor">
         <summary>Kategori bazında limit de belirle</summary>
         <ul>
           {CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
             <li key={def.id}>
-              <span>{def.label}</span>
+              <span className="flex items-center gap-2.5 text-ink">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: def.color }}
+                />
+                {def.label}
+              </span>
               <TextInput
                 inputMode="decimal"
                 aria-label={`${def.label} aylık limiti`}
@@ -87,10 +100,10 @@ export function BudgetSheet({
           ))}
         </ul>
       </details>
+
       {!valid && (
-        <p role="alert" className="text-body text-negative">
-          Tutarı Türkçe biçimde gir: 1.250,50. Limiti kaldırmak için alanı boş
-          bırak.
+        <p role="alert" className="mt-3 text-label text-negative">
+          Tutarı Türkçe biçimde gir: 1.250,50. Limiti kaldırmak için alanı boş bırak.
         </p>
       )}
     </Modal>

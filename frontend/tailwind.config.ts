@@ -1,9 +1,10 @@
 import type { Config } from 'tailwindcss'
 
 /**
- * Colours resolve to CSS variables declared in `src/styles/index.css`, so the
- * whole product re-themes from one block and utilities stay theme-aware without
- * `dark:` variants scattered through the components.
+ * Mizan 2026 — Obsidian Equilibrium Design Tokens.
+ * Every colour, radius, shadow, and motion curve resolves to CSS variables in
+ * `src/styles/tokens.css`, keeping Dark (Obsidian Studio) and Light (Alabaster Vault)
+ * seamlessly unified with zero scattered `dark:` overrides.
  */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
@@ -12,9 +13,11 @@ export default {
       colors: {
         bg: 'var(--bg)',
         raised: 'var(--bg-raised)',
+        elevated: 'var(--bg-elevated)',
         sunken: 'var(--bg-sunken)',
         hover: 'var(--bg-hover)',
         active: 'var(--bg-active)',
+        glass: 'var(--bg-glass)',
         line: 'var(--line)',
         'line-strong': 'var(--line-strong)',
         ink: 'var(--text)',
@@ -25,7 +28,12 @@ export default {
           DEFAULT: 'var(--accent)',
           hover: 'var(--accent-hover)',
           soft: 'var(--accent-soft)',
+          border: 'var(--accent-border)',
           text: 'var(--accent-text)',
+        },
+        gold: {
+          DEFAULT: 'var(--gold)',
+          soft: 'var(--gold-soft)',
         },
         positive: {
           DEFAULT: 'var(--positive)',
@@ -41,38 +49,39 @@ export default {
         },
       },
       borderRadius: {
+        xs: 'var(--radius-xs)',
+        sm: 'var(--radius-sm)',
         DEFAULT: 'var(--radius)',
         lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
       },
       boxShadow: {
+        card: 'var(--shadow-card)',
+        elevated: 'var(--shadow-elevated)',
         overlay: 'var(--shadow-overlay)',
+        glow: 'var(--shadow-glow)',
       },
       fontFamily: {
         sans: ['DM Sans Variable', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
-      /*
-       * Five steps, and nothing between them. Anything that does not fit one of
-       * these is a level the interface does not need.
-       *
-       *   hero    one number per screen, the answer itself
-       *   figure  a section's own total
-       *   title   a section heading
-       *   body    everything a person reads as a sentence
-       *   label   units, axes, timestamps — never a sentence
-       */
       fontSize: {
-        hero: ['40px', { lineHeight: '1', letterSpacing: '-0.022em' }],
-        figure: ['24px', { lineHeight: '1.1', letterSpacing: '-0.016em' }],
-        title: ['17px', { lineHeight: '1.3', letterSpacing: '-0.008em' }],
-        body: ['15px', { lineHeight: '1.5' }],
-        label: ['12px', { lineHeight: '1.35' }],
+        display: ['clamp(2.25rem, 4.2vw, 3.25rem)', { lineHeight: '1.05', letterSpacing: '-0.04em' }],
+        hero: ['clamp(2rem, 3.6vw, 2.85rem)', { lineHeight: '1.06', letterSpacing: '-0.038em' }],
+        figure: ['clamp(1.35rem, 2vw, 1.75rem)', { lineHeight: '1.14', letterSpacing: '-0.028em' }],
+        title: ['1.0625rem', { lineHeight: '1.3', letterSpacing: '-0.018em' }],
+        body: ['0.9375rem', { lineHeight: '1.55' }],
+        label: ['0.75rem', { lineHeight: '1.35', letterSpacing: '0.005em' }],
+        micro: ['0.6875rem', { lineHeight: '1.2', letterSpacing: '0.055em' }],
       },
       transitionTimingFunction: {
-        DEFAULT: 'var(--ease)',
+        DEFAULT: 'var(--ease-smooth)',
+        spring: 'var(--ease-spring)',
+        smooth: 'var(--ease-smooth)',
+        ios: 'var(--ease-ios)',
       },
       maxWidth: {
-        app: '1180px',
+        app: '1240px',
       },
     },
   },

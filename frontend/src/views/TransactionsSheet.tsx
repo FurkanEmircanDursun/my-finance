@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { ArrowDownLeft, Plus, Search } from 'lucide-react'
 import { clsx } from 'clsx'
-import { Badge, Button, Empty, TextInput } from '../ui/primitives'
+import { Badge, Button, Chip, Empty, TextInput } from '../ui/primitives'
 import { Modal } from '../ui/Modal'
-import { money2, count } from '../core/money'
+import { MoneyValue } from '../ui/MoneyValue'
+import { count } from '../core/money'
 import { fold } from '../core/text'
 import { EntrySheet } from '../app/EntrySheet'
 import { CATEGORIES, categoryColor, type CategoryId } from '../domain/categories'
@@ -13,23 +14,10 @@ import { applyFilters } from '../store/selectors'
 import { useSheets } from '../app/sheets'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
+import { hapticTap } from '../platform/haptics'
 
 const PAGE_SIZE = 60
 
-/**
- * The transaction list, as a drill-down rather than a tab.
- *
- * Nobody opens an app to look at rows; they open it with a question, and rows
- * are where the question bottoms out. So this arrives from somewhere — a
- * category, a merchant, a subscription — already carrying its own title and
- * its own subset.
- *
- * Selection is gone. The old screen had a checkbox column, a select-all, and
- * three buttons that only existed once something was ticked. What people were
- * actually doing with all that was re-categorising a merchant, so a row now
- * opens in place and re-categorising it teaches the rule for that merchant by
- * default — the bulk operation, expressed as the single thing it really is.
- */
 export function TransactionsSheet({
   open,
   onClose,
@@ -42,68 +30,140 @@ export function TransactionsSheet({
   transactions: Transaction[]
 }) {
   const [adding, setAdding] = useState(false)
-  return <Modal open={open} onClose={onClose} title={title} variant="sheet">
-    <TransactionList transactions={transactions} onAdd={() => setAdding(true)} />
-    <ManualTransactionModal open={adding} onClose={() => setAdding(false)} />
-  </Modal>
+  return (
+    <Modal open={open} onClose={onClose} title={title} variant="sheet">
+      <TransactionList transactions={transactions} onAdd={() => setAdding(true)} />
+      <ManualTransactionModal open={adding} onClose={() => setAdding(false)} />
+    </Modal>
+  )
 }
 
 export function TransactionsView() {
   const { state } = useStore()
   const { openIncome, openIncomeEntry } = useSheets()
-  const transactions = useMemo(() => applyFilters(
-    state.transactions, { ...state.filters, includeNonSpend: true },
-    { periodGrouping: state.settings.periodGrouping, statements: state.statements },
-  ), [state.transactions, state.filters, state.settings.periodGrouping, state.statements])
+  const transactions = useMemo(
+    () =>
+      applyFilters(
+        state.transactions,
+        { ...state.filters, includeNonSpend: true },
+        { periodGrouping: state.settings.periodGrouping, statements: state.statements },
+      ),
+    [state.transactions, state.filters, state.settings.periodGrouping, state.statements],
+  )
 
-  return <div className="transactions-page">
-    <header className="dashboard-title"><div><h1>İşlemler</h1></div>
-      <button type="button" className="quiet-button" onClick={openIncome}><ArrowDownLeft size={17} /> Sabit gelir ve giderler</button>
-    </header>
-    <TransactionList transactions={transactions} onIncome={openIncomeEntry} />
-  </div>
+  return (
+    <div className="transactions-page">
+      <header className="dashboard-title">
+        <div>
+          <h1>İşlemler</h1>
+          <p>Ara, filtrele veya işyeri kategorisini tek dokunuşla düzelt</p>
+        </div>
+        <button type="button" className="quiet-button" onClick={openIncome}>
+          <ArrowDownLeft size={16} /> Sabit gelir ve giderler
+        </button>
+      </header>
+      <TransactionList transactions={transactions} onIncome={openIncomeEntry} />
+    </div>
+  )
 }
 
-function TransactionList({ transactions, onAdd, onIncome }: {
+type KindFilter = 'all' | 'expense' | 'income' | 'refund'
+
+function TransactionList({
+  transactions,
+  onAdd,
+  onIncome,
+}: {
   transactions: Transaction[]
   onAdd?: () => void
   onIncome?: () => void
 }) {
   const [query, setQuery] = useState('')
+  const [kindFilter, setKindFilter] = useState<KindFilter>('all')
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState<string | null>(null)
 
   const rows = useMemo(() => {
     const folded = query.trim() ? fold(query.trim()) : ''
-    const list = folded
-      ? transactions.filter((tx) => fold(tx.description).includes(folded) || tx.merchant.includes(folded))
-      : transactions
+    const list = transactions.filter((tx) => {
+      if (kindFilter !== 'all' && tx.kind !== kindFilter) return false
+      if (!folded) return true
+      return fold(tx.description).includes(folded) || tx.merchant.includes(folded)
+    })
     return [...list].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-  }, [transactions, query])
+  }, [transactions, query, kindFilter])
 
   const total = rows.reduce((sum, tx) => sum + spendAmount(tx), 0)
 
   return (
     <div className="transaction-list">
-      <div className="mb-4 flex items-center gap-2">
-        <div className="relative min-w-0 flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[200px] flex-1">
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-faint"
+          />
           <TextInput
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="İşyeri ara"
+            placeholder="İşyeri veya açıklama ara"
             aria-label="İşlem ara"
-            className="pl-9"
+            className="pl-10"
           />
         </div>
-        {onAdd && <Button onClick={onAdd} className="shrink-0"><Plus size={16} /> Ekle</Button>}
-        {onIncome && <Button onClick={onIncome} className="shrink-0"><ArrowDownLeft size={16} /> Gelir ekle</Button>}
+        {onAdd && (
+          <Button variant="primary" onClick={onAdd} className="shrink-0">
+            <Plus size={16} /> Ekle
+          </Button>
+        )}
+        {onIncome && (
+          <Button onClick={onIncome} className="shrink-0">
+            <ArrowDownLeft size={16} /> Gelir ekle
+          </Button>
+        )}
       </div>
-      <p className="transaction-result" aria-live="polite">{count(rows.length)} işlem · Net harcama <span className="num">{money2(total)}</span></p>
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="İşlem türü filtresi">
+          {(
+            [
+              ['all', 'Tümü'],
+              ['expense', 'Gider'],
+              ['income', 'Gelir'],
+              ['refund', 'İade'],
+            ] as const
+          ).map(([value, label]) => (
+            <Chip
+              key={value}
+              selected={kindFilter === value}
+              onClick={() => {
+                hapticTap()
+                setKindFilter(value)
+              }}
+            >
+              {label}
+            </Chip>
+          ))}
+        </div>
+        <p className="transaction-result" aria-live="polite" style={{ paddingBlock: 0 }}>
+          {count(rows.length)} işlem · Net harcama{' '}
+          <strong className="text-ink">
+            <MoneyValue value={total} duration={320} />
+          </strong>
+        </p>
+      </div>
 
       {rows.length === 0 ? (
-        <Empty compact title="İşlem bulunamadı" description={query ? "Başka bir sözcükle ara." : "Başka bir ay seçebilir veya işlem ekleyebilirsin."} />
+        <Empty
+          compact
+          title="İşlem bulunamadı"
+          description={
+            query || kindFilter !== 'all'
+              ? 'Filtreleri temizleyip başka bir sözcükle ara.'
+              : 'Başka bir ay seçebilir veya işlem ekleyebilirsin.'
+          }
+        />
       ) : (
         <ul className="transaction-list-rows">
           {rows.slice(0, limit).map((tx) => (
@@ -111,7 +171,10 @@ function TransactionList({ transactions, onAdd, onIncome }: {
               key={tx.id}
               tx={tx}
               open={expanded === tx.id}
-              onToggle={() => setExpanded((prev) => (prev === tx.id ? null : tx.id))}
+              onToggle={() => {
+                hapticTap()
+                setExpanded((prev) => (prev === tx.id ? null : tx.id))
+              }}
               onDone={() => setExpanded(null)}
             />
           ))}
@@ -125,12 +188,9 @@ function TransactionList({ transactions, onAdd, onIncome }: {
           </Button>
         </div>
       )}
-
     </div>
   )
 }
-
-/* ── One row, and its editor ─────────────────────────────────────────────── */
 
 function TransactionRow({
   tx,
@@ -157,6 +217,7 @@ function TransactionRow({
         syncNow()
         await ensureHistory()
       }
+      hapticTap()
       dispatch({ type: 'setCategory', transactionIds: [tx.id], category, learn: !onlyThis })
       onDone()
     } catch {
@@ -168,10 +229,18 @@ function TransactionRow({
 
   return (
     <li className="border-b border-line last:border-b-0">
-      <TransactionItem transaction={tx} onOpen={onToggle} expanded={open} onDelete={() => { remove(tx); onDone() }} />
+      <TransactionItem
+        transaction={tx}
+        onOpen={onToggle}
+        expanded={open}
+        onDelete={() => {
+          remove(tx)
+          onDone()
+        }}
+      />
 
       {open && (
-        <div className="rise-in px-2 pb-4">
+        <div className="rise-in mb-3 rounded-[var(--radius)] border border-line bg-sunken p-3.5">
           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
             {CATEGORIES.map((def) => (
               <button
@@ -180,8 +249,10 @@ function TransactionRow({
                 disabled={saving}
                 onClick={() => void assign(def.id)}
                 className={clsx(
-                  'flex min-h-[44px] items-center gap-2 rounded-[var(--radius)] px-3 text-left text-body transition-colors duration-200',
-                  def.id === tx.category ? 'bg-accent-soft text-accent-text' : 'bg-sunken text-ink hover:bg-hover',
+                  'flex min-h-[42px] items-center gap-2 rounded-[var(--radius-sm)] border px-3 text-left text-label font-medium transition-all duration-150',
+                  def.id === tx.category
+                    ? 'border-accent-border bg-accent-soft font-semibold text-accent-text'
+                    : 'border-line bg-raised text-ink hover:border-line-strong hover:bg-hover',
                 )}
               >
                 <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: def.color }} />
@@ -191,10 +262,7 @@ function TransactionRow({
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-3">
-            {/* Learning the merchant is the default because it is what people
-                mean: they are not fixing one line, they are telling the app
-                what this shop is. */}
-            <label className="flex cursor-pointer items-center gap-2 text-body text-muted">
+            <label className="flex cursor-pointer items-center gap-2 text-label font-medium text-muted">
               <input
                 type="checkbox"
                 disabled={saving}
@@ -204,8 +272,6 @@ function TransactionRow({
               />
               Sadece bu işlem
             </label>
-
-
           </div>
 
           {!onlyThis && (
@@ -214,15 +280,21 @@ function TransactionRow({
               güncellenir.
             </p>
           )}
-          {saving && <p role="status">İşlemler kontrol ediliyor…</p>}
-          {error && <p role="alert">İşlem geçmişi yüklenemedi. Bağlantını kontrol edip tekrar dene.</p>}
+          {saving && (
+            <p role="status" className="mt-2 text-label text-muted">
+              İşlemler kontrol ediliyor…
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="mt-2 text-label text-negative">
+              İşlem geçmişi yüklenemedi. Bağlantını kontrol edip tekrar dene.
+            </p>
+          )}
         </div>
       )}
     </li>
   )
 }
-
-/* ── Manual entry ────────────────────────────────────────────────────────── */
 
 function ManualTransactionModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   return open ? <EntrySheet onClose={onClose} /> : null
