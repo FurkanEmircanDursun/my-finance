@@ -108,6 +108,20 @@ function readSummary(text: string, periodStart: DayKey | null): StatementSummary
   const chip = money(new RegExp(String.raw`Chip\s+Para\s+Bakiyeniz\s+${AMOUNT}`, 'i'))
   if (chip !== null) summary.loyalty = { programme: 'Chip-para', earned: null, spent: null, balance: chip }
 
+  // A card's first statement (or a cycle with zero carried balance) omits the
+  // "Önceki Dönem Hesap Özeti Bakiyesi" row completely. When both the detail
+  // table heading and a matching "Genel Toplam" are present with no prior-balance
+  // label anywhere in the document, the carried balance is unambiguously zero.
+  if (summary.previousBalance === null && summary.totalDebt !== null) {
+    const folded = fold(text)
+    const hasDetailTable = /\bHESAP\s+OZETI\s+DETAYLAR/.test(folded)
+    const hasPriorBalanceLabel = /\bONCEKI\s+DONEM\b/.test(folded)
+    const grandTotalMatch = new RegExp(String.raw`\bGENEL\s+TOPLAM\s+${AMOUNT}`).exec(folded)
+    if (hasDetailTable && !hasPriorBalanceLabel && grandTotalMatch && parseEnAmount(grandTotalMatch[1]) === summary.totalDebt) {
+      summary.previousBalance = 0
+    }
+  }
+
   return summary
 }
 

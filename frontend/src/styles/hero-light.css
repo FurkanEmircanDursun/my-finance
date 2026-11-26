@@ -1,0 +1,137 @@
+/*
+ * Luminous Alabaster-Jade Hero Surfaces for Light Mode.
+ * Replaces the heavy pitch-black hero background in Light Mode with an airy,
+ * high-contrast porcelain-emerald surface that harmonizes with neighboring Bento cards,
+ * while preserving the Obsidian Studio dark hero in Dark Mode.
+ */
+
+:root:not([data-theme='dark']) {
+  --hero-surface: linear-gradient(145deg, #FFFFFF 0%, #F3FBF7 56%, #E6F5EE 100%);
+  --hero-surface-text: #0A131F;
+  --hero-surface-muted: #4A5A6D;
+  --hero-surface-line: rgba(10, 116, 87, 0.14);
+  --hero-surface-well: rgba(255, 255, 255, 0.84);
+  --hero-surface-well-hover: #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --hero-surface: linear-gradient(145deg, #101820 0%, #0A0F15 55%, #0A1714 100%);
+    --hero-surface-text: #F4F7FA;
+    --hero-surface-muted: #96A5B8;
+    --hero-surface-line: rgba(255, 255, 255, 0.10);
+    --hero-surface-well: rgba(255, 255, 255, 0.045);
+    --hero-surface-well-hover: rgba(255, 255, 255, 0.085);
+  }
+}
+
+/* Harmonize inner hero text, switcher, ratio bar, and metric wells with semantic hero tokens */
+:root .bento-hero {
+  border-color: var(--hero-surface-line);
+}
+
+:root .overview-hero__modes {
+  background: var(--hero-surface-well);
+  border-color: var(--hero-surface-line);
+}
+
+:root .overview-hero__mode-btn:hover {
+  color: var(--hero-surface-text);
+}
+
+:root .overview-hero__mode-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+:root .overview-hero__period {
+  color: var(--hero-surface-text);
+}
+
+:root .overview-hero__figure {
+  color: var(--hero-surface-text);
+}
+
+:root .overview-hero__figure--negative {
+  color: var(--negative);
+}
+
+:root .overview-hero__ratio-bar {
+  background: var(--hero-surface-line);
+}
+
+:root .overview-hero__metric {
+  color: var(--hero-surface-text);
+}
+
+:root .overview-hero__metric:hover {
+  border-color: var(--accent-border);
+}
+
+:root .overview-hero__metric-value {
+  color: var(--hero-surface-text);
+}
+
+:root .overview-hero__metric-sub {
+  color: var(--hero-surface-muted);
+}
+
+:root .statement-hero dd {
+  color: var(--hero-surface-text);
+}
+
+/* Crisp high-contrast card cutoff calendar pills on Alabaster Hero in Light Mode */
+:root:not([data-theme='dark']) .cards-cycle-chip {
+  background: #FFFFFF;
+  border-color: rgba(10, 116, 87, 0.24);
+  color: #0A131F;
+  box-shadow: 0 2px 6px rgba(10, 19, 31, 0.07);
+}
+
+:root:not([data-theme='dark']) .cards-cycle-chip span {
+  color: #0A131F;
+}
+
+:root:not([data-theme='dark']) .cards-cycle-chip strong {
+  color: #046C4E;
+}
+
+:root:not([data-theme='dark']) .cards-cycle-chip--missing strong {
+  color: #B45309;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .cards-cycle-chip {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.16);
+    color: #F4F7FA;
+    box-shadow: none;
+  }
+
+  :root:not([data-theme='light']) .cards-cycle-chip span {
+    color: #F4F7FA;
+  }
+
+  :root:not([data-theme='light']) .cards-cycle-chip strong {
+    color: #5EE8B8;
+  }
+
+  :root:not([data-theme='light']) .cards-cycle-chip--missing strong {
+    color: #FCD34D;
+  }
+}
+
+/* Luminous Champagne-Alabaster hero for AssetsView in Light Mode */
+:root[data-theme='light'] .bento-hero--gold,
+:root:not([data-theme='dark']) .bento-hero--gold {
+  background: linear-gradient(145deg, #FFFFFF 0%, #FDF9EE 58%, #F7EED4 100%);
+  border-color: rgba(150, 110, 34, 0.22);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .bento-hero--gold {
+    background: linear-gradient(145deg, #1A1610 0%, #0E1015 55%, #16130D 100%);
+    border-color: var(--gold-border);
+  }
+}

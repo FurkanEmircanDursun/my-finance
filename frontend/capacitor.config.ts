@@ -19,7 +19,9 @@ const config: CapacitorConfig = {
     // is installed; never substitute Android/web Firebase credentials.
     includePlugins: [
       '@capacitor-firebase/analytics',
-      ...(iosHasFirebase ? ['@capacitor-firebase/authentication'] : []),
+      ...(iosHasFirebase
+        ? ['@capacitor-firebase/authentication', '@capacitor-firebase/crashlytics', '@capacitor-firebase/app-check']
+        : []),
       '@capacitor/app', '@capacitor/local-notifications', '@capacitor/push-notifications',
       '@capacitor/splash-screen', '@capacitor/status-bar',
     ],
@@ -38,7 +40,7 @@ const config: CapacitorConfig = {
       // Firebase Auth SDK in on its own, producing a second session that the
       // JS side never looks at and that can drift out of sync with it.
       skipNativeAuth: true,
-      providers: ['google.com'],
+      providers: ['google.com', 'apple.com'],
     },
   },
 }

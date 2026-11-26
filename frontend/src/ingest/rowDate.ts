@@ -1,6 +1,7 @@
 import { parseSlashDate, parseTurkishLongDate } from '../core/date'
 
-export const STATEMENT_ROW = /^(\d{1,2}(?:[./-]\d{1,2}[./-]|\s+\p{L}+\s+)\d{4})(?:\s+(.*))?$/u
+export const STATEMENT_ROW =
+  /^(\d{1,2}(?:[./-]\d{1,2}[./-]|\s+\p{L}+\s+)\d{4})(?:(?:\s+|(?=[A-Za-zÇĞİÖŞÜçğıöşü0-9]))(.*))?$/u
 
 export function parseStatementRowDate(value: string) {
   return parseTurkishLongDate(value) ?? parseSlashDate(value.replace(/-/g, '/'))

@@ -7,6 +7,7 @@ import {
   linkWithCredential,
   linkWithPopup,
   linkWithRedirect,
+  OAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
@@ -32,7 +33,7 @@ export interface AuthUser {
   displayName: string | null
   photoURL: string | null
   isAnonymous: boolean
-  /** `google.com`, `password` … — how this account can be signed into. */
+  /** `google.com`, `apple.com`, `password` … — how this account can be signed into. */
   providers: string[]
 }
 
@@ -50,12 +51,28 @@ function toAuthUser(user: User): AuthUser {
 const codeOf = (error: unknown): string | undefined => (error as { code?: string })?.code
 const messageOf = (error: unknown): string => (error as { message?: string })?.message ?? ''
 
-/** Native Credential Manager reports cancellation without a Firebase code. */
-function isGoogleCancellation(error: unknown): boolean {
-  const code = codeOf(error) ?? ''
-  return ['auth/popup-closed-by-user', 'auth/cancelled-popup-request', '12501', 'SIGN_IN_CANCELLED'].includes(code)
+/** Native Google Credential Manager & Apple ASAuthorizationController report cancellation without Firebase codes. */
+function isOAuthCancellation(error: unknown): boolean {
+  const code = String(codeOf(error) ?? '')
+  return [
+    'auth/popup-closed-by-user',
+    'auth/cancelled-popup-request',
+    '12501',
+    '1001',
+    'SIGN_IN_CANCELLED',
+    'ASAuthorizationErrorCanceled',
+    'ERR_CANCELED',
+  ].includes(code)
     || /(?:CANCELED|CANCELLED|CANCELLATION)/i.test(code)
+    || /ASAuthorizationError[^\n]*1001|error\s+1001/i.test(messageOf(error))
     || /(?:user (?:cancelled|canceled)|(?:sign.in|authorization|activity) (?:is )?(?:cancelled|canceled)|(?:cancelled|canceled) by (?:the )?user)/i.test(messageOf(error))
+}
+
+function extractRefusedOAuthCredential(error: unknown): AuthCredential | null {
+  return (
+    GoogleAuthProvider.credentialFromError(error as never) ??
+    OAuthProvider.credentialFromError(error as never)
+  )
 }
 
 /**
@@ -80,8 +97,8 @@ export function onAuthChange(callback: (user: AuthUser | null) => void, onError?
  * another account, signs into *that* account instead.
  *
  * Someone who has been using the app without an account, then signs in with an
- * email or Google account that already exists (made on their phone, say), has
- * asked for exactly one thing: to be in that account. Failing with "this
+ * email, Google, or Apple account that already exists (made on their phone, say),
+ * has asked for exactly one thing: to be in that account. Failing with "this
  * credential is already in use" turns a perfectly clear request into a dead end.
  * The workspace starts a fresh data session if this changes the UID.
  */
@@ -100,7 +117,7 @@ async function attach(credential: AuthCredential): Promise<void> {
     const code = codeOf(error)
     if (code === 'auth/credential-already-in-use' || code === 'auth/email-already-in-use') {
       // Firebase hands back the credential it refused when it can.
-      const refused = GoogleAuthProvider.credentialFromError(error as never) ?? credential
+      const refused = extractRefusedOAuthCredential(error) ?? credential
       await signInWithCredential(auth, refused)
       return
     }
@@ -163,23 +180,24 @@ export async function sendPasswordReset(email: string): Promise<void> {
   await sendPasswordResetEmail(getFirebaseAuth(), email.trim())
 }
 
-// ─── Google ───────────────────────────────────────────────────────────────────
+// ─── OAuth (Google & Apple) ───────────────────────────────────────────────────
 
-export type GoogleOutcome = 'done' | 'redirecting' | 'cancelled'
+export type OAuthOutcome = 'done' | 'redirecting' | 'cancelled'
+export type GoogleOutcome = OAuthOutcome
 
 /**
  * On the web this is a popup, with a full-page redirect as the way out when the
  * popup cannot open (blocked, or inside an in-app browser that has no popups).
- * Inside the Android WebView there is no popup to open at all, so the native
+ * Inside the native WebView there is no popup to open at all, so the native
  * build asks the OS for a Google credential (via `@capacitor-firebase/authentication`,
  * configured with `skipNativeAuth: true`) and feeds the idToken into this same
  * Firebase JS session, which is what the rest of the app reads. Every path ends
  * in the one session, attached the same way.
  */
-let googleSignInFlight: Promise<GoogleOutcome> | null = null
+let googleSignInFlight: Promise<OAuthOutcome> | null = null
 
 /** Sharing one in-flight request prevents competing Google account pickers. */
-export function signInWithGoogle(): Promise<GoogleOutcome> {
+export function signInWithGoogle(): Promise<OAuthOutcome> {
   if (!googleSignInFlight) {
     googleSignInFlight = performGoogleSignIn().then(outcome => {
       if (outcome === 'done') trackProductEvent('sign_in_completed')
@@ -189,7 +207,7 @@ export function signInWithGoogle(): Promise<GoogleOutcome> {
   return googleSignInFlight
 }
 
-async function performGoogleSignIn(): Promise<GoogleOutcome> {
+async function performGoogleSignIn(): Promise<OAuthOutcome> {
   const auth = getFirebaseAuth()
 
   if (isNative()) {
@@ -201,7 +219,7 @@ async function performGoogleSignIn(): Promise<GoogleOutcome> {
       await attach(GoogleAuthProvider.credential(idToken))
       return 'done'
     } catch (error) {
-      if (isGoogleCancellation(error)) return 'cancelled'
+      if (isOAuthCancellation(error)) return 'cancelled'
       throw error
     }
   }
@@ -229,7 +247,74 @@ async function performGoogleSignIn(): Promise<GoogleOutcome> {
         return 'redirecting'
 
       case 'auth/credential-already-in-use': {
-        const refused = GoogleAuthProvider.credentialFromError(error as never)
+        const refused = extractRefusedOAuthCredential(error)
+        if (!refused) throw error
+        await signInWithCredential(auth, refused)
+        return 'done'
+      }
+
+      default:
+        throw error
+    }
+  }
+}
+
+let appleSignInFlight: Promise<OAuthOutcome> | null = null
+
+/** Sharing one in-flight request prevents competing Apple sign-in sheets. */
+export function signInWithApple(): Promise<OAuthOutcome> {
+  if (!appleSignInFlight) {
+    appleSignInFlight = performAppleSignIn().then(outcome => {
+      if (outcome === 'done') trackProductEvent('sign_in_completed')
+      return outcome
+    }).finally(() => { appleSignInFlight = null })
+  }
+  return appleSignInFlight
+}
+
+async function performAppleSignIn(): Promise<OAuthOutcome> {
+  const auth = getFirebaseAuth()
+
+  if (isNative()) {
+    const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+    try {
+      const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true })
+      const idToken = result.credential?.idToken
+      if (!idToken) throw new UserFacingError('Apple kimliği alınamadı. Yeniden dene veya başka bir giriş yöntemi seç.')
+      const rawNonce = result.credential?.nonce
+      const provider = new OAuthProvider('apple.com')
+      await attach(provider.credential({ idToken, ...(rawNonce ? { rawNonce } : {}) }))
+      return 'done'
+    } catch (error) {
+      if (isOAuthCancellation(error)) return 'cancelled'
+      throw error
+    }
+  }
+
+  const provider = new OAuthProvider('apple.com')
+  provider.addScope('email')
+  provider.addScope('name')
+  provider.setCustomParameters({ locale: 'tr' })
+
+  const user = auth.currentUser
+  try {
+    if (user?.isAnonymous) await linkWithPopup(user, provider)
+    else await signInWithPopup(auth, provider)
+    return 'done'
+  } catch (error) {
+    switch (codeOf(error)) {
+      case 'auth/popup-closed-by-user':
+      case 'auth/cancelled-popup-request':
+        return 'cancelled'
+
+      case 'auth/popup-blocked':
+      case 'auth/operation-not-supported-in-this-environment':
+        if (user?.isAnonymous) await linkWithRedirect(user, provider)
+        else await signInWithRedirect(auth, provider)
+        return 'redirecting'
+
+      case 'auth/credential-already-in-use': {
+        const refused = extractRefusedOAuthCredential(error)
         if (!refused) throw error
         await signInWithCredential(auth, refused)
         return 'done'
@@ -242,8 +327,8 @@ async function performGoogleSignIn(): Promise<GoogleOutcome> {
 }
 
 /**
- * Completes a Google sign-in that left the page and came back. Called once at
- * start-up; a no-op when the page was not reached by a redirect.
+ * Completes an OAuth sign-in (Google or Apple) that left the page and came back.
+ * Called once at start-up; a no-op when the page was not reached by a redirect.
  */
 export async function completeRedirectSignIn(): Promise<void> {
   // The native picker returns credentials directly; browser redirects do not
@@ -254,7 +339,7 @@ export async function completeRedirectSignIn(): Promise<void> {
     await getRedirectResult(auth)
   } catch (error) {
     if (codeOf(error) === 'auth/credential-already-in-use') {
-      const refused = GoogleAuthProvider.credentialFromError(error as never)
+      const refused = extractRefusedOAuthCredential(error)
       if (refused) {
         await signInWithCredential(auth, refused)
         return
@@ -276,10 +361,10 @@ export async function signOutSession(expectedUid?: string): Promise<void> {
   await import('../platform/push').then((push) => push.disconnectCloudPush())
   if (expectedUid && getFirebaseAuth().currentUser?.uid !== expectedUid) throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
   await signOut(getFirebaseAuth())
-  // Only clears the OS-level Google account cache the native plugin keeps;
+  // Only clears the OS-level account cache the native plugin keeps;
   // `skipNativeAuth` means there was never a second native Firebase session to
-  // sign out of. Without this, the next "Google ile devam et" would silently
-  // reuse the same account with no picker.
+  // sign out of. Without this, the next sign-in could silently reuse the same
+  // account with no picker.
   if (isNative()) {
     const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
     // The JS sign-out already succeeded. An unavailable OS credential cache
@@ -296,6 +381,28 @@ export async function reauthenticate(password?: string): Promise<void> {
   const usesPassword = user.providerData.some((p) => p.providerId === 'password')
   if (usesPassword && password !== undefined && user.email) {
     await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password))
+    return
+  }
+
+  const usesApple = user.providerData.some((p) => p.providerId === 'apple.com')
+  const usesGoogle = user.providerData.some((p) => p.providerId === 'google.com')
+  if (usesApple && !usesGoogle) {
+    if (isNative()) {
+      const { FirebaseAuthentication } = await import('@capacitor-firebase/authentication')
+      const result = await FirebaseAuthentication.signInWithApple({ skipNativeAuth: true })
+      const idToken = result.credential?.idToken
+      if (!idToken) throw new UserFacingError('Apple girişi tamamlanamadı. Yeniden dene veya başka bir yöntem seç.')
+      const rawNonce = result.credential?.nonce
+      await reauthenticateWithCredential(
+        user,
+        new OAuthProvider('apple.com').credential({ idToken, ...(rawNonce ? { rawNonce } : {}) }),
+      )
+      return
+    }
+    const provider = new OAuthProvider('apple.com')
+    provider.addScope('email')
+    provider.addScope('name')
+    await reauthenticateWithPopup(user, provider)
     return
   }
 
@@ -326,10 +433,16 @@ export async function deleteCurrentAccount(expectedUid?: string): Promise<void> 
 export function authErrorMessage(error: unknown): string {
   const code = codeOf(error)
   if (error instanceof UserFacingError) return error.message
-  if (isGoogleCancellation(error)) return 'Google girişi iptal edildi. Hazır olduğunda yeniden deneyebilirsin.'
+  if (isOAuthCancellation(error)) return 'Giriş iptal edildi. Hazır olduğunda yeniden deneyebilirsin.'
   const message = messageOf(error)
   if (code === '10' || /(?:DEVELOPER_ERROR|(?:^|\s)10:|serverClientId.*(?:invalid|incorrect))/i.test(message)) {
     return 'Bu Android sürümünün Google giriş yapılandırması doğrulanamadı. E-posta ile giriş yapabilir, durumu geliştiriciye iletebilirsin.'
+  }
+  if (code === '1000' || /ASAuthorizationError[^\n]*1000/i.test(message)) {
+    return 'Apple ile giriş bu cihazda tamamlanamadı. Cihazında iCloud oturumunun açık olduğunu kontrol et veya Google / e-posta ile devam et.'
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return 'Bu giriş yöntemi şu an etkin değil. Google veya e-posta ile devam edebilirsin.'
   }
   if (/NoCredentialException|no credentials available|no google accounts/i.test(message)) {
     return 'Bu telefonda kullanılabilir Google hesabı bulunamadı. Telefon ayarlarından Google hesabı ekle veya e-posta ile devam et.'

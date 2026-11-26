@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { firebaseErrorMessage } from '../firebase/errors'
+import { recordCrashError } from '../platform/crashlytics'
 import { BrandMark } from '../ui/Brand'
 
 interface State {
@@ -20,6 +21,10 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Uygulama hatası:', error, info.componentStack)
+    void recordCrashError(error, {
+      source: 'react_error_boundary',
+      componentStack: info.componentStack ?? undefined,
+    })
   }
 
   render() {

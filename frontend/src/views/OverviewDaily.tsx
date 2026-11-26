@@ -15,8 +15,10 @@ import {
 } from 'recharts'
 import { fullDayLabel } from '../core/date'
 import { count, money2, moneyCompact } from '../core/money'
+import { effectiveDate, type Transaction } from '../domain/types'
 import { hapticTap } from '../platform/haptics'
 import { MoneyValue } from '../ui/MoneyValue'
+import { TransactionItem } from '../ui/TransactionItem'
 import { Segmented } from '../ui/primitives'
 import { ChartTooltipShell } from '../ui/charts'
 import type { overviewSpending } from './overviewSpending'
@@ -26,6 +28,7 @@ type Spending = ReturnType<typeof overviewSpending>
 export function OverviewDaily({
   days,
   peak,
+  transactions = [],
   privateMode,
   onDay,
   onAnalysis,
@@ -33,6 +36,7 @@ export function OverviewDaily({
 }: {
   days: Spending['days']
   peak: Spending['peak']
+  transactions?: readonly Transaction[]
   privateMode: boolean
   onDay: (day: string) => void
   onAnalysis?: () => void
@@ -62,10 +66,24 @@ export function OverviewDaily({
     })
   }, [days])
 
-  const picked =
-    series.find((day) => day.date === (scrubDate ?? selected)) ??
+  const lockedDay =
+    series.find((day) => day.date === selected) ??
     series.find((day) => day.date === peak?.date) ??
     [...series].reverse().find((day) => day.count > 0)
+
+  const picked =
+    (scrubDate ? series.find((day) => day.date === scrubDate) : undefined) ?? lockedDay
+
+  const dayTransactions = useMemo(() => {
+    if (!lockedDay) return []
+    return transactions
+      .filter(
+        (tx) =>
+          effectiveDate(tx) === lockedDay.date &&
+          (tx.kind === 'expense' || tx.kind === 'refund'),
+      )
+      .sort((a, b) => b.amount - a.amount)
+  }, [transactions, lockedDay])
 
   const hasData = Boolean(picked)
   const index = picked ? series.indexOf(picked) : -1
@@ -89,7 +107,7 @@ export function OverviewDaily({
               : 'Ay boyunca birikimli harcama seyri'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {hasData && !privateMode && (
             <Segmented
               value={mode}
@@ -125,7 +143,7 @@ export function OverviewDaily({
               <p>
                 {fullDayLabel(picked.date)}
                 {picked.date === peak?.date && (
-                  <span className="ml-2 inline-flex rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent-text">
+                  <span className="ml-2 inline-flex rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-text">
                     En yüksek gün
                   </span>
                 )}
@@ -247,6 +265,13 @@ export function OverviewDaily({
                     if (active?.date) setScrubDate(active.date)
                   }}
                   onMouseLeave={() => setScrubDate(null)}
+                  onClick={(state) => {
+                    const active = state?.activePayload?.[0]?.payload as (typeof series)[number] | undefined
+                    if (active?.date) {
+                      hapticTap()
+                      setSelected(active.date)
+                    }
+                  }}
                 >
                   <defs>
                     <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -303,44 +328,49 @@ export function OverviewDaily({
 
           <div className="overview-day-footer">
             <span>
-              {picked.count
-                ? `${count(picked.count)} harcama / iade kaydı`
-                : 'Seçili günde kayıt yok'}
+              {lockedDay && dayTransactions.length > 0
+                ? `${fullDayLabel(lockedDay.date)} · ${count(dayTransactions.length)} harcama / iade`
+                : picked.count
+                  ? `${count(picked.count)} harcama / iade kaydı`
+                  : 'Seçili günde kayıt yok'}
             </span>
-            {picked.count > 0 && (
+            {lockedDay && dayTransactions.length > 0 && (
               <button
                 type="button"
                 className="text-button"
-                onClick={() => onDay(picked.date)}
+                onClick={() => onDay(lockedDay.date)}
               >
-                Günün işlemleri <ChevronRight size={15} aria-hidden="true" />
+                Tümünü aç <ChevronRight size={15} aria-hidden="true" />
               </button>
             )}
           </div>
 
-          <details className="overview-data">
-            <summary>Günlük tutar tablosu</summary>
-            <div className="max-h-56 overflow-auto">
-              <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Gün</th>
-                    <th scope="col">Kayıt</th>
-                    <th scope="col">Net harcama</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {days.map((day) => (
-                    <tr key={day.date}>
-                      <th scope="row">{fullDayLabel(day.date)}</th>
-                      <td>{count(day.count)}</td>
-                      <td className="num">{day.net === null ? '—' : money2(day.net)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {lockedDay && dayTransactions.length > 0 && (
+            <div className="overview-day-list" aria-live="polite">
+              <ul>
+                {dayTransactions.slice(0, 6).map((tx) => (
+                  <li key={tx.id}>
+                    <TransactionItem
+                      transaction={tx}
+                      compact
+                      onOpen={() => onDay(lockedDay.date)}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {dayTransactions.length > 6 && (
+                <div className="overview-day-list__more">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => onDay(lockedDay.date)}
+                  >
+                    +{count(dayTransactions.length - 6)} kayıt daha göster <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
             </div>
-          </details>
+          )}
         </>
       )}
     </section>

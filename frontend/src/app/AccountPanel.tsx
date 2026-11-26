@@ -4,10 +4,11 @@ import { useStore } from '../store/AppStore'
 import { describeSync } from '../sync/present'
 import { Button, Skeleton } from '../ui/primitives'
 import { GoogleConnectButton } from './GoogleConnectButton'
+import { AppleConnectButton } from './AppleConnectButton'
 import { useNow } from './useNow'
 import './account.css'
 
-/** Visible, truthful account status; Google is an action, not a hidden setting. */
+/** Visible, truthful account status; Google and Apple are direct actions, not hidden settings. */
 export function AccountPanel({ onOpen, compact = false }: { onOpen: () => void; compact?: boolean }) {
   const { cloudAvailable, authReady, authError, retryAuth, authUser, sync, syncNow } = useStore()
   const now = useNow()
@@ -24,7 +25,7 @@ export function AccountPanel({ onOpen, compact = false }: { onOpen: () => void; 
   if (!authReady) return <Skeleton className={compact ? 'h-11 w-32' : 'h-28 w-full'} />
 
   if (compact) return (
-    <button type="button" className={clsx('account-pill', authError && 'account-pill--warning')} onClick={onOpen} aria-label={signedIn ? `Hesabım. ${view.title}` : 'Google girişi ve senkronizasyon'}>
+    <button type="button" className={clsx('account-pill', authError && 'account-pill--warning')} onClick={onOpen} aria-label={signedIn ? `Hesabım. ${view.title}` : 'Hesap girişi ve senkronizasyon'}>
       {signedIn ? sync.status === 'synced' ? <CircleCheck size={18} /> : sync.status === 'offline' ? <CloudOff size={18} /> : <Cloud size={18} /> : <UserRound size={18} />}
       <span>{signedIn ? 'Hesabım' : 'Giriş yap'}</span>
       {signedIn && <span className={clsx('account-pill__dot', `account-tone-${view.tone}`)} aria-hidden="true" />}
@@ -37,7 +38,7 @@ export function AccountPanel({ onOpen, compact = false }: { onOpen: () => void; 
         <span className="account-panel__icon" aria-hidden="true">{signedIn ? <CircleCheck size={22} /> : <Cloud size={22} />}</span>
         <div className="account-panel__copy">
           <h2>{signedIn ? (authUser.displayName ?? authUser.email ?? 'Hesabım') : 'Her cihazda, aynı bütçe.'}</h2>
-          <p>{signedIn ? view.detail : 'Google ile bağlan. Kayıtların telefonunda ve bilgisayarında eşitlensin.'}</p>
+          <p>{signedIn ? view.detail : 'Google veya Apple ile bağlan. Kayıtların telefonunda ve bilgisayarında eşitlensin.'}</p>
         </div>
       </div>
 
@@ -60,8 +61,9 @@ export function AccountPanel({ onOpen, compact = false }: { onOpen: () => void; 
         </div>
       ) : (
         <div className="account-panel__actions">
+          <AppleConnectButton />
           <GoogleConnectButton />
-          <Button variant="ghost" onClick={onOpen}>Diğer giriş seçenekleri<ChevronRight size={15} /></Button>
+          <Button variant="ghost" onClick={onOpen}>E-posta ile devam et<ChevronRight size={15} /></Button>
         </div>
       )}
     </section>

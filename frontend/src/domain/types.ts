@@ -175,6 +175,8 @@ export interface Statement {
   fileName: string
   /** SHA-256 of the original PDF bytes, scoped to the owning account. */
   pdfSha256?: string
+  /** Cardholder name printed on the statement cover, when reliably detected. */
+  cardholderName?: string
   bank: string
   /** "Akbank Axess", "Garanti Bonus Platinum" — as printed. */
   accountLabel?: string
@@ -259,6 +261,8 @@ export interface CreditCard {
   name: string
   /** Last four digits only; the full card number is never requested. */
   last4?: string
+  /** Optional custom card color preset ID; defaults to the bank's signature color when omitted. */
+  color?: string
   statementDay: number
   entryDay: number
   remindersEnabled: boolean
@@ -363,6 +367,7 @@ export interface ParseResult {
   bank: string
   engine: string
   reportedCardLast4?: string
+  cardholderName?: string
   accountLabel: string
   transactions: Transaction[]
   skipped: number
@@ -376,14 +381,27 @@ export interface ParseResult {
   ignored: IgnoredRow[]
 }
 
+export type ImportErrorCode =
+  | 'different_holder'
+  | 'unsupported_bank'
+  | 'reconciliation'
+  | 'unreadable'
+  | 'duplicate_cycle'
+  | 'other'
+
 export interface ImportOutcome {
   alreadyImported?: boolean
+  existingMatchLabel?: string
   reportedCardLast4?: string
+  cardholderName?: string
+  warnings?: import('../ingest/ownership').ImportReviewWarning[]
+  diagnosticReport?: { reportId: string; ext: 'pdf' | 'csv' | 'txt' }
   fileName: string
   ok: boolean
   added: number
   duplicates: number
   removed?: number
   error?: string
+  errorCode?: ImportErrorCode
   statement?: Statement
 }

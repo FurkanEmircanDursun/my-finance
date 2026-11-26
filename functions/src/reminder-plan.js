@@ -61,6 +61,22 @@ export async function cleanupExpiredDeliveries(hour, removeBatch) {
   return removed
 }
 
+export const FAILED_STATEMENT_RETENTION_DAYS = 30
+const FAILED_STATEMENT_OBJECT_RE = /^users\/[^/]+\/failed-statements\/[0-9a-f]{64}\/(?:source\.(?:pdf|csv|txt)|report\.json)$/
+
+export function isExpiredFailedStatementObject(name, timeCreated, nowMs) {
+  if (typeof name !== 'string' || !FAILED_STATEMENT_OBJECT_RE.test(name)) return false
+  const createdMs = typeof timeCreated === 'string' ? Date.parse(timeCreated) : Number(timeCreated)
+  if (!Number.isFinite(createdMs)) return false
+  return nowMs - createdMs >= FAILED_STATEMENT_RETENTION_DAYS * 86_400_000
+}
+
+/** Daily retention sweep for write-only failed-statement diagnostic objects (30-day max lifetime). */
+export async function cleanupExpiredFailedStatements(hour, removeExpiredBatch) {
+  if (hour !== 0) return 0
+  return removeExpiredBatch(500)
+}
+
 export function messageFor(token, reminder, id, uid) {
   return {
     token,

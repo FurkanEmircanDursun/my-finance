@@ -10,8 +10,13 @@ import type { CreditCard, ParseResult, Statement } from '../domain/types'
 import { buildLedger } from '../analytics/ledger'
 import { useImport } from './useImport'
 
-const harness = vi.hoisted(() => ({ state: null as AppState | null, dispatch: vi.fn(), parseFile: vi.fn() }))
-vi.mock('../store/AppStore', () => ({ useStore: () => ({ state: harness.state, dispatch: harness.dispatch }) }))
+const harness = vi.hoisted(() => ({
+  state: null as AppState | null,
+  authUser: null as { displayName?: string | null } | null,
+  dispatch: vi.fn(),
+  parseFile: vi.fn(),
+}))
+vi.mock('../store/AppStore', () => ({ useStore: () => ({ state: harness.state, authUser: harness.authUser, dispatch: harness.dispatch }) }))
 vi.mock('../ingest/pipeline', async original => ({ ...await original<typeof import('../ingest/pipeline')>(), parseFile: harness.parseFile }))
 vi.mock('../platform/analytics', () => ({ trackProductEvent: vi.fn().mockResolvedValue(undefined) }))
 
@@ -24,6 +29,7 @@ function render() { renderToStaticMarkup(createElement(Harness)); return importe
 beforeEach(() => {
   vi.clearAllMocks()
   harness.state = { ...initialState, hydrated: true }
+  harness.authUser = null
   harness.dispatch.mockImplementation((action: Action) => { harness.state = reducer(harness.state!, action) })
   harness.parseFile.mockResolvedValue(parsed)
 })
@@ -191,5 +197,75 @@ describe('physical card import and explicit save lifecycle', () => {
     expect(outcomes![0].error).toContain('ait değil')
     expect(harness.state!.transactions).toEqual([])
     expect(harness.state!.statements).toEqual([])
+  })
+
+  it('requires review confirmation for a different cardholder and blocks when cancelled or headless', async () => {
+    harness.authUser = { displayName: 'Furkan Dursun' }
+    harness.parseFile.mockResolvedValueOnce({ ...parsed, cardholderName: 'Ahmet Yılmaz' })
+    const rejectReview = vi.fn(async (items) => {
+      expect(items[0].warnings?.[0]).toMatchObject({
+        code: 'different_holder_account',
+        requiresExplicitConfirm: true,
+        expectedConfirmName: 'Ahmet Yılmaz',
+      })
+      return false
+    })
+    const cancelled = await render().run([file], undefined, false, undefined, rejectReview)
+    expect(rejectReview).toHaveBeenCalledOnce()
+    expect(cancelled).toBeUndefined()
+    expect(harness.state!.transactions).toEqual([])
+    expect(harness.state!.statements).toEqual([])
+
+    // Headless (no review callback) still refuses foreign cardholders automatically.
+    harness.parseFile.mockResolvedValueOnce({ ...parsed, cardholderName: 'Ahmet Yılmaz' })
+    const headless = await render().run([file])
+    expect(headless![0]).toMatchObject({
+      ok: false,
+      added: 0,
+      errorCode: 'different_holder',
+      cardholderName: 'Ahmet Yılmaz',
+    })
+    expect(harness.state!.statements).toEqual([])
+
+    // Once the user confirms in review (after typing the name), the statement is saved.
+    harness.parseFile.mockResolvedValueOnce({ ...parsed, cardholderName: 'Ahmet Yılmaz' })
+    const approveReview = vi.fn(async () => true)
+    const approved = await render().run([file], undefined, false, undefined, approveReview)
+    expect(approveReview).toHaveBeenCalledOnce()
+    expect(approved![0].ok).toBe(true)
+    expect(harness.state!.statements).toHaveLength(1)
+  })
+
+  it('refuses headless mixing of statements from two different people in the same batch or after an existing owner', async () => {
+    const fileA = { name: 'owner.pdf', size: 100 } as File
+    const fileB = { name: 'other.pdf', size: 100 } as File
+    harness.parseFile
+      .mockResolvedValueOnce({ ...parsed, cardholderName: 'Deniz Kaya', reportedCardLast4: '1111' })
+      .mockResolvedValueOnce({ ...parsed, cardholderName: 'Mert Demir', reportedCardLast4: '2222' })
+    const outcomes = await render().run([fileA, fileB])
+    expect(outcomes![0].ok).toBe(true)
+    expect(outcomes![1]).toMatchObject({ ok: false, errorCode: 'different_holder', cardholderName: 'Mert Demir' })
+    expect(harness.state!.statements).toHaveLength(1)
+
+    // Subsequent headless upload belonging to yet another person is also rejected against existing cardholder.
+    harness.parseFile.mockResolvedValueOnce({ ...parsed, cardholderName: 'Selin Aydın', reportedCardLast4: '3333' })
+    const later = await render().run([{ name: 'third.pdf', size: 100 } as File])
+    expect(later![0]).toMatchObject({ ok: false, errorCode: 'different_holder', cardholderName: 'Selin Aydın' })
+    expect(harness.state!.statements).toHaveLength(1)
+  })
+
+  it('imports multiple cards of the same bank (1-to-N) automatically without requiring pre-selection', async () => {
+    const savedCard: CreditCard = { id: 'card-saved', bank: 'akbank', name: 'Axess', last4: '1111', statementDay: 20, entryDay: 21, remindersEnabled: true }
+    harness.dispatch({ type: 'upsertCard', card: savedCard })
+    const secondCardPdf = { name: 'second-card.pdf', size: 100 } as File
+    harness.parseFile.mockResolvedValueOnce({ ...parsed, reportedCardLast4: '2222' })
+
+    const outcomes = await render().run([secondCardPdf])
+    expect(outcomes![0].ok).toBe(true)
+    expect(outcomes![0].statement!.cardId).not.toBe(savedCard.id)
+    expect(importedCardDraft(outcomes![0].statement!, [], [savedCard.id])).toMatchObject({
+      bank: 'akbank',
+      last4: '2222',
+    })
   })
 })

@@ -114,4 +114,31 @@ describe('update destination and durable offline policy', () => {
     expect(updateDecision('2.3.0', policy, 'web')).toBe('hard')
     expect(updateDecision('2.3.0', policy, 'android')).toBe('none')
   })
+  it('supports optional per-platform version overrides without affecting other platforms', () => {
+    const policy = parseUpdatePolicy({
+      min_required_version: '2.4.0',
+      latest_version: '2.9.3',
+      min_required_version_android: '2.9.0',
+      latest_version_android: '2.9.3',
+      min_required_version_ios: '2.5.0',
+      latest_version_ios: '2.8.0',
+      update_url: 'https://my-finance-webapp-fd.web.app',
+      update_url_android: 'https://play.google.com/store/apps/details?id=com.faraday.followfinance',
+      update_url_ios: 'https://apps.apple.com/tr/app/id123456789',
+    })!
+    expect(updateDecision('2.8.0', policy, 'android')).toBe('hard')
+    expect(updateDecision('2.8.0', policy, 'ios')).toBe('none')
+    expect(updateDecision('2.8.0', policy, 'web')).toBe('soft')
+  })
+  it('fails open when a platform override contradicts its paired latest version', () => {
+    const policy = parseUpdatePolicy({
+      min_required_version: '2.4.0',
+      latest_version: '2.9.3',
+      min_required_version_ios: '3.0.0',
+      update_url: 'https://my-finance-webapp-fd.web.app',
+      update_url_ios: 'https://apps.apple.com/tr/app/id123456789',
+    })!
+    expect(updateDecision('2.8.0', policy, 'ios')).toBe('none')
+    expect(updateDecision('2.8.0', policy, 'web')).toBe('soft')
+  })
 })

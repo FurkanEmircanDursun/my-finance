@@ -25,8 +25,8 @@ export function BudgetRibbon({
       aria-labelledby="budget-title"
     >
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <span className="text-micro font-semibold uppercase text-faint">Bütçe Kapasitesi</span>
+        <div className="min-w-0">
+          <span className="text-micro font-medium uppercase text-faint">Bütçe Kapasitesi</span>
           <h2 id="budget-title" className="mt-0.5 text-title font-semibold text-ink">
             Aylık harcama alanın
           </h2>
@@ -43,16 +43,16 @@ export function BudgetRibbon({
 
       {limit > 0 ? (
         <>
-          <div className="mt-5 flex items-center justify-between gap-4">
-            <div className="min-w-0">
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+            <div className="min-w-0 flex-1">
               <div
-                className={`text-[clamp(1.65rem,2.6vw,2.15rem)] font-bold leading-none tracking-[-0.035em] ${
+                className={`break-words text-[clamp(1.5rem,2.6vw,2.15rem)] font-bold leading-none tracking-[-0.035em] ${
                   over ? 'text-negative' : 'text-ink'
                 }`}
               >
                 <MoneyValue value={Math.abs(limit - spend)} />
               </div>
-              <div className="mt-2 flex items-center gap-1.5 text-label font-semibold">
+              <div className="mt-2 flex items-center gap-1.5 text-label font-medium">
                 {over ? (
                   <span className="inline-flex items-center gap-1 text-negative">
                     <ShieldAlert size={14} /> Limit üzerinde
@@ -65,11 +65,11 @@ export function BudgetRibbon({
               </div>
             </div>
 
-            <RadialGauge value={Math.min(100, usedPct)} max={100} size={78} strokeWidth={7} tone={tone}>
+            <RadialGauge value={Math.min(100, usedPct)} max={100} size={76} strokeWidth={7} tone={tone}>
               <RollingNumber
                 value={usedPct}
                 suffix="%"
-                className="text-body font-bold text-ink"
+                className="text-body font-semibold text-ink"
               />
             </RadialGauge>
           </div>
@@ -82,9 +82,9 @@ export function BudgetRibbon({
               height={8}
               label="Aylık limit kullanımı"
             />
-            <div className="flex items-center justify-between gap-2 text-label text-muted">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-label text-muted">
               <span className="num">%{usedPct} kullanıldı</span>
-              <span className="num font-semibold text-ink">{money2(limit)} limit</span>
+              <span className="num font-medium text-ink">{money2(limit)} limit</span>
             </div>
           </div>
 

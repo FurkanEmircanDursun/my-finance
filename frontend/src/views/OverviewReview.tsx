@@ -3,6 +3,7 @@ import { ArrowRight, PieChart as PieIcon, Sparkles } from 'lucide-react'
 import { money2, percent } from '../core/money'
 import type { CategoryId } from '../domain/categories'
 import { InteractiveDonutChart, type DonutSlice } from '../ui/charts'
+import { CategoryIcon } from '../ui/CategoryIcon'
 import { RadialGauge } from '../ui/motion'
 import { RollingNumber } from '../ui/MoneyValue'
 import type { overviewSpending, spendingHabits } from './overviewSpending'
@@ -47,17 +48,22 @@ export function OverviewCategories({
               className="overview-category-row"
             >
               <span
-                className="overview-category-dot"
-                style={{ background: item.color }}
+                className="overview-category-icon"
+                style={{
+                  background: `${item.color}18`,
+                  color: item.color,
+                }}
                 aria-hidden="true"
-              />
-              <span className="truncate font-medium">{item.label}</span>
-              <span className="num font-semibold text-ink">
+              >
+                <CategoryIcon category={item.id} size={14} />
+              </span>
+              <span className="overview-category-name">{item.label}</span>
+              <span className="num overview-category-amount">
                 {privateMode ? '—' : money2(item.total)}
               </span>
-              <strong className="num text-muted">
+              <span className="num overview-category-share">
                 {privateMode ? '—' : item.share < 0.1 ? '<%0,1' : percent(item.share)}
-              </strong>
+              </span>
               {!privateMode && (
                 <span className="overview-category-track" aria-hidden="true">
                   <i style={{ width: `${item.share}%`, backgroundColor: item.color }} />
@@ -95,14 +101,7 @@ export function OverviewCategories({
             />
           </div>
 
-          {renderRows(categories.slice(0, 5))}
-
-          {categories.length > 5 && (
-            <details className="overview-data">
-              <summary>Kalan kategoriler ({categories.length - 5})</summary>
-              {renderRows(categories.slice(5))}
-            </details>
-          )}
+          {renderRows(categories)}
 
           {!privateMode && refunds > 0 && (
             <p className="overview-note">
@@ -161,10 +160,10 @@ export function OverviewReview({
             <div className="overview-habit-inner">
               <RadialGauge value={habit.score} max={100} size={86} strokeWidth={7} tone={scoreTone}>
                 <RollingNumber value={habit.score} className="text-[1.45rem] font-bold text-ink" />
-                <span className="text-[10px] font-semibold uppercase text-faint">/ 100</span>
+                <span className="text-[10px] font-medium uppercase text-faint">/ 100</span>
               </RadialGauge>
               <div className="min-w-0 flex-1">
-                <p className="text-body font-semibold text-ink">
+                <p className="text-body font-medium text-ink">
                   {habit.score >= 80
                     ? 'Güçlü finansal denge'
                     : habit.score >= 55

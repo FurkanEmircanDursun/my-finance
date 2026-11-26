@@ -22,9 +22,13 @@ xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
 
 For a physical device/archive, select the Apple development team for **App** and
 **MizanShare**. Register the bundle IDs `com.faraday.followfinance` and
-`com.faraday.followfinance.share` and grant the same App Group to both provisioning
-profiles. This requires the owner's Apple developer account. The App Group cannot
-be provisioned from this Windows workspace.
+`com.faraday.followfinance.share`, grant the same App Group to both provisioning
+profiles, and enable the **Sign in with Apple** capability on `com.faraday.followfinance`
+(and enable the Apple provider in Firebase Console → Authentication → Sign-in method,
+configuring the Service ID + private key for web Sign in with Apple). This requires the
+owner's Apple Developer account and cannot be provisioned from this Windows workspace.
+The App Store privacy manifest is bundled at `ios/App/App/Native/PrivacyInfo.xcprivacy`
+and `ITSAppUsesNonExemptEncryption` is declared `false` in `Info.plist`.
 
 The registered Firebase iOS configuration belongs at
 `ios/App/App/GoogleService-Info.plist`. `ios:configure` validates its bundle ID,

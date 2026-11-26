@@ -1,7 +1,7 @@
 .mizan-modal-native,
 .mizan-modal-fallback {
   --modal-width: 33rem;
-  --modal-height: calc(var(--modal-visible-height, 100vh) - var(--safe-top, 0px) - 18px);
+  --modal-height: calc(var(--modal-visible-height, 100dvh) - var(--safe-top, 0px) - 18px);
   --modal-scrim: rgba(4, 7, 12, 0.68);
   position: fixed;
   right: 0;
@@ -121,6 +121,18 @@
   padding: 16px 22px;
   border-top: 1px solid var(--line);
   background: var(--bg-sunken);
+}
+
+@media (max-width: 400px) {
+  .mizan-modal-header {
+    padding: 16px 16px 12px;
+  }
+  .mizan-modal-body {
+    padding: 0 16px 20px;
+  }
+  .mizan-modal-footer {
+    padding: 14px 16px;
+  }
 }
 
 @media (min-width: 640px) {

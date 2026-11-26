@@ -4,14 +4,42 @@
       "defaultValue": {
         "value": "0.0.0"
       },
-      "description": "Bu sürümün altındaki kurulumlar zorunlu güncelleme görür. Yükseltmeden önce yayınlanmış güncelleme bağlantısını doğrulayın.",
+      "description": "Bu sürümün altındaki tüm platform kurulumları zorunlu güncelleme pop-up'ı görür. Platforma özel değer tanımlıysa o önceliklidir.",
       "valueType": "STRING"
     },
     "latest_version": {
       "defaultValue": {
-        "value": "2.8.0"
+        "value": "2.9.3"
       },
-      "description": "Bu sürümün altındaki, minimumu karşılayan kurulumlara 24 saat ertelenebilen güncelleme önerilir.",
+      "description": "Bu sürümün altındaki, minimumu karşılayan kurulumlara 24 saat ertelenebilen güncelleme pop-up'ı önerilir.",
+      "valueType": "STRING"
+    },
+    "min_required_version_android": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "İsteğe bağlı Android zorunlu minimum sürüm. Boşsa global min_required_version kullanılır.",
+      "valueType": "STRING"
+    },
+    "latest_version_android": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "İsteğe bağlı Android güncel sürüm. Boşsa global latest_version kullanılır.",
+      "valueType": "STRING"
+    },
+    "min_required_version_ios": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "İsteğe bağlı iOS zorunlu minimum sürüm. Boşsa global min_required_version kullanılır.",
+      "valueType": "STRING"
+    },
+    "latest_version_ios": {
+      "defaultValue": {
+        "value": ""
+      },
+      "description": "İsteğe bağlı iOS güncel sürüm. Boşsa global latest_version kullanılır.",
       "valueType": "STRING"
     },
     "update_url": {
@@ -25,21 +53,21 @@
       "defaultValue": {
         "value": "Mizan’ın yeni sürümündeki iyileştirmelerle devam et."
       },
-      "description": "Güncelleme ekranında düz metin olarak gösterilen, en fazla 500 karakterlik açıklama.",
+      "description": "Güncelleme pop-up'ında düz metin olarak gösterilen, en fazla 500 karakterlik açıklama.",
       "valueType": "STRING"
     },
     "update_url_android": {
       "defaultValue": {
         "value": ""
       },
-      "description": "Android güncelleme bağlantısı. Boşken Android güncelleme istemi gösterilmez; doğrulanmış mağaza/dağıtım adresi yayınlandığında buradan ayarlayın.",
+      "description": "Android Play Store bağlantısı (örn. https://play.google.com/store/apps/details?id=com.faraday.followfinance). Boşken Android güncelleme istemi gösterilmez.",
       "valueType": "STRING"
     },
     "update_url_ios": {
       "defaultValue": {
         "value": ""
       },
-      "description": "iOS güncelleme bağlantısı. Boşken iOS güncelleme istemi gösterilmez; doğrulanmış App Store/TestFlight adresi yayınlandığında buradan ayarlayın.",
+      "description": "iOS App Store veya TestFlight bağlantısı (örn. https://apps.apple.com/tr/app/id...). Boşken iOS güncelleme istemi gösterilmez.",
       "valueType": "STRING"
     }
   }

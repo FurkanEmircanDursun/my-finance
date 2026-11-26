@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, ChevronRight, CreditCard, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronRight, CreditCard, Trash2, Upload } from 'lucide-react'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
 import { categoryLabel, CATEGORIES, type CategoryId } from '../domain/categories'
@@ -7,6 +7,8 @@ import { spendAmount } from '../domain/types'
 import { fullDayLabel, monthLabel } from '../core/date'
 import { money2 } from '../core/money'
 import { Button, Empty } from '../ui/primitives'
+import { CategoryBadge } from '../ui/CategoryIcon'
+import { StatementDelete } from '../ui/StatementDelete'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
 import { PhysicalCard } from '../ui/PhysicalCard'
@@ -21,6 +23,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
   const remove = useTransactionDelete()
   const periods = useCardPeriods()
   const [activeCat, setActiveCat] = useState<string | null>(null)
+  const [deletingStatementId, setDeletingStatementId] = useState<string | undefined>()
   const period = periods.find((item) => item.id === cardId)
   const rows = period?.transactions.filter((tx) => tx.kind === 'expense' || tx.kind === 'refund') ?? []
 
@@ -90,6 +93,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
               bankLabel={period.bank}
               name={period.name}
               last4={period.card?.last4}
+              color={period.card?.color}
               amount={period.netSpend}
               amountLabel="Takvim ayı net harcama"
               badge={<CardStatementStatus period={period} />}
@@ -97,8 +101,8 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
 
             <section className="bento-card flex flex-col justify-between" aria-label="Kartın seçili dönem özeti">
               <div>
-                <span className="text-micro font-semibold uppercase text-faint">Dönem Özeti</span>
-                <div className="mt-2 text-[clamp(1.75rem,3vw,2.35rem)] font-bold tracking-[-0.035em] text-ink">
+                <span className="text-micro font-medium uppercase text-faint">Dönem Özeti</span>
+                <div className="mt-2 break-words text-[clamp(1.65rem,3vw,2.35rem)] font-bold tracking-[-0.035em] text-ink">
                   <MoneyValue value={period.netSpend} />
                 </div>
                 <p className="mt-2 text-label text-muted">
@@ -108,7 +112,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
               </div>
               {period.statements.length > 0 && (
                 <div className="mt-4 border-t border-line pt-3">
-                  <span className="text-label font-semibold text-accent-text">
+                  <span className="text-label font-medium text-accent-text">
                     {period.statements.length} yüklü ekstre belgesi
                   </span>
                 </div>
@@ -126,20 +130,21 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
                     const debt =
                       statement.summary?.totalDebt ?? statement.reconciliation?.printedDebt ?? null
                     return (
-                      <li key={statement.id}>
+                      <li key={statement.id} className="flex items-center gap-2">
                         <button
                           type="button"
-                          className="card-document-link"
+                          className="card-document-link flex-1"
                           onClick={() => sheets.openStatement(statement.id)}
                         >
-                          <span>
-                            <strong className="font-semibold text-ink">
+                          <span className="min-w-0">
+                            <strong className="font-medium text-ink">
                               {statement.periodEnd ? fullDayLabel(statement.periodEnd) : statement.label}
                             </strong>
                             <small>
                               {statement.dueDate
                                 ? `Son ödeme ${fullDayLabel(statement.dueDate)}`
                                 : 'Son ödeme tarihi okunamadı'}
+                              {statement.cardholderName ? ` · ${statement.cardholderName}` : ''}
                             </small>
                           </span>
                           <span>
@@ -150,12 +155,26 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
                           </span>
                           <ChevronRight size={17} className="text-faint" aria-label="Ekstreyi aç" />
                         </button>
+                        <button
+                          type="button"
+                          className="transaction-item__delete"
+                          aria-label={`${statement.label} ekstresini komple sil`}
+                          title="Ekstreyi ve bağlı işlemlerini sil"
+                          onClick={() => setDeletingStatementId(statement.id)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </li>
                     )
                   })}
               </ul>
             </section>
           )}
+
+          <StatementDelete
+            statementId={deletingStatementId}
+            onClose={() => setDeletingStatementId(undefined)}
+          />
 
           {categories.length > 0 && (
             <section className="card-detail-categories">
@@ -171,10 +190,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
                 <ul className="divide-y divide-line">
                   {categories.map((cat) => (
                     <li key={cat.id} className="flex items-center gap-3 py-2.5 text-body">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: cat.color }}
-                      />
+                      <CategoryBadge category={cat.id} size="xs" />
                       <span className="flex-1 text-ink">{cat.label}</span>
                       <strong className="num font-semibold text-ink">{money2(cat.total)}</strong>
                     </li>

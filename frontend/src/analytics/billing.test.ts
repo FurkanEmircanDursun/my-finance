@@ -101,6 +101,24 @@ describe('instalment plans stand where their statement says', () => {
     )
     expect(result.commitments[0]).toMatchObject({ month: '2026-10', installments: toMinor(900) })
   })
+
+  it('omits an instalment plan whose steps were fully cancelled and refunded', () => {
+    const rows = [1, 2, 3, 4, 5].flatMap((step) => [
+      tx('2026-11-10', 'WATCH STORE', 500, { kind: 'expense', installment: { current: step, total: 5 } }),
+      tx('2026-11-10', 'WATCH STORE', 500, { kind: 'refund', installment: { current: step, total: 5 } }),
+    ])
+    expect(buildInstallmentPlans(rows, '2026-11')).toHaveLength(0)
+  })
+
+  it('zeros future obligations when later instalments of a started plan are refunded', () => {
+    const rows = [
+      tx('2026-10-05', 'MODA SHOP', 400, { kind: 'expense', installment: { current: 1, total: 4 } }),
+      tx('2026-11-05', 'MODA SHOP', 400, { kind: 'expense', installment: { current: 2, total: 4 } }),
+      tx('2026-11-05', 'MODA SHOP', 400, { kind: 'refund', installment: { current: 2, total: 4 } }),
+    ]
+    const [plan] = buildInstallmentPlans(rows, '2026-11')
+    expect(plan).toMatchObject({ paidCount: 1, totalCount: 4, remainingCount: 0, remainingAmount: 0 })
+  })
 })
 
 /* ── Time-based analysis uses the day a charge was billed ─────────────────── */
@@ -180,6 +198,27 @@ describe('possible double charges', () => {
     const insight = analyze(rows, defaultProfile).insights.find((i) => i.id === 'duplicates')
     expect(insight?.severity).toBe('warning')
     expect(insight?.body).toMatch(/aynı gün/)
+  })
+
+  it('does not flag repeated small contactless public-transit fare taps as double charges', () => {
+    const rows = [
+      tx('2026-10-19', 'EGO KART ARAC ICI GECIS', 46, { category: 'transport' }),
+      tx('2026-10-20', 'EGO KART ARAC ICI GECIS', 46, { category: 'transport' }),
+      tx('2026-10-20', 'EGO KART ARAC ICI GECIS', 46, { category: 'transport' }),
+    ]
+    expect(detectDuplicates(group(rows), new Set())).toHaveLength(0)
+  })
+
+  it('nets same-month refunds out of monthly spend so cancelled purchases do not inflate charts', () => {
+    const rows = [
+      tx('2026-11-02', 'MIGROS', 1000, { category: 'market' }),
+      tx('2026-11-10', 'WATCH STORE', 2500, { category: 'clothing' }),
+      tx('2026-11-10', 'WATCH STORE', 2500, { category: 'clothing', kind: 'refund' }),
+    ]
+    const result = analyze(rows, defaultProfile)
+    expect(result.totals.spend).toBe(toMinor(3500))
+    expect(result.totals.netSpend).toBe(toMinor(1000))
+    expect(result.monthly[0].spend).toBe(toMinor(1000))
   })
 
   it('is exercised by buildInsights directly too', () => {

@@ -1,12 +1,15 @@
 import { collection, deleteDoc, doc, getDocsFromServer, writeBatch } from 'firebase/firestore'
+import { storageAvailable } from '../firebase/available'
 import { getFirebaseDb } from '../firebase/db'
+import { deleteAllRecordedFailedStatements } from '../firebase/failedStatements'
 import { KINDS, SINGLES } from './model'
 
 const BATCH = 400
 
 /**
- * Permanently removes everything this account has in Firestore. Used by "bulut
- * verilerimi sil" and "hesabımı sil"; the device's own copy is not touched.
+ * Permanently removes everything this account has in Firestore and any
+ * failed-statement diagnostic bundles uploaded to Storage. Used by
+ * "bulut verilerimi sil" and "hesabımı sil"; the device's own copy is not touched.
  *
  * The caller stops writes before deletion and detaches the account on success.
  */
@@ -25,4 +28,8 @@ export async function wipeCloudData(uid: string): Promise<void> {
   await Promise.all(
     [...SINGLES, 'settings', 'schema'].map((id) => deleteDoc(doc(db, 'users', uid, 'meta', id))),
   )
+
+  if (storageAvailable) {
+    await deleteAllRecordedFailedStatements(uid)
+  }
 }

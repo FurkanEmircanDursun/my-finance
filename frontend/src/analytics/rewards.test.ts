@@ -137,4 +137,23 @@ describe('what is reported', () => {
     const report = buildRewards({ statements: [aug], transactions: [manual] })
     expect(report.programmes[0].earned).toBe(toMinor(12.53))
   })
+
+  it('infers default programme names across all supported banks when cover omits loyalty summary', () => {
+    const makeSt = (id: string, bank: string): Statement => ({
+      id, label: id, fileName: `${id}.pdf`, bank, transactionCount: 1, skippedCount: 0,
+      periodStart: '2026-10-01', periodEnd: '2026-10-31', dueDate: null, importedAt: 0, engine: 'pdf-text',
+      summary: emptySummary(),
+    })
+    const stIs = makeSt('is1', 'Türkiye İş Bankası')
+    const stDk = makeSt('dk1', 'Dünya Katılım')
+    const stQnb = makeSt('qnb1', 'QNB')
+    const txs: Transaction[] = [
+      { ...garanti.transactions[0], id: 't1', statementId: 'is1', bank: 'Türkiye İş Bankası', kind: 'expense', reward: toMinor(2) },
+      { ...garanti.transactions[0], id: 't2', statementId: 'dk1', bank: 'Dünya Katılım', kind: 'expense', reward: toMinor(3) },
+      { ...garanti.transactions[0], id: 't3', statementId: 'qnb1', bank: 'QNB', kind: 'expense', reward: toMinor(4) },
+    ]
+    const report = buildRewards({ statements: [stIs, stDk, stQnb], transactions: txs })
+    expect(report.programmes.map((p) => p.programme).sort()).toEqual(['MaxiPuan', 'ParaPuan', 'ParafPara'])
+    expect(report.earned).toBe(toMinor(9))
+  })
 })

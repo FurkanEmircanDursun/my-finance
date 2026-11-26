@@ -10,29 +10,39 @@
 <body>
   <main>
     <header>
-      <a href="/">Mizan</a>
+      <div class="trust-topbar">
+        <a class="trust-brand" href="/">
+          <img src="/favicon.svg" alt="" width="34" height="34">
+          <span>Mizan</span>
+        </a>
+        <a class="trust-back" href="/">Uygulamaya dön →</a>
+      </div>
+      <span class="trust-eyebrow">Veri & Gizlilik Taahhüdü</span>
       <h1>Gizlilik politikası</h1>
-      <p>23 Kasım 2026</p>
+      <p>26 Kasım 2026</p>
     </header>
     <section>
       <h2>Hesap ve finans kayıtları</h2>
-      <p>Mizan giriş ve kimlik doğrulaması için Google Firebase Authentication kullanır. Hesap kimliği, e-posta ve giriş yöntemine bağlı ad veya profil görseli oturumu açmak ve hesabı göstermek için kullanılır.</p>
+      <p>Mizan giriş ve kimlik doğrulaması için Google Firebase Authentication (Apple ile giriş, Google ile giriş ve e-posta/şifre) kullanır. Hesap kimliği, e-posta ve giriş yöntemine bağlı ad veya profil görseli oturumu açmak ve hesabı göstermek için kullanılır.</p>
       <p>Ekstrelerden kaydetmeyi onayladığın işlem açıklamaları, tarihler, tutarlar ve ekstre özetleri ile el ile eklediğin gelir, gider, kart, bütçe, varlık ve tercih kayıtları Cloud Firestore’da hesabınla eşitlenir. Kart tanımında isteğe bağlı son dört hane kullanılabilir. Tam kart numarası veya kart güvenlik kodu istenmez.</p>
-      <p>PDF dosyası ve metni cihazda okunur. Mobil paylaşımda bekleyen dosya uygulamanın özel geçici alanına alınır. Kaydettiğinde PDF dosyasının kendisi yerine onayladığın kayıtlar eşitlenir. İsteğe bağlı yerel OCR kullanırsan dosya cihazında ayarladığın yerel servise gönderilir.</p>
+      <p>PDF dosyası ve metni cihazda okunur. Mobil paylaşımda bekleyen dosya uygulamanın özel geçici alanına alınır. Başarıyla okunan ekstrelerde PDF dosyasının kendisi değil, yalnızca onayladığın kayıtlar eşitlenir. İsteğe bağlı yerel OCR kullanırsan dosya cihazında ayarladığın yerel servise gönderilir.</p>
+      <p>Giriş yapmış bir hesapta banka ekstresi okunamadığında veya desteklenmeyen bir banka biçimiyle karşılaşıldığında Mizan, yalnızca yeni banka ve ekstre biçimi desteği geliştirmek amacıyla okunamayan dosyayı ve teknik hata özetini (hata kodu, uygulama sürümü, mutabakat özeti) hesabına özel, dışarıdan okunamayan ve yalnızca yazmaya açık korumalı Firebase Storage alanında saklayabilir. Ekstre olmayan belgeler, parolalı PDF’ler ve farklı kart sahibi uyarıları aktarılmaz. Bu paylaşımı dilediğin zaman Ayarlar → Bulut ve Gizlilik üzerinden kapatabilir veya yüklenen kaydı hemen silebilirsin.</p>
     </section>
     <section>
-      <h2>Bildirimler ve ölçüm</h2>
-      <p>Bulut bildirimlerini etkinleştirirsen Firebase Cloud Messaging, cihaz bildirim belirteci ile seçtiğin hatırlatma tercihlerini kullanır. Uygulama kullanım ve performans ölçümü ayrı ayrı isteğe bağlıdır. Firebase Analytics ve Performance Monitoring, açılan ekranlar, tanımlı ürün olayları ve işlem süreleri gibi ölçümler alabilir. Mizan bu ölçümlere banka hareketi, ekstre metni veya e-posta eklemez. İzinleri Ayarlar’dan kapatabilirsin.</p>
+      <h2>Bildirimler, güvenlik ve ölçüm</h2>
+      <p>Bulut bildirimlerini etkinleştirirsen Firebase Cloud Messaging, cihaz bildirim belirteci ile seçtiğin hatırlatma tercihlerini kullanır. Firebase App Check (web’de reCAPTCHA Enterprise, Android’de Play Integrity, iOS’ta App Attest) yalnızca yetkisiz erişimi ve kötüye kullanımı önlemek için uygulama doğrulaması yapar; finansal kayıtlarını işlemez. Firebase Remote Config yalnızca uygulama sürüm uyumluluğunu ve zorunlu güncelleme bilgisini kontrol eder.</p>
+      <p>Beklenmeyen uygulama çökmeleri ve teknik hata izleri, kararlılığı artırmak amacıyla Firebase Crashlytics (Web, Android ve iOS) üzerinden toplanabilir. Çökme raporlarından e-posta, kart numarası, IBAN ve finansal tutarlar otomatik olarak temizlenir. Çökme raporlamasını dilediğin zaman Ayarlar → Bulut ve Gizlilik üzerinden kapatabilirsin.</p>
+      <p>Uygulama kullanım ve performans ölçümü ayrı ayrı isteğe bağlıdır. Firebase Analytics ve Performance Monitoring, açılan ekranlar, tanımlı ürün olayları ve işlem süreleri gibi ölçümler alabilir. Mizan bu ölçümlere banka hareketi, ekstre metni veya e-posta eklemez. İzinleri Ayarlar’dan kapatabilirsin.</p>
       <p>Varlık ekranı Truncgil Finans, Frankfurter ve ExchangeRate-API’den genel piyasa fiyatı isteyebilir. Bu isteklere hesap kayıtların eklenmez. Ağ hizmetleri bağlantı için IP adresi gibi teknik bilgileri işler.</p>
-      <p><a href="https://firebase.google.com/support/privacy">Google Firebase veri koruma bilgileri</a></p>
+      <p><a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer">Google Firebase veri koruma bilgileri</a></p>
     </section>
     <section>
       <h2>Saklama ve silme</h2>
-      <p>Bulut finans kayıtların, onları veya hesabını silene kadar saklanır. Hesap silme, Firebase oturum hesabını ve uygulamadaki finans kayıtlarını kaldırır. Bildirim tekrarını önleyen teknik teslim kayıtları 45 gün sonra temizlenmek üzere işaretlenir. İndirdiğin PDF veya yedekleri cihazından ayrıca silebilirsin.</p>
+      <p>Bulut finans kayıtların, onları veya hesabını silene kadar saklanır. Biçim desteği için korumalı alana kaydedilen okunamayan ekstre dosyaları en geç 30 gün içinde otomatik olarak silinir; istersen aktarım ekranından tek tıkla hemen kaldırabilirsin. Hesap silme veya bulut verilerini temizleme işlemi, Firebase oturum hesabını, finans kayıtlarını ve kaydedilmiş ekstre hata dosyalarını kaldırır. Bildirim tekrarını önleyen teknik teslim kayıtları 45 gün sonra temizlenmek üzere işaretlenir. İndirdiğin PDF veya yedekleri cihazından ayrıca silebilirsin.</p>
       <p><a href="/account-deletion.html">Mizan hesabını sil</a></p>
     </section>
     <footer>
-      <p>Gizlilik ve destek için <a href="https://github.com/FurkanEmircanDursun/my-finance/issues">Mizan destek sayfasını</a> kullanabilirsin. Bu sayfa herkese açıktır. Ekstre, hesap bilgisi veya parola paylaşma.</p>
+      <p>Gizlilik ve destek için <a href="https://github.com/FurkanEmircanDursun/my-finance/issues" target="_blank" rel="noopener noreferrer">Mizan destek sayfasını</a> kullanabilirsin. Bu sayfa herkese açıktır. Ekstre, hesap bilgisi veya parola paylaşma.</p>
     </footer>
   </main>
 </body>

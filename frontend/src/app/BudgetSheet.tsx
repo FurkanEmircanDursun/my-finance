@@ -5,7 +5,7 @@ import { Button, Field, TextInput } from '../ui/primitives'
 import { useStore } from '../store/AppStore'
 import { toMajor } from '../core/money'
 import { entryAmount } from '../domain/entry'
-import { CATEGORIES } from '../domain/categories'
+import { SORTED_CATEGORIES } from '../domain/categories'
 import { hapticImpact } from '../platform/haptics'
 
 export function BudgetSheet({
@@ -34,7 +34,7 @@ export function BudgetSheet({
       type: 'setProfile',
       profile: {
         spendingLimit: entryAmount(total) ?? 0,
-        budgets: CATEGORIES.flatMap((def) => {
+        budgets: SORTED_CATEGORIES.flatMap((def) => {
           const limit = entryAmount(drafts[def.id] ?? '')
           return limit ? [{ category: def.id, limit }] : []
         }),
@@ -76,19 +76,19 @@ export function BudgetSheet({
       <details className="category-budget-editor">
         <summary>Kategori bazında limit de belirle</summary>
         <ul>
-          {CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
+          {SORTED_CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
             <li key={def.id}>
-              <span className="flex items-center gap-2.5 text-ink">
+              <span className="flex min-w-0 flex-1 items-center gap-2.5 text-ink">
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ background: def.color }}
                 />
-                {def.label}
+                <span className="truncate">{def.label}</span>
               </span>
               <TextInput
                 inputMode="decimal"
                 aria-label={`${def.label} aylık limiti`}
-                className="w-32 text-right"
+                className="w-28 shrink-0 text-right sm:w-32"
                 placeholder="—"
                 value={drafts[def.id] ?? ''}
                 onChange={(e) =>

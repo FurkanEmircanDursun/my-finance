@@ -67,7 +67,10 @@ root.compatibilityVersion = '"Xcode 16.0"'
 root.attributes.TargetAttributes[extensionId] ??= { CreatedOnToolsVersion: '16.0', ProvisioningStyle: 'Automatic' }
 for (const id of [main.uuid, extensionId]) {
   root.attributes.TargetAttributes[id] ??= {}
-  root.attributes.TargetAttributes[id].SystemCapabilities = { 'com.apple.ApplicationGroups.iOS': { enabled: 1 } }
+  root.attributes.TargetAttributes[id].SystemCapabilities = {
+    'com.apple.ApplicationGroups.iOS': { enabled: 1 },
+    ...(id === main.uuid ? { 'com.apple.SignInWithApple': { enabled: 1 } } : {}),
+  }
 }
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 function settings(target) {

@@ -21,6 +21,8 @@
     </array>
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <true/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>FirebaseAnalyticsCollectionEnabled</key>
     <false/>
     <key>GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED</key>

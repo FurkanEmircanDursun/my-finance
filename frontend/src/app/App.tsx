@@ -363,6 +363,7 @@ function Shell() {
   useEffect(() => {
     if (lastFocusedRoute.current === window.location.hash) return
     lastFocusedRoute.current = window.location.hash
+    window.getSelection?.()?.removeAllRanges()
     window.scrollTo(0, 0)
     document.getElementById('main-content')?.focus({ preventScroll: true })
   }, [view, route.cardId, route.statementId])
@@ -379,10 +380,14 @@ function Shell() {
       >
         İçeriğe geç
       </a>
-      <WorkspaceRail view={view} onSelect={setView} />
+      <WorkspaceRail
+        view={view}
+        onSelect={setView}
+      />
       <div className="workspace-body">
         <WorkspaceToolbar
           view={view}
+          onNavigate={setView}
           privateMode={privateMode}
           onTogglePrivate={togglePrivate}
         />
@@ -394,7 +399,7 @@ function Shell() {
             >
               <Info size={16} className="mt-0.5 shrink-0 text-accent" />
               <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-body font-semibold text-accent-text">
+                <p className="text-body font-medium text-accent-text">
                   Veri yapısı güncellendi
                 </p>
                 {state.notices.map((note) => (
@@ -407,7 +412,7 @@ function Shell() {
                 type="button"
                 onClick={() => dispatch({ type: 'dismissNotices' })}
                 aria-label="Kapat"
-                className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-accent-text hover:bg-accent/15"
+                className="-mr-1 -mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-accent-text hover:bg-accent/15"
               >
                 <X size={16} />
               </button>

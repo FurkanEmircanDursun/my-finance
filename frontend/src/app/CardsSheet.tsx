@@ -1,7 +1,7 @@
 import { trackProductEvent, trackScreen } from '../platform/analytics'
 import { hapticImpact } from '../platform/haptics'
 import { useEffect, useId, useState, type FormEvent } from 'react'
-import { CalendarDays, CreditCard as CreditCardIcon, Pencil, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, Check, CreditCard as CreditCardIcon, Pencil, Plus, Trash2 } from 'lucide-react'
 import { uid } from '../core/hash'
 import { cardBankLabel, cardDisplayName, isCardDay, nextCardDate } from '../domain/cards'
 import { cardBanks } from '../domain/banks'
@@ -9,7 +9,8 @@ import type { CardBank, CreditCard } from '../domain/types'
 import { useStore } from '../store/AppStore'
 import { Modal } from '../ui/Modal'
 import { Button, Field, TextInput } from '../ui/primitives'
-import { PhysicalCard } from '../ui/PhysicalCard'
+import { Select } from '../ui/Select'
+import { CARD_COLOR_PRESETS, PhysicalCard } from '../ui/PhysicalCard'
 
 export function CardEditor({
   initial,
@@ -30,6 +31,7 @@ export function CardEditor({
     b === 'akbank' ? 'Akbank Axess' : b === 'garanti' ? 'Garanti Bonus' : b === 'other' ? '' : cardBankLabel(b)
   const [name, setName] = useState(initial?.name ?? suggestedName('akbank'))
   const [last4, setLast4] = useState(initial?.last4 ?? '')
+  const [color, setColor] = useState<string>(initial?.color ?? '')
   const [statementDay, setStatementDay] = useState(initial?.statementDay ? String(initial.statementDay) : '')
   const [entryDay, setEntryDay] = useState(initial?.entryDay ? String(initial.entryDay) : '')
   const [remindersEnabled, setRemindersEnabled] = useState(initial?.remindersEnabled !== false)
@@ -54,6 +56,7 @@ export function CardEditor({
       bank,
       name: name.trim(),
       ...(last4 ? { last4 } : {}),
+      ...(color ? { color } : {}),
       statementDay: Number(statementDay),
       entryDay: Number(entryDay),
       remindersEnabled,
@@ -75,12 +78,13 @@ export function CardEditor({
   }
 
   return (
-    <form onSubmit={save} className="space-y-4">
+    <form onSubmit={save} className="space-y-4" noValidate>
       <PhysicalCard
         bank={bank}
         bankLabel={cardBankLabel(bank)}
         name={name.trim() || 'Kart adı'}
         last4={last4 || undefined}
+        color={color || undefined}
         badge={
           statementDay && isCardDay(Number(statementDay)) ? (
             <span className="card-statement-status card-statement-status--upcoming">
@@ -91,26 +95,64 @@ export function CardEditor({
         compact
       />
 
+      <Field label="Kart rengi" hint="Banka rengi otomatik atanır; istersen değiştirebilirsin.">
+        <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Kart rengi">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={color === ''}
+            onClick={() => setColor('')}
+            className={`min-h-[44px] rounded-full border px-3.5 text-xs font-medium transition-all sm:min-h-[38px] ${
+              color === ''
+                ? 'border-accent-border bg-accent-soft text-accent-text'
+                : 'border-line bg-sunken text-muted hover:text-ink'
+            }`}
+          >
+            Banka rengi
+          </button>
+          {CARD_COLOR_PRESETS.map((preset) => {
+            const active = color === preset.id
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                aria-label={preset.label}
+                title={preset.label}
+                onClick={() => setColor(preset.id)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border-2 transition-transform hover:scale-105 sm:h-9 sm:w-9"
+                style={{
+                  background: preset.swatch,
+                  borderColor: active ? 'var(--text)' : 'transparent',
+                  boxShadow: active ? '0 0 0 2px var(--bg-raised)' : undefined,
+                }}
+              >
+                {active && <Check size={15} className="text-white" strokeWidth={2.6} />}
+              </button>
+            )
+          })}
+        </div>
+      </Field>
+
       <Field
         label="Banka"
         hint={initial ? 'Banka değişikliği için yeni kart ekleyebilirsin.' : undefined}
       >
-        <select
-          className="finance-select disabled:opacity-70"
+        <Select
+          ariaLabel="Banka seçimi"
           value={bank}
           disabled={Boolean(initial)}
-          onChange={(event) => {
-            const value = event.target.value as CardBank
+          onChange={(next) => {
+            const value = next as CardBank
             setBank(value)
             if (name === suggestedName(bank)) setName(suggestedName(value))
           }}
-        >
-          {cardBanks.map((bankId) => (
-            <option key={bankId} value={bankId}>
-              {cardBankLabel(bankId)}
-            </option>
-          ))}
-        </select>
+          options={cardBanks.map((bankId) => ({
+            value: bankId,
+            label: cardBankLabel(bankId),
+          }))}
+        />
       </Field>
 
       <Field label="Kart adı" hint="Örneğin: Ev harcamaları veya Bonus kartım">
@@ -134,8 +176,8 @@ export function CardEditor({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Ekstre kesim günü">
+      <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+        <Field label="Ekstre kesim günü (1–31)">
           <TextInput
             type="number"
             min={1}
@@ -144,11 +186,14 @@ export function CardEditor({
             inputMode="numeric"
             placeholder="Örn. 20"
             value={statementDay}
-            onChange={(event) => setStatementDay(event.target.value)}
+            onChange={(event) => {
+              setStatementDay(event.target.value)
+              setError('')
+            }}
             required
           />
         </Field>
-        <Field label="Aylık veri giriş günü">
+        <Field label="Aylık veri giriş günü (1–31)">
           <TextInput
             type="number"
             min={1}
@@ -157,7 +202,10 @@ export function CardEditor({
             inputMode="numeric"
             placeholder="Örn. 21"
             value={entryDay}
-            onChange={(event) => setEntryDay(event.target.value)}
+            onChange={(event) => {
+              setEntryDay(event.target.value)
+              setError('')
+            }}
             required
           />
         </Field>

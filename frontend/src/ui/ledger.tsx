@@ -27,7 +27,7 @@ export function LedgerStatus({
 }) {
   if (status === 'match') {
     return (
-      <span className="inline-flex items-center gap-1.5 text-label font-semibold text-positive">
+      <span className="inline-flex items-center gap-1.5 text-label font-medium text-positive">
         <CheckCircle2 size={14} className="shrink-0" />
         {compact ? 'Tutuyor' : 'Ekstreyle kuruşu kuruşuna tutuyor'}
       </span>
@@ -35,7 +35,7 @@ export function LedgerStatus({
   }
   if (status === 'mismatch' && delta !== null) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-label font-semibold text-negative">
+      <span className="inline-flex items-center gap-1.5 text-label font-medium text-negative">
         <AlertTriangle size={14} className="shrink-0" />
         {money2(Math.abs(delta))} {delta > 0 ? 'fazla okundu' : 'eksik okundu'}
       </span>
@@ -143,7 +143,7 @@ export function LedgerSummary({
           <button
             type="button"
             onClick={() => onOpen(ledger.statement.id)}
-            className="inline-flex min-h-[44px] items-center gap-1 text-body font-semibold text-accent hover:underline"
+            className="inline-flex min-h-[44px] items-center gap-1 text-body font-medium text-accent hover:underline"
           >
             Tüm satırları gör
             <ChevronRight size={16} />
@@ -158,7 +158,7 @@ export function LedgerSummary({
   const sentence = carriedSentence(totals.previousBalance, totals.payments)
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 gap-y-0 text-label text-faint">
+      <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-2.5 gap-y-0 text-label text-faint sm:gap-x-4">
         <span>Ekstre</span>
         <span className="text-right">Harcama</span>
         <span className="text-right">Dönem borcu</span>
@@ -170,7 +170,7 @@ export function LedgerSummary({
             <button
               type="button"
               onClick={() => onOpen(ledger.statement.id)}
-              className="grid min-h-[56px] w-full grid-cols-[1fr_auto_auto] items-center gap-x-4 rounded-[var(--radius)] px-2 py-2 text-left transition-colors duration-200 hover:bg-hover"
+              className="grid min-h-[56px] w-full grid-cols-[1fr_auto_auto] items-center gap-x-2.5 rounded-[var(--radius)] px-2 py-2 text-left transition-colors duration-200 hover:bg-hover sm:gap-x-4"
             >
               <span className="min-w-0">
                 <span className="block break-words text-body text-ink">{ledger.statement.label}</span>
@@ -187,8 +187,8 @@ export function LedgerSummary({
         ))}
       </ul>
 
-      <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-4 border-t border-line pt-3">
-        <span className="text-body font-semibold text-ink">Toplam</span>
+      <div className="grid grid-cols-[1fr_auto_auto] items-baseline gap-x-2.5 border-t border-line pt-3 sm:gap-x-4">
+        <span className="text-body font-medium text-ink">Toplam</span>
         <span className="num text-right text-body font-semibold text-ink">{money2(totals.charges)}</span>
         <span className="num text-right text-body font-semibold text-muted">
           {totals.printedDebt === null ? '—' : money2(totals.printedDebt)}

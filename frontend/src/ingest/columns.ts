@@ -69,8 +69,8 @@ interface Word {
   last: TextGeom
 }
 
-/** A number as either bank prints it, with its sign marker and instalment tail. */
-const MONEY_WORD_RE = /^\d[\d.,]*[.,]\d{2}(?:\(-\)|[+-])?(?:x\d+)?$/
+/** A number as any supported bank prints it, with its sign marker and instalment tail. */
+const MONEY_WORD_RE = /^[+-]?\d[\d.,]*[.,]\d{2}(?:\(-\)|[+-])?(?:x\d+)?$/
 function isTransactionRow(words: Word[]): boolean {
   return Boolean(STATEMENT_ROW.exec(words.map(word => word.text).join(' ').replace(/^bosluk\s+/i, ''))?.[2])
 }
@@ -127,7 +127,7 @@ function rowWords(row: TextGeom[], decode: (text: string) => string): Word[] {
  * and it only counts beside a "Tutar" header in the first place.
  */
 function isRewardHeader(text: string): boolean {
-  return text.length <= 24 && /(Bonus|Chip-?para)/i.test(text)
+  return text.length <= 28 && /(Bonus|Chip-?para|MaxiPuan|ParafPara|ParaPuan)/i.test(text)
 }
 
 /**

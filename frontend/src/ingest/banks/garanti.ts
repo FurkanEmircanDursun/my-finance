@@ -46,6 +46,18 @@ import {
 
 const NUMBER_RE = /^\d{1,3}(?:\.\d{3})*,\d{2}[+-]?$|^\d+,\d{2}[+-]?$/
 const INSTALLMENT_RE = /(?:TAKSIT|TAKSİT)?\s*(?:^|\s)(\d{1,2})\/(\d{1,2})(?:\s*\.?\s*taksit)?(?=\s|$)/i
+/**
+ * Garanti's printed table column "Kalan Borç / Taksit" renders instalments as:
+ *   1.250,00x2=2.500,00 1.Taksit
+ *   8.707,59x3=26.122,77 3.Taksit
+ * where `xN` is the total instalment count, `=P` is the principal, and `M.Taksit`
+ * is the 1-based current instalment.
+ */
+const GARANTI_INSTALLMENT_RE =
+  /(?:^|\s)(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s*x\s*(\d{1,2})\s*=\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s+(\d{1,2})\s*\.\s*Taksit(?=\s|$)/i
+/** Undated interest, tax, and fee rows Garanti prints inside the transaction table. */
+const UNDATED_FEE_RE =
+  /^(?:(?:TOPLAM\s+)?DONEM\s+FAIZI|GEC\s+ODEME\s+FAIZI|GECIKME\s+FAIZI|NAKIT\s+AVANS\s+(?:GECIKME\s+)?FAIZI|LIMIT\s+ASIM\s+FAIZI|KKDF\s*\+\s*BSMV|BSMV\s*\+\s*KKDF|BSMV|KKDF|YILLIK\s+(?:KART\s+)?(?:UYELIK\s+)?UCRETI|KART\s+(?:YENILEME|DEGISIM|UYELIK)\s+UCRETI|KAMPANYA\s+KATILIM\s+UCRETI)\b/
 /** "Google makromusic for 899,99 TL 899,99" — the price is echoed twice. */
 const ECHOED_PRICE_RE = /^(.*?)\s+[\d.,]+\s*TL\s+([\d.,]+[+-]?)$/i
 /** Template spacer cells that leak into the text layer. */
@@ -55,7 +67,8 @@ const HAS_DATE_RE = new RegExp(LONG_DATE)
 
 const CUT_DATE_RE = new RegExp(String.raw`Hesap\s+Kesim\s+Tarihi[\s:]*(${LONG_DATE}|\d{2}[./]\d{2}[./]\d{4})`, 'i')
 const DUE_DATE_RE = new RegExp(String.raw`Son\s+Ödeme\s+Tarihi[\s:]*(${LONG_DATE}|\d{2}[./]\d{2}[./]\d{4})`, 'i')
-const CARD_RE = /\bBonus(?:\s+(?:Platinum|Gold|Genç|Trink))?\b|\bMoney\b|\bMiles&Smiles\b|\bShop&Fly\b/i
+const CARD_RE =
+  /\bBonus(?:\s+(?:Platinum|Gold|Flexi|Classic(?:\s+Troy)?|Genç|Trink|Plus|Business))?\b|\bMoney\b|\bMiles&Smiles\b|\bShop&Fly\b/i
 
 /** Section headings Garanti prints above groups of rows. */
 const SECTION_HINTS: Array<[string, CategoryId]> = [
@@ -68,6 +81,8 @@ const SECTION_HINTS: Array<[string, CategoryId]> = [
   ['PASTANE', 'dining'],
   ['ECZANE', 'health'],
   ['SAGLIK', 'health'],
+  ['SPOR KLUPLERI', 'health'],
+  ['SPOR KULUPLERI', 'health'],
   ['KONAKLAMA', 'travel'],
   ['SEYAHAT', 'travel'],
   ['AKARYAKIT', 'transport'],
@@ -95,6 +110,7 @@ const SECTION_RESET = [
   'BONUS HARCAMALARINIZ',
   'BONUS PROGRAM ORTAKLARI',
   'BONUS PLATINUM SAHIBI',
+  'NAKIT AVANS BILGILERI',
   'EKSTRE OZETI',
 ]
 
@@ -222,6 +238,13 @@ function parse(text: string): AdapterOutput {
   let minDate: DayKey | null = null
   let maxDate: DayKey | null = null
   let hint: CategoryId | undefined
+  let inTable = false
+
+  const cutMatch = CUT_DATE_RE.exec(text)
+  const dueMatch = DUE_DATE_RE.exec(text)
+  const cardMatch = CARD_RE.exec(text)
+  const { summary, printedTotals } = readSummary(text)
+  const cutDate = cutMatch ? parseHeaderDate(cutMatch[1]) : null
 
   // A document that carries column information says, for every number, which
   // column it is in. Wording heuristics are only for text that does not.
@@ -235,6 +258,15 @@ function parse(text: string): AdapterOutput {
     const { line, rewards } = splitRewardTags(despaced)
     if (!line) continue
 
+    const foldedLine = fold(line)
+    if (/\bISLEM\s+TARIHI\b/.test(foldedLine) && /\bTUTAR\b/.test(foldedLine)) {
+      inTable = true
+      continue
+    }
+    if (inTable && (/^TOPLAM(?:\s|$)/.test(foldedLine) || foldedLine.startsWith('EKSTRE OZETI') || foldedLine.startsWith('ONCEKI BAKIYE'))) {
+      inTable = false
+    }
+
     const heading = sectionHint(line)
     if (heading !== undefined) {
       hint = heading ?? undefined
@@ -243,6 +275,29 @@ function parse(text: string): AdapterOutput {
 
     const match = STATEMENT_ROW.exec(line)
     if (!match) {
+      // Garanti prints statement-level interest and taxes ("DÖNEM FAİZİ",
+      // "GEÇ ÖDEME FAİZİ", "KKDF + BSMV") inside the transaction table without
+      // a leading date; they are assessed on the statement cut date.
+      if (inTable && cutDate && UNDATED_FEE_RE.test(foldedLine)) {
+        const feeParts = line.split(/\s+/)
+        const last = feeParts[feeParts.length - 1]
+        if (feeParts.length >= 2 && NUMBER_RE.test(last)) {
+          const desc = feeParts.slice(0, -1).join(' ').trim()
+          const { value: amount, credit } = readAmount(last)
+          if (desc && amount > 0) {
+            rows.push({
+              date: cutDate,
+              description: desc,
+              amount,
+              kind: credit ? 'refund' : 'expense',
+              installment: null,
+              category: 'fees',
+              raw: stripBilledTag(line),
+            })
+            continue
+          }
+        }
+      }
       if (hasUnrecognisedRowDate(line)) skipped++
       continue
     }
@@ -296,16 +351,31 @@ function parse(text: string): AdapterOutput {
     }
 
     let installment: Installment | null = null
-    const instMatch = INSTALLMENT_RE.exec(description)
-    if (instMatch) {
-      const a = Number(instMatch[1])
-      const b = Number(instMatch[2])
-      if (a > 0 && b > 0) {
-        // Garanti prints both orders depending on the card programme; the
-        // instalment index can never exceed the plan length, so the smaller
-        // number is the current one.
-        installment = { current: Math.min(a, b), total: Math.max(a, b) }
-        description = description.replace(instMatch[0], ' ')
+    const garantiInst = GARANTI_INSTALLMENT_RE.exec(description)
+    if (garantiInst) {
+      const total = Number(garantiInst[2])
+      const principal = parseTrAmount(garantiInst[3])
+      const current = Number(garantiInst[4])
+      if (current > 0 && total > 0 && current <= total) {
+        installment = {
+          current,
+          total,
+          ...(principal > 0 ? { principal } : {}),
+        }
+        description = description.replace(garantiInst[0], ' ')
+      }
+    } else {
+      const instMatch = INSTALLMENT_RE.exec(description)
+      if (instMatch) {
+        const a = Number(instMatch[1])
+        const b = Number(instMatch[2])
+        if (a > 0 && b > 0) {
+          // Garanti prints both orders depending on the card programme; the
+          // instalment index can never exceed the plan length, so the smaller
+          // number is the current one.
+          installment = { current: Math.min(a, b), total: Math.max(a, b) }
+          description = description.replace(instMatch[0], ' ')
+        }
       }
     }
 
@@ -345,10 +415,6 @@ function parse(text: string): AdapterOutput {
     })
   }
 
-  const cutMatch = CUT_DATE_RE.exec(text)
-  const dueMatch = DUE_DATE_RE.exec(text)
-  const cardMatch = CARD_RE.exec(text)
-  const { summary, printedTotals } = readSummary(text)
   if (printedTotals) {
     // Some Garanti covers count these credits with payments. For the app they
     // still reduce spending rather than being recorded as a card repayment.
@@ -357,7 +423,7 @@ function parse(text: string): AdapterOutput {
       .reduce((total, row) => total + row.amount, 0)
   }
 
-  const periodEnd = (cutMatch ? parseHeaderDate(cutMatch[1]) : null) ?? maxDate
+  const periodEnd = cutDate ?? maxDate
 
   return {
     rows,

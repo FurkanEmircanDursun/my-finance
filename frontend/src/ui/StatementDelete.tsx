@@ -3,7 +3,15 @@ import { useStore } from '../store/AppStore'
 import { useFeedback } from './Feedback'
 import { ConfirmDialog } from './Modal'
 
-export function StatementDelete({ statementId, onClose }: { statementId?: string; onClose: () => void }) {
+export function StatementDelete({
+  statementId,
+  onClose,
+  onDeleted,
+}: {
+  statementId?: string
+  onClose: () => void
+  onDeleted?: () => void
+}) {
   const { state, getCurrentState, dispatch } = useStore()
   const feedback = useFeedback()
   const statement = state.statements.find(item => item.id === statementId)
@@ -11,7 +19,7 @@ export function StatementDelete({ statementId, onClose }: { statementId?: string
 
   return <ConfirmDialog
     open={Boolean(statement)}
-    title="Ekstreyi sil"
+    title="Ekstreyi komple sil"
     message={`${statement?.label ?? ''} ve ona bağlı ${count(linkedCount)} işlem hesabından silinir. Silme bildiriminden geri alabilirsin.`}
     confirmLabel="Ekstreyi sil"
     destructive
@@ -28,6 +36,7 @@ export function StatementDelete({ statementId, onClose }: { statementId?: string
       dispatch({ type: 'removeStatement', statementId: target.id })
       if (getCurrentState().statements.some(item => item.id === target.id)) return
       onClose()
+      onDeleted?.()
       feedback({
         message: `Ekstre ve ${count(transactions.length)} bağlı işlem silindi.`,
         undo: () => {

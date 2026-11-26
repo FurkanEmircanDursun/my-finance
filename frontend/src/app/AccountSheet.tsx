@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { ChevronDown, CircleCheck, CloudOff, Eye, EyeOff, LogOut, RefreshCw, TriangleAlert } from 'lucide-react'
+import { ChevronDown, CircleCheck, CloudOff, Eye, EyeOff, LogOut, Mail, RefreshCw, TriangleAlert } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button, Field, Skeleton, TextInput } from '../ui/primitives'
 import { ConfirmDialog, Modal } from '../ui/Modal'
@@ -8,21 +8,21 @@ import { useStore } from '../store/AppStore'
 import { describeSync, type Tone } from '../sync/present'
 import {
   authErrorMessage, continueWithEmail, reauthenticate, registerWithEmail, sendPasswordReset,
-  signInWithGoogle, type AuthUser,
+  signInWithApple, signInWithGoogle, type AuthUser,
 } from '../firebase/auth'
 import { useNow } from './useNow'
 import { GoogleMark } from './GoogleConnectButton'
+import { AppleMark } from './AppleConnectButton'
 import { UserFacingError } from '../core/errors'
 
 /**
  * Hesap ve senkron — the whole cloud story on one screen, and only when asked.
  *
- * Signed out it is one decision with two doors (Google, or an e-posta + şifre
- * form), and the form is a single form for both: it signs in, and only when
- * that fails does it offer to create the account. Firebase hides whether an
- * address is registered, so no screen can know in advance; what it can do is
- * never make the person choose between "kayıt ol" and "giriş yap" before they
- * have typed anything.
+ * Signed out it offers Apple, Google, or a single e-posta + şifre form: the
+ * form tries to sign in, and only when that fails offers to create the account.
+ * Firebase hides whether an address is registered, so no screen can know in
+ * advance; what it can do is never make the person choose between "kayıt ol"
+ * and "giriş yap" before they have typed anything.
  *
  * Signed in it is a status and an exit. The sheet stays open through the
  * sign-in itself — it turns from the form into the status in place — so the
@@ -59,12 +59,31 @@ export function AccountSheet({ open, onClose, startDeletion = false }: { open: b
 }
 
 export function PrivacyPolicyLink() {
-  return <a className="mt-4 inline-block text-body text-accent underline" href="https://my-finance-webapp-fd.web.app/privacy.html" target="_blank" rel="noopener noreferrer">Gizlilik politikası</a>
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-label">
+      <a
+        className="inline-flex min-h-[44px] items-center font-medium text-accent-text underline-offset-4 hover:underline"
+        href="/privacy.html"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Gizlilik politikası
+      </a>
+      <a
+        className="inline-flex min-h-[44px] items-center text-muted underline-offset-4 hover:text-ink hover:underline"
+        href="/account-deletion.html"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Hesap ve veri silme
+      </a>
+    </div>
+  )
 }
 
 /* ── Signed out ──────────────────────────────────────────────────────────── */
 
-type Busy = 'google' | 'email' | 'create' | 'reset' | null
+type Busy = 'apple' | 'google' | 'email' | 'create' | 'reset' | null
 
 export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
   const { refreshAuthUser } = useStore()
@@ -99,6 +118,14 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
     }
   }
 
+  const apple = () =>
+    run('apple', async () => {
+      const outcome = await signInWithApple()
+      if (outcome === 'done') refreshAuthUser()
+      if (outcome === 'redirecting') setNotice('Apple’a yönlendiriliyorsun…')
+      if (outcome === 'cancelled') setNotice('Giriş iptal edildi. İstediğin zaman yeniden deneyebilirsin.')
+    })
+
   const google = () =>
     run('google', async () => {
       const outcome = await signInWithGoogle()
@@ -131,7 +158,7 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
         // send them in a circle. What is left is a reset, or another way in.
         if ((err as { code?: string })?.code === 'auth/email-already-in-use') {
           throw new UserFacingError(
-            'Bu e-posta zaten kayıtlı ve şifre uyuşmuyor. "Şifremi sıfırla"yı dene; hesabı Google ile açtıysan Google ile devam et.',
+            'Bu e-posta zaten kayıtlı ve şifre uyuşmuyor. "Şifremi sıfırla"yı dene; hesabı Google veya Apple ile açtıysan ilgili yöntemle devam et.',
           )
         }
         throw err
@@ -150,7 +177,7 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
     <div className="space-y-5">
       {upgrading && (
         <p className="rounded-[var(--radius)] bg-warning-soft px-4 py-3 text-label text-warning">
-          Şu an hesapsız bir oturum açık: verilerin yedekleniyor ama başka bir cihazdan açılamaz. Google veya
+          Şu an hesapsız bir oturum açık: verilerin yedekleniyor ama başka bir cihazdan açılamaz. Apple, Google veya
           e-posta ekleyerek aynı verilere her cihazdan ulaş.
         </p>
       )}
@@ -159,18 +186,34 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
         Kayıtların Firebase hesabında saklanır. Telefonunda ve bilgisayarında aynı hesapla giriş yapabilirsin.
       </p>
 
-      <Button className="google-connect-button w-full" onClick={google} disabled={busy !== null} aria-busy={busy === 'google'}>
-        <GoogleMark />
-        {busy === 'google' ? 'Google bekleniyor…' : 'Google ile devam et'}
-      </Button>
+      <div className="space-y-2.5">
+        <Button className="apple-connect-button w-full" onClick={apple} disabled={busy !== null} aria-busy={busy === 'apple'}>
+          <AppleMark />
+          {busy === 'apple' ? 'Apple bekleniyor…' : 'Apple ile devam et'}
+        </Button>
+
+        <Button className="google-connect-button w-full" onClick={google} disabled={busy !== null} aria-busy={busy === 'google'}>
+          <GoogleMark />
+          {busy === 'google' ? 'Google bekleniyor…' : 'Google ile devam et'}
+        </Button>
+      </div>
 
       {error && <p className="text-body text-negative" role="alert">{error}</p>}
       {notice && <p className="text-body text-muted" role="status">{notice}</p>}
 
-      <details className="account-email-options">
-      <summary className="flex min-h-11 cursor-pointer items-center text-body font-semibold text-muted">E-posta ile devam et</summary>
+      <details className="account-email-options group">
+      <summary className="flex min-h-[44px] cursor-pointer items-center justify-between gap-2 rounded-[var(--radius)] border border-line bg-sunken px-3.5 text-body font-medium text-ink transition-colors hover:border-line-strong hover:bg-hover">
+        <span className="inline-flex items-center gap-2.5">
+          <Mail size={16} className="text-accent-text" />
+          E-posta ile devam et
+        </span>
+        <ChevronDown size={16} className="text-muted transition-transform duration-200 group-open:rotate-180" />
+      </summary>
       <form onSubmit={submit} className="mt-4 space-y-4" noValidate>
-        <Field label="E-posta">
+        <Field
+          label="E-posta"
+          hint={email.trim() && !emailOk ? 'Geçerli bir e-posta adresi gir (örn. ad@eposta.com).' : undefined}
+        >
           <TextInput
             type="email"
             name="email"
@@ -180,6 +223,7 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
             spellCheck={false}
             placeholder="ornek@eposta.com"
             value={email}
+            aria-invalid={Boolean(email.trim() && !emailOk)}
             onChange={(e) => edit(setEmail)(e.target.value)}
           />
         </Field>
@@ -210,7 +254,7 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
         {noMatch ? (
           <div className="space-y-3 rounded-[var(--radius-lg)] bg-sunken p-4" role="status">
             <div>
-              <p className="text-body font-semibold text-ink">Bu bilgilerle giriş yapılamadı</p>
+              <p className="text-body font-medium text-ink">Bu bilgilerle giriş yapılamadı</p>
               <p className="mt-0.5 text-label text-muted">
                 Bu e-postayla hesap açılmamış olabilir ya da şifre yanlış. Hangisi olduğunu güvenlik için
                 söyleyemiyoruz.
@@ -248,7 +292,11 @@ export function AccountSignInForm({ upgrading }: { upgrading: boolean }) {
 
 /* ── Signed in ───────────────────────────────────────────────────────────── */
 
-const PROVIDER: Record<string, string> = { 'google.com': 'Google', password: 'E-posta' }
+const PROVIDER: Record<string, string> = {
+  'apple.com': 'Apple',
+  'google.com': 'Google',
+  password: 'E-posta',
+}
 
 function SignedIn({ user, startDeletion }: { user: AuthUser; startDeletion: boolean }) {
   const { state, sync, authUser, eraseCloud, logout, historyReady } = useStore()
@@ -410,10 +458,10 @@ function StatusPanel() {
         : TriangleAlert
 
   return (
-    <div className="flex items-start gap-3 rounded-[var(--radius-lg)] bg-sunken p-4" role="status">
+    <div className="flex flex-wrap items-start gap-3 rounded-[var(--radius-lg)] bg-sunken p-4" role="status">
       <Icon size={20} className={clsx('mt-0.5 shrink-0', TONE_TEXT[view.tone], view.busy && 'motion-safe:animate-spin')} />
       <div className="min-w-0 flex-1">
-        <p className="text-body font-semibold text-ink">{view.title}</p>
+        <p className="text-body font-medium text-ink">{view.title}</p>
         <p className="mt-0.5 text-label text-muted">{view.detail}</p>
       </div>
       <Button size="sm" onClick={syncNow} disabled={view.busy}>
@@ -431,6 +479,7 @@ function StatusPanel() {
 function DeleteAccountDialog({ user, onClose }: { user: AuthUser; onClose: () => void }) {
   const { eraseCloud } = useStore()
   const usesPassword = user.providers.includes('password')
+  const usesAppleOnly = user.providers.includes('apple.com') && !user.providers.includes('google.com')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -486,7 +535,9 @@ function DeleteAccountDialog({ user, onClose }: { user: AuthUser; onClose: () =>
             />
           </Field>
         ) : (
-          <p className="text-label text-faint">Devam edince Google kimliğini yeniden doğrulaman istenecek.</p>
+          <p className="text-label text-faint">
+            Devam edince {usesAppleOnly ? 'Apple' : 'Google'} kimliğini yeniden doğrulaman istenecek.
+          </p>
         )}
         {error && (
           <p className="text-body text-negative" role="alert">
@@ -506,7 +557,7 @@ function Disclosure({ title, children, initiallyOpen = false }: { title: string;
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="-ml-2 flex h-11 items-center gap-1.5 rounded-[var(--radius)] px-2 text-body font-semibold text-muted transition-colors duration-200 hover:bg-hover hover:text-ink"
+        className="-ml-2 flex h-11 items-center gap-1.5 rounded-[var(--radius)] px-2 text-body font-medium text-muted transition-colors duration-200 hover:bg-hover hover:text-ink"
       >
         {title}
         <ChevronDown size={16} className={clsx('transition-transform duration-200', open && 'rotate-180')} />

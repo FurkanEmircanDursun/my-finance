@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { clsx } from 'clsx'
-import { ArrowLeft, ChevronDown, FileText, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, ChevronDown, FileText, Trash2, Upload, UserCheck } from 'lucide-react'
 import { useSheets } from '../app/sheets'
 import { cardBankFromName, legacyCardKey } from '../domain/cardLifecycle'
 import { Badge, Button, Empty } from '../ui/primitives'
+import { CategoryBadge } from '../ui/CategoryIcon'
 import { LedgerEquation, carriedSentence } from '../ui/ledger'
 import { RewardsCard } from '../ui/rewards'
 import { SummaryFacts } from '../ui/statements'
@@ -11,7 +12,7 @@ import { StatementDelete } from '../ui/StatementDelete'
 import { MoneyValue } from '../ui/MoneyValue'
 import { count, money2 } from '../core/money'
 import { dayLabel, fullDayLabel } from '../core/date'
-import { categoryColor, categoryLabel } from '../domain/categories'
+import { categoryLabel } from '../domain/categories'
 import { buildLedger, type LedgerSection } from '../analytics/ledger'
 import { buildRewards } from '../analytics/rewards'
 import { useStore } from '../store/AppStore'
@@ -84,6 +85,13 @@ export function StatementView({ statementId, onBack }: { statementId: string; on
             {ledger.card}
             {range && <> · {range}</>}
           </p>
+          {statement.cardholderName && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge tone="neutral">
+                <UserCheck size={12} /> {statement.cardholderName}
+              </Badge>
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {ledger.status === 'match' && retry}
@@ -96,6 +104,7 @@ export function StatementView({ statementId, onBack }: { statementId: string; on
       <StatementDelete
         statementId={deleting ? statement.id : undefined}
         onClose={() => setDeleting(false)}
+        onDeleted={onBack}
       />
 
       <section className="statement-hero" aria-label="Ekstre özeti">
@@ -190,8 +199,8 @@ export function StatementView({ statementId, onBack }: { statementId: string; on
             <Section key={section.id} section={section} />
           ))}
 
-          <div className="bento-card flex items-baseline justify-between gap-3">
-            <span className="text-body font-semibold text-ink">
+          <div className="bento-card flex flex-wrap items-baseline justify-between gap-2 sm:gap-3">
+            <span className="min-w-0 text-body font-medium text-ink">
               Dönem harcamaları
               <span className="ml-2 text-label font-normal text-faint">
                 {ledger.sections
@@ -242,11 +251,7 @@ function Section({ section }: { section: LedgerSection }) {
 function Row({ tx, sign }: { tx: Transaction; sign: 1 | -1 | 0 }) {
   return (
     <li className="statement-line">
-      <span
-        className="h-2.5 w-2.5 shrink-0 rounded-full"
-        style={{ background: categoryColor(tx.category) }}
-        aria-hidden
-      />
+      <CategoryBadge category={tx.category} size="sm" />
       <span className="min-w-0 flex-1">
         <span className="block break-words text-body font-medium text-ink">{tx.description}</span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-label text-faint">

@@ -54,8 +54,8 @@ export function FindingsSheet({
                 openTransactions({ merchant: group.merchant })
               }}
             >
-              <span className="font-medium text-ink">{group.label}</span>
-              <span className="num font-semibold text-warning">
+              <span className="min-w-0 flex-1 truncate font-medium text-ink">{group.label}</span>
+              <span className="num shrink-0 font-semibold text-warning">
                 {money2(group.amount)} · {group.transactions.length} işlem
               </span>
             </button>
@@ -77,8 +77,8 @@ export function FindingsSheet({
                 openTransactions({ merchant: item.transaction.merchant })
               }}
             >
-              <span className="font-medium text-ink">{item.transaction.description}</span>
-              <span className="num font-semibold text-ink">{money2(item.transaction.amount)}</span>
+              <span className="min-w-0 flex-1 truncate font-medium text-ink">{item.transaction.description}</span>
+              <span className="num shrink-0 font-semibold text-ink">{money2(item.transaction.amount)}</span>
             </button>
           ))}
           {!analysis.anomalies.length && (

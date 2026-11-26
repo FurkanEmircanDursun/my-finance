@@ -1,9 +1,20 @@
 import { initializeApp } from 'firebase-admin/app'
 import { FieldPath, FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore'
 import { getMessaging } from 'firebase-admin/messaging'
+import { getStorage } from 'firebase-admin/storage'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
 import { logger } from 'firebase-functions'
-import { cleanupExpiredDeliveries, deliveryId, deliverOnce, dueReminders, istanbulDate, messageFor, TIME_ZONE } from './reminder-plan.js'
+import {
+  cleanupExpiredDeliveries,
+  cleanupExpiredFailedStatements,
+  deliveryId,
+  deliverOnce,
+  dueReminders,
+  isExpiredFailedStatementObject,
+  istanbulDate,
+  messageFor,
+  TIME_ZONE,
+} from './reminder-plan.js'
 
 initializeApp()
 const db = getFirestore()
@@ -88,6 +99,37 @@ export const monthlyStatementReminders = onSchedule({
     await batch.commit()
     return expired.size
   })
-  if (failed) logger.warn('Monthly reminder delivery finished with failures', { sent, failed, removed })
-  else if (sent || removed) logger.info('Monthly reminder delivery finished', { sent, removed })
+
+  let removedDiagnostics = 0
+  try {
+    removedDiagnostics = await cleanupExpiredFailedStatements(hour, async (maxDeletes) => {
+      const bucket = getStorage().bucket()
+      let deleted = 0
+      let pageToken
+      for (let page = 0; page < 5 && deleted < maxDeletes; page++) {
+        const [files, nextQuery] = await bucket.getFiles({
+          prefix: 'users/',
+          autoPaginate: false,
+          maxResults: 200,
+          ...(pageToken ? { pageToken } : {}),
+        })
+        for (const file of files) {
+          if (deleted >= maxDeletes) break
+          if (!isExpiredFailedStatementObject(file.name, file.metadata?.timeCreated, now.getTime())) continue
+          await file.delete({ ignoreNotFound: true })
+          deleted++
+        }
+        pageToken = nextQuery?.pageToken
+        if (!pageToken) break
+      }
+      return deleted
+    })
+  } catch (error) {
+    logger.warn('Failed-statement storage cleanup skipped', {
+      code: typeof error?.code === 'string' ? error.code : 'unknown',
+    })
+  }
+
+  if (failed) logger.warn('Monthly reminder delivery finished with failures', { sent, failed, removed, removedDiagnostics })
+  else if (sent || removed || removedDiagnostics) logger.info('Monthly reminder delivery finished', { sent, removed, removedDiagnostics })
 })

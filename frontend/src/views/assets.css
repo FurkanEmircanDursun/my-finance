@@ -6,20 +6,20 @@
 }
 
 .assets-summary h2 {
-  font-size: 0.78rem;
-  font-weight: 650;
+  font-size: 0.76rem;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--hero-surface-muted);
 }
 
 .assets-total {
-  font-size: clamp(2.1rem, 4.2vw, 3.15rem);
+  font-size: clamp(2rem, 4.2vw, 3.1rem);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1.08;
   margin-top: 10px;
-  color: #FFFFFF;
+  color: var(--hero-surface-text);
   overflow-wrap: anywhere;
 }
 
@@ -41,13 +41,13 @@
 }
 
 .assets-summary-state > button {
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #FFFFFF;
+  background: var(--hero-surface-well);
+  border: 1px solid var(--hero-surface-line);
+  color: var(--hero-surface-text);
 }
 
 .assets-summary-state > button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--hero-surface-well-hover);
 }
 
 .assets-summary-state > p {
@@ -60,16 +60,17 @@
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(226, 194, 125, 0.16);
-  border: 1px solid rgba(226, 194, 125, 0.3);
-  color: #F3D99B;
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-border);
+  color: var(--gold);
   font-size: 0.72rem;
-  font-weight: 620;
+  font-weight: 500;
 }
 
 .assets-rate-badge.is-cached {
-  background: rgba(251, 191, 36, 0.18);
-  color: #FDE68A;
+  background: var(--warning-soft);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: var(--warning);
 }
 
 .assets-notice {
@@ -177,7 +178,7 @@
 .assets-holding-copy > strong {
   display: block;
   font-size: 0.925rem;
-  font-weight: 620;
+  font-weight: 500;
   color: var(--text);
 }
 
@@ -198,7 +199,7 @@
 .assets-holding-value > strong {
   white-space: nowrap;
   font-size: 0.95rem;
-  font-weight: 660;
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -209,8 +210,8 @@
 .assets-delete {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   color: var(--text-faint);
   flex-shrink: 0;

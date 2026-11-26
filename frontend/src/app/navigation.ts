@@ -1,4 +1,4 @@
-import { LayoutDashboard, BarChart3, CreditCard, List } from 'lucide-react'
+import { LayoutDashboard, BarChart3, CreditCard, CalendarDays, CalendarClock } from 'lucide-react'
 import type { ComponentType } from 'react'
 
 export type ViewId = 'overview' | 'transactions' | 'analysis' | 'spending' | 'future' | 'assets' | 'cards' | 'card-detail' | 'statement' | 'settings'
@@ -9,12 +9,13 @@ export interface NavItem {
   icon: ComponentType<{ size?: number | string; className?: string }>
 }
 
-/** Daily destinations, in the same order on both navigation surfaces. */
+/** 5-tab 2026 Super-App primary destinations. */
 export const NAV: NavItem[] = [
-  { id: 'overview', label: 'Ay Özeti', icon: LayoutDashboard },
-  { id: 'transactions', label: 'İşlemler', icon: List },
+  { id: 'overview', label: 'Kokpit', icon: LayoutDashboard },
+  { id: 'transactions', label: 'İşlemler', icon: CalendarDays },
   { id: 'cards', label: 'Kartlar', icon: CreditCard },
-  { id: 'analysis', label: 'Analiz', icon: BarChart3 },
+  { id: 'future', label: 'Plan & Bütçe', icon: CalendarClock },
+  { id: 'analysis', label: 'Varlık & Analiz', icon: BarChart3 },
 ]
 const VIEWS = new Set<ViewId>([...NAV.map(item => item.id), 'spending', 'future', 'assets', 'card-detail', 'statement', 'settings'])
 const LEGACY: Record<string, ViewId> = {
@@ -24,7 +25,7 @@ const LEGACY: Record<string, ViewId> = {
 export function isViewId(value: string): value is ViewId { return VIEWS.has(value as ViewId) }
 export function navigationSection(view: ViewId): ViewId {
   if (view === 'card-detail' || view === 'statement') return 'cards'
-  if (view === 'assets' || view === 'future' || view === 'spending') return 'analysis'
+  if (view === 'assets' || view === 'spending') return 'analysis'
   return view
 }
 export function parseRoute(hash: string): AppRoute {

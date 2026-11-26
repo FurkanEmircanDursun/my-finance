@@ -3,12 +3,40 @@ import { measureOperation } from '../platform/diagnostics'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { parseFile, ParseError, statementImportProblem } from '../ingest/pipeline'
 import { StatementValidationError, isPdfFile, MAX_STATEMENT_BYTES } from '../ingest/validation'
+import { assessStatementWarnings, findOwnershipMismatch } from '../ingest/ownership'
 import { UserFacingError } from '../core/errors'
 import { uid } from '../core/hash'
 import { useStore } from '../store/AppStore'
-import type { CreditCard, ImportOutcome, Statement, Transaction } from '../domain/types'
+import { storageAvailable } from '../firebase/available'
+import {
+  classifyFailedStatementUpload,
+  failedStatementUploadEnabled,
+  uploadFailedStatement,
+} from '../firebase/failedStatements'
+import type { CreditCard, ImportErrorCode, ImportOutcome, ParseResult, Statement, Transaction } from '../domain/types'
 import { assignResultCard } from '../domain/cards'
 import { legacyCardKey, resolveImportCard } from '../domain/cardLifecycle'
+
+function classifyImportError(error: unknown): ImportErrorCode | undefined {
+  if (error instanceof StatementValidationError) {
+    if (error.code === 'unsupported_bank') return 'unsupported_bank'
+    if (
+      error.code === 'unreadable_text' ||
+      error.code === 'unreadable_pdf' ||
+      error.code === 'invalid_pdf' ||
+      error.code === 'password_required'
+    ) {
+      return 'unreadable'
+    }
+    return 'other'
+  }
+  if (error instanceof ParseError) {
+    if (/uyuşmuyor|önceki bakiyesi|okunamayan işlem/i.test(error.message)) return 'reconciliation'
+    if (/döneme ait ekstre var/i.test(error.message)) return 'duplicate_cycle'
+    return 'other'
+  }
+  return undefined
+}
 
 export interface ImportProgress {
   running: boolean
@@ -22,7 +50,7 @@ const IDLE: ImportProgress = { running: false, fileName: '', message: '', done: 
 type ReviewImport = (outcomes: readonly ImportOutcome[]) => Promise<boolean>
 
 export function useImport() {
-  const { state, getCurrentState, dispatch, ensureHistory, historyReady } = useStore()
+  const { state, getCurrentState, dispatch, ensureHistory, historyReady, authUser } = useStore()
   const [progress, setProgress] = useState<ImportProgress>(IDLE)
   const lifetime = useRef(0)
   const runningFor = useRef<number | null>(null)
@@ -44,14 +72,17 @@ export function useImport() {
       const outcomes: ImportOutcome[] = []
       const reservations = new Map<string, CreditCard>()
       const reviewedCardNumbers = new Map<string, string>()
+      const batchCardholders: string[] = []
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i]
         setProgress({ running: true, fileName: file.name, message: 'Okunuyor…', done: i, total: files.length })
+        let pdfSha256: string | undefined
+        let failedParsed: ParseResult | undefined
+        let failureStage: 'parse' | 'post-parse' = 'parse'
 
         try {
           if (repairStatementId && !isPdfFile(file)) throw new ParseError('Ekstreyi düzeltmek için bankanın özgün PDF dosyasını seç.')
-          let pdfSha256: string | undefined
           if (typeof file.type === 'string' && isPdfFile(file) && file.size > 0 && file.size <= MAX_STATEMENT_BYTES && globalThis.crypto?.subtle) {
             const bytes = await file.arrayBuffer()
             const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
@@ -59,10 +90,19 @@ export function useImport() {
             pdfSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
             // A statement replaced earlier in this batch supersedes its saved fingerprint.
             const superseded = new Set(statements.map(statement => statement.id))
-            if (statements.some(statement => statement.pdfSha256 === pdfSha256) ||
-                importState.statements.some(statement => statement.id !== repairStatementId &&
-                  !superseded.has(statement.id) && statement.pdfSha256 === pdfSha256)) {
-              outcomes.push({ fileName: file.name, ok: true, added: 0, duplicates: 0, alreadyImported: true })
+            const duplicateInBatch = statements.find(statement => statement.pdfSha256 === pdfSha256)
+            const duplicateInStore = importState.statements.find(statement => statement.id !== repairStatementId &&
+              !superseded.has(statement.id) && statement.pdfSha256 === pdfSha256)
+            const duplicateMatch = duplicateInBatch ?? duplicateInStore
+            if (duplicateMatch) {
+              outcomes.push({
+                fileName: file.name,
+                ok: true,
+                added: 0,
+                duplicates: 0,
+                alreadyImported: true,
+                existingMatchLabel: duplicateMatch.label,
+              })
               continue
             }
           }
@@ -75,23 +115,61 @@ export function useImport() {
             },
           }))
           if (session !== lifetime.current) return
+          failedParsed = parsed
           const problem = statementImportProblem(parsed, isPdfFile(file))
           if (problem) throw problem
+          failureStage = 'post-parse'
 
           if (!workingRows) {
             if (ensureHistory && !historyReady) {
               setProgress(p => ({ ...p, message: 'Ekstre geçmişi kontrol ediliyor…' }))
               importState = await ensureHistory()
               if (session !== lifetime.current) return
-              if (pdfSha256 && importState.statements.some(statement =>
-                statement.id !== repairStatementId && statement.pdfSha256 === pdfSha256)) {
-                outcomes.push({ fileName: file.name, ok: true, added: 0, duplicates: 0, alreadyImported: true })
+              const duplicateAfterSync = pdfSha256
+                ? importState.statements.find(statement =>
+                    statement.id !== repairStatementId && statement.pdfSha256 === pdfSha256)
+                : undefined
+              if (duplicateAfterSync) {
+                outcomes.push({
+                  fileName: file.name,
+                  ok: true,
+                  added: 0,
+                  duplicates: 0,
+                  alreadyImported: true,
+                  existingMatchLabel: duplicateAfterSync.label,
+                })
                 continue
               }
             }
             workingRows = new Map(importState.transactions.map(tx => [tx.id, tx]))
           }
           const knownStatements = [...statements, ...importState.statements]
+
+          // Check statement ownership against signed-in account, prior statements, and current batch.
+          // Interactive imports surface a typed-name confirmation gate in the review step;
+          // headless/non-interactive calls without a review handler still refuse foreign statements.
+          const existingCardholders = importState.statements
+            .map((st) => st.cardholderName)
+            .filter((name): name is string => Boolean(name))
+          const ownershipMismatch = findOwnershipMismatch({
+            cardholderName: parsed.cardholderName,
+            accountDisplayName: authUser?.displayName,
+            existingCardholders,
+            batchCardholders,
+          })
+          if (ownershipMismatch && !review) {
+            outcomes.push({
+              fileName: file.name,
+              ok: false,
+              added: 0,
+              duplicates: 0,
+              error: ownershipMismatch.detail,
+              errorCode: 'different_holder',
+              ...(parsed.cardholderName ? { cardholderName: parsed.cardholderName } : {}),
+            })
+            continue
+          }
+
           const pdfStatementId = pdfSha256 ? `st-pdf-${pdfSha256}` : undefined
           const interruptedRow = pdfStatementId && !knownStatements.some(statement => statement.id === pdfStatementId)
             ? [...workingRows.values()].find(tx => tx.statementId === pdfStatementId && tx.cardId)
@@ -100,7 +178,8 @@ export function useImport() {
             ? { id: interruptedRow.cardId, name: interruptedRow.accountLabel ?? parsed.accountLabel }
             : undefined
           const card = resolveImportCard(parsed, { selectedId: cardId, newCard, interruptedCard,
-            cards: importState.profile.cards ?? [], statements: knownStatements, reservations })
+            cards: importState.profile.cards ?? [], statements: knownStatements, reservations,
+            claimedLast4ByCardId: reviewedCardNumbers })
           const result = card ? assignResultCard(parsed, card) : parsed
           const reportedCardLast4 = result.reportedCardLast4
           const priorSuffix = card && reviewedCardNumbers.get(card.id)
@@ -131,11 +210,6 @@ export function useImport() {
           }
           let added = 0
           let duplicates = 0
-          // An old unlinked import keeps its original transaction ids when it
-          // is attached to a card. Only this statement's old ids can match;
-          // another card's identical purchase must still be added.
-          // The receipt is sent after its movements. A stopped bulk import
-          // can leave confirmed rows under the same deterministic PDF ID.
           const previousRows = existing || pdfStatementId
             ? [...workingRows.values()].filter((tx) => tx.statementId === statementId)
             : []
@@ -145,8 +219,6 @@ export function useImport() {
             throw new ParseError('Mevcut ekstreyi güncellemek için dönem borcu ve önceki bakiyesi okunabilen bir dosya yükle.')
           }
 
-          // The bank-verified set supersedes the old read of this cycle. A
-          // unique raw line also carries edits across an amount/sign correction.
           const priorByLine = new Map<string, Transaction | null>()
           for (const tx of previousRows) {
             if (tx.raw) priorByLine.set(tx.raw, priorByLine.has(tx.raw) ? null : tx)
@@ -186,11 +258,25 @@ export function useImport() {
             collected.set(tx.id, tx)
           }
 
+          const sameBankCardCount = (importState.profile.cards ?? []).filter(
+            (saved) => saved.bank === card?.bank,
+          ).length
+          const warnings = assessStatementWarnings({
+            cardholderName: result.cardholderName,
+            accountDisplayName: authUser?.displayName,
+            existingCardholders,
+            batchCardholders,
+            periodEnd: result.periodEnd,
+            reportedCardLast4,
+            sameBankCardCount,
+          })
+
           const statement: Statement = {
             id: statementId,
             label: result.label,
             fileName: file.name,
             ...(pdfSha256 ? { pdfSha256 } : {}),
+            ...(result.cardholderName ? { cardholderName: result.cardholderName } : {}),
             bank: result.bank,
             accountLabel: result.accountLabel,
             ...(card ? { cardId: card.id } : {}),
@@ -206,8 +292,6 @@ export function useImport() {
             ignored: result.ignored,
           }
 
-          // The parser accepts zero-row documents only with explicit, balanced
-          // no-activity evidence. Their cover still proves this cycle was uploaded.
           if (existing) {
             const at = statements.findIndex((st) => st.id === existing.id)
             if (at >= 0) statements[at] = statement
@@ -217,9 +301,19 @@ export function useImport() {
           }
           const removed = verified ? previousRows.length - duplicates : 0
           if (statements.includes(statement)) {
+            if (result.cardholderName) batchCardholders.push(result.cardholderName)
             if (card && reportedCardLast4) reviewedCardNumbers.set(card.id, reportedCardLast4)
-            outcomes.push({ fileName: file.name, ok: true, added, duplicates, ...(removed > 0 ? { removed } : {}),
-              ...(reportedCardLast4 ? { reportedCardLast4 } : {}), statement })
+            outcomes.push({
+              fileName: file.name,
+              ok: true,
+              added,
+              duplicates,
+              ...(removed > 0 ? { removed } : {}),
+              ...(reportedCardLast4 ? { reportedCardLast4 } : {}),
+              ...(result.cardholderName ? { cardholderName: result.cardholderName } : {}),
+              ...(warnings.length ? { warnings } : {}),
+              statement,
+            })
           } else {
             outcomes.push({ fileName: file.name, ok: true, added, duplicates, alreadyImported: true })
           }
@@ -231,7 +325,36 @@ export function useImport() {
               : error instanceof UserFacingError
                 ? error.message
                 : 'Dosya eklenemedi. Bankandan özgün ekstre PDF’sini indirip yeniden dene.'
-          outcomes.push({ fileName: file.name, ok: false, added: 0, duplicates: 0, error: message })
+          const errorCode = classifyImportError(error)
+          let diagnosticReport: ImportOutcome['diagnosticReport']
+          const classification = classifyFailedStatementUpload(error, failedParsed, failureStage)
+          if (
+            classification &&
+            authUser?.uid &&
+            !authUser.isAnonymous &&
+            storageAvailable &&
+            failedStatementUploadEnabled()
+          ) {
+            diagnosticReport =
+              (await uploadFailedStatement({
+                uid: authUser.uid,
+                file,
+                sha256: pdfSha256,
+                classification,
+                userMessage: message,
+                parsed: failedParsed,
+              })) ?? undefined
+            if (session !== lifetime.current) return
+          }
+          outcomes.push({
+            fileName: file.name,
+            ok: false,
+            added: 0,
+            duplicates: 0,
+            error: message,
+            ...(errorCode ? { errorCode } : {}),
+            ...(diagnosticReport ? { diagnosticReport } : {}),
+          })
         }
       }
 
@@ -260,6 +383,7 @@ export function useImport() {
           error: 'Ekstreler veya kartlar işlem sırasında değişti. Dosyayı yeniden incele.',
         } : outcome)
       }
+
       if (collected.size || outcomes.length) {
         dispatch({ type: 'import', transactions: [...collected.values()], statements, outcomes, refreshedStatementIds: [...refreshed] })
       }
@@ -269,7 +393,7 @@ export function useImport() {
       setProgress(IDLE)
       return outcomes
     },
-    [dispatch, ensureHistory, getCurrentState, historyReady, state],
+    [authUser?.displayName, authUser?.isAnonymous, authUser?.uid, dispatch, ensureHistory, getCurrentState, historyReady, state],
   )
 
   return { run, progress }

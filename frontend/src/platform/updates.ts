@@ -1,7 +1,7 @@
 import { cloudAvailable } from '../firebase/available'
 import { isNative, isAndroid } from './index'
 import { measureOperation } from './diagnostics'
-import { compareVersions, parseUpdatePolicy, resolveUpdateUrl, updateDecision, type UpdateDecision, type UpdatePolicy, type UpdatePlatform } from './updatesPolicy'
+import { cacheUpdatePolicy, compareVersions, parseUpdatePolicy, readCachedUpdatePolicy, resolveUpdateUrl, updateDecision, type UpdateDecision, type UpdatePolicy, type UpdatePlatform } from './updatesPolicy'
 
 export interface UpdateState {
   currentVersion: string | null
@@ -45,12 +45,17 @@ export function watchUpdates(onChange: (state: UpdateState) => void): { refresh:
     const policy = parseUpdatePolicy({
       min_required_version: sdk.getString(remote, 'min_required_version'),
       latest_version: sdk.getString(remote, 'latest_version'),
+      min_required_version_android: sdk.getString(remote, 'min_required_version_android'),
+      latest_version_android: sdk.getString(remote, 'latest_version_android'),
+      min_required_version_ios: sdk.getString(remote, 'min_required_version_ios'),
+      latest_version_ios: sdk.getString(remote, 'latest_version_ios'),
       update_url: sdk.getString(remote, 'update_url'),
       update_url_android: sdk.getString(remote, 'update_url_android'),
       update_url_ios: sdk.getString(remote, 'update_url_ios'),
       update_message: sdk.getString(remote, 'update_message'),
     })
     if (!policy) { publish({ status: 'invalid' }); return }
+    if (typeof localStorage !== 'undefined') cacheUpdatePolicy(localStorage, policy)
     publish({ policy, status: 'ready' })
   }
   const refreshRemote = async () => {
@@ -63,7 +68,12 @@ export function watchUpdates(onChange: (state: UpdateState) => void): { refresh:
   }
   const initialize = async () => {
     const currentVersion = await installedVersion()
-    publish({ currentVersion, platform: isNative() ? isAndroid() ? 'android' : 'ios' : 'web' })
+    const cached = typeof localStorage !== 'undefined' ? readCachedUpdatePolicy(localStorage) : null
+    publish({
+      currentVersion,
+      platform: isNative() ? isAndroid() ? 'android' : 'ios' : 'web',
+      ...(cached ? { policy: cached } : {}),
+    })
     if (disposed) return
     if (!cloudAvailable || (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_AUTH_EMULATOR)) {
       publish({ status: 'unavailable' })
@@ -77,7 +87,18 @@ export function watchUpdates(onChange: (state: UpdateState) => void): { refresh:
       if (disposed) return
       remote = sdk.getRemoteConfig(getFirebaseApp())
       remote.settings = { minimumFetchIntervalMillis: 60 * 60 * 1000, fetchTimeoutMillis: 8000 }
-      remote.defaultConfig = { min_required_version: '0.0.0', latest_version: '0.0.0', update_url: '', update_url_android: '', update_url_ios: '', update_message: '' }
+      remote.defaultConfig = {
+        min_required_version: '0.0.0',
+        latest_version: '0.0.0',
+        min_required_version_android: '',
+        latest_version_android: '',
+        min_required_version_ios: '',
+        latest_version_ios: '',
+        update_url: '',
+        update_url_android: '',
+        update_url_ios: '',
+        update_message: '',
+      }
       await sdk.ensureInitialized(remote)
       if (disposed) return
       // A previously activated remote policy is useful even before today's fetch.

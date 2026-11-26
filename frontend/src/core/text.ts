@@ -11,30 +11,35 @@
 const DIACRITICS: Record<string, string> = {
   Ç: 'C', Ğ: 'G', İ: 'I', I: 'I', Ö: 'O', Ş: 'S', Ü: 'U',
   ç: 'C', ğ: 'G', ı: 'I', ö: 'O', ş: 'S', ü: 'U',
+  Â: 'A', â: 'A', Î: 'I', î: 'I', Û: 'U', û: 'U',
 }
 
 /** Payment processors and wallets that prefix the real merchant name. */
 const PROCESSOR_PREFIXES = [
-  'IYZICO', 'IYZI', 'PAYTR', 'PAYU', 'PARAM', 'MOKA', 'SIPAY', 'CRAFTGATE',
-  'GOOGLE *', 'GOOGLE*', 'APPLE.COM/BILL', 'PAYPAL *', 'PAYPAL*', 'SQ *', 'SUMUP',
-  'MP*', 'PAYCELL', 'MONEYPAY',
+  'IYZICO', 'IYZI', 'PAYTR', 'PAY TR', 'PAYU', 'PARAM', 'MOKA U', 'MOKA', 'SIPAY', 'CRAFTGATE',
+  'LIDIO ODEME', 'LIDIO', 'HALKODE OD', 'HALKODE', 'RUBIKPARA', 'HEPSIP', 'TKPAY', 'VODAFONEPY',
+  'GOOGLE *', 'GOOGLE*', 'APPLE.COM/BILL', 'PAYPAL *', 'PAYPAL*', 'SQ *', 'FS *', 'FS*', 'SUMUP',
+  'MP*', 'MP/', 'E/', 'O/', 'S/', 'PAYCELL', 'MONEYPAY',
 ]
 
 /**
  * Location, legal-form and domain noise that varies between two visits to the
- * same shop. Everything here was observed in real Akbank and Garanti
- * statements, where the merchant column carries city, branch and country code.
+ * same shop. Everything here was observed in real Turkish bank statements,
+ * where the merchant column carries city, branch and country code.
  */
 const NOISE_TOKENS = new Set([
   // Cities and districts
   'ISTANBUL', 'ANKARA', 'IZMIR', 'BURSA', 'ANTALYA', 'ADANA', 'KONYA', 'MERSIN',
   'KAYSERI', 'ESKISEHIR', 'GAZIANTEP', 'SAMSUN', 'DENIZLI', 'KOCAELI', 'SAKARYA',
-  'BALIKESIR', 'CANKIRI', 'ILGAZ', 'TRABZON', 'MALATYA', 'ERZURUM', 'AYDIN',
+  'BALIKESIR', 'CANKIRI', 'ILGAZ', 'KASTAMONU', 'BINGOL', 'ELAZIG', 'CORUM', 'DUZCE',
+  'KIGI', 'KURSUNLU', 'DIYARBAKIR', 'TRABZON', 'MALATYA', 'ERZURUM', 'AYDIN',
   'MUGLA', 'TEKIRDAG', 'MANISA', 'HATAY', 'ORDU', 'RIZE', 'VAN', 'SIVAS',
+  'CORLU', 'EDREMIT', 'MAMAK', 'KIRKLARELI', 'IZMIT', 'KARAKOY', 'USKUDAR',
+  'BEYLERBEYI', 'SALACAK',
   'BAHCELIEVL', 'BAHCELIEVLER', 'KADIKOY', 'BESIKTAS', 'SISLI', 'UMRANIYE',
   'ZIVERBEY', 'AKARETLER', 'LEVENT', 'MASLAK', 'ATASEHIR', 'BAKIRKOY',
   // Country codes printed after the merchant
-  'TUR', 'TR', 'TURKIYE', 'TURKEY', 'GBR', 'USA', 'DEU', 'NLD', 'IRL', 'LONDON',
+  'TUR', 'TR', 'TU', 'TRTR', 'TURKIYE', 'TURKEY', 'GBR', 'GB', 'USA', 'DEU', 'NLD', 'IRL', 'LONDON',
   // Foreign cities foreign-currency rows end with ("GITHUB, INC. SAN FRANCISCO USA")
   'FRANCISCO', 'BELLEVUE', 'DUBLIN', 'AMSTERDAM', 'SEATTLE',
   // A refund is a `kind`, not a different shop: "IADE - TRENDYOL" and
@@ -45,7 +50,7 @@ const NOISE_TOKENS = new Set([
   'SUBE', 'SUBESI', 'MAGAZA', 'MAGAZASI', 'MAH', 'MAHALLESI', 'CAD', 'CADDESI',
   'SOK', 'SOKAK', 'AVM', 'PLAZA', 'MERKEZ', 'IST',
   // Legal forms
-  'SAN', 'TIC', 'LTD', 'STI', 'AS', 'ANONIM', 'SIRKETI', 'LIMITED', 'INC',
+  'SAN', 'TIC', 'LTD', 'STI', 'AS', 'ANONIM', 'SIRKETI', 'LIMITED', 'INC', 'ISLETMECILIGI',
   // Domain suffixes — "TRENDYOL.COM" and "TRENDYOL" are one merchant
   'COM', 'NET', 'ORG', 'WWW',
 ])
@@ -64,6 +69,12 @@ const normalCache = new Map<string, string>()
 export function clearMerchantCache(): void { normalCache.clear() }
 const MAX_CACHE = 4000
 
+/** Short alphanumeric brand names that resemble store/terminal codes and must survive filtering. */
+const SHORT_BRANDS = new Set(['A101', 'N11'])
+
+/** Pure terminal/branch codes such as "G040" or "I353" that should not hijack the brand anchor. */
+const STORE_CODE_RE = /^[A-Z]\d{3,}$/
+
 /**
  * "GOOGLE *YOUTUBEPREMIUM g.co/helppay# 12345 ISTANBUL TR"
  *   -> "YOUTUBEPREMIUM"
@@ -74,15 +85,30 @@ export function normalizeMerchant(description: string): string {
 
   let s = fold(description)
 
-  // Drop URLs, e-mails and help strings the processors append.
-  s = s.replace(/\b(?:HTTPS?:\/\/|WWW\.)\S+/g, ' ')
+  // Drop URLs, e-mails and help strings the processors append, but preserve
+  // merchant domains like "WWW.TRENDYOL.COM" or "WWW.SAATVESAAT.COM. TR" by
+  // stripping only the "WWW." prefix rather than wiping the host name itself.
+  s = s.replace(/\bHTTPS?:\/\/\S+/g, ' ')
+  s = s.replace(/\bWWW\./g, '')
   s = s.replace(/\b[\w.-]+@[\w.-]+\b/g, ' ')
   s = s.replace(/\bG\.CO\/\S*/g, ' ')
 
-  for (const prefix of PROCESSOR_PREFIXES) {
-    if (s.startsWith(prefix)) {
-      s = s.slice(prefix.length)
-      break
+  // Strip chained processor prefixes such as "IYZICO/IYZICO/AMAZONPRI".
+  let strippedPrefix = true
+  while (strippedPrefix) {
+    strippedPrefix = false
+    const trimmed = s.replace(/^[\s/*.:-]+/, '')
+    for (const prefix of PROCESSOR_PREFIXES) {
+      if (trimmed.startsWith(prefix)) {
+        const rest = trimmed.slice(prefix.length)
+        // Guard against stripping a prefix that is actually the start of a
+        // longer word (e.g. "PARAM" vs "PARAMEDIC").
+        if (!rest || /^[\s/*.:-]/.test(rest) || prefix.endsWith('*') || prefix.endsWith('/')) {
+          s = rest
+          strippedPrefix = true
+          break
+        }
+      }
     }
   }
 
@@ -101,9 +127,13 @@ export function normalizeMerchant(description: string): string {
   const kept: string[] = []
 
   for (const token of tokens) {
-    if (NOISE_TOKENS.has(token)) continue
+    // "SOK" is street noise ("BELEN SOK.") after a name, but when leading it is
+    // the ŞOK supermarket chain ("ŞOK-5665 İSTANBUL").
+    if (NOISE_TOKENS.has(token) && !(token === 'SOK' && !kept.length)) continue
     // Pure digits are terminal ids or store numbers, never a brand.
     if (/^\d+$/.test(token)) continue
+    // Branch codes like "G040" before "A101" must not displace the real brand.
+    if (!SHORT_BRANDS.has(token) && STORE_CODE_RE.test(token)) continue
 
     if (!kept.length) {
       // The first surviving token is the brand anchor and is kept whatever its
@@ -113,22 +143,27 @@ export function normalizeMerchant(description: string): string {
       continue
     }
 
-    // After the anchor, keep only tokens that read as words. This drops the
-    // terminal ids ("I353"), branch codes and single letters that follow.
-    if (token.replace(/[^A-Z]/g, '').length < 3) continue
+    // After the anchor, keep only tokens that read as words (or known short brands).
+    // This drops terminal ids ("I353"), branch codes and single letters that follow.
+    if (!SHORT_BRANDS.has(token) && token.replace(/[^A-Z]/g, '').length < 3) continue
 
     kept.push(token)
     if (kept.length === 4) break // Merchant identity never needs more.
   }
 
   // A bank truncates long names, and what survives the noise filter can be a lone
-  // fragment — "1022 İSTANBUL ZİVERBEY MA" leaves "MA". That is not a name anyone
-  // can recognise, so the words around it are kept to make one.
-  // Only when the fragment is the *last* word — a truncated name — so a real
-  // two-letter brand that leads the line ("BP ISTANBUL") is left alone.
-  if (kept.length === 1 && kept[0].length < 3 && !/\d/.test(kept[0]) && tokens[tokens.length - 1] === kept[0]) {
+  // fragment — "1022 İSTANBUL ZİVERBEY MA" leaves "MA", or a dropped glyph leaves
+  // a single letter ("E/ÖL ME SE ME VE Y" -> "E"). Rescue either case from the
+  // non-digit words so the label stays readable, while leaving real two-letter
+  // brands at the start of the line ("BP ISTANBUL") intact.
+  const loneTrailingFragment =
+    kept.length === 1 && kept[0].length < 3 && !/\d/.test(kept[0]) && tokens[tokens.length - 1] === kept[0]
+  const loneSingleLetter = kept.length === 1 && kept[0].length === 1 && !/\d/.test(kept[0])
+  const allTinyFragments =
+    kept.length === 1 && kept[0].length <= 2 && !/\d/.test(kept[0]) && tokens.length >= 3 && tokens.every((w) => w.length <= 2)
+  if (loneTrailingFragment || loneSingleLetter || allTinyFragments) {
     const words = s.split(' ').filter((w) => w && !/^\d+$/.test(w))
-    if (words.length > 1) kept.splice(0, kept.length, ...words.slice(0, 3))
+    if (words.length > 1) kept.splice(0, kept.length, ...words.slice(0, loneSingleLetter || allTinyFragments ? 4 : 3))
   }
 
   const result = (kept.length ? kept.join(' ') : s || fold(description).trim()) || 'BILINMEYEN'

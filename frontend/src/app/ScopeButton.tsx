@@ -6,6 +6,7 @@ import { availablePeriodYears } from '../store/selectors'
 import { monthLabel, monthOf, todayKey } from '../core/date'
 import { useExplore } from './ExploreContext'
 import { Button, Field } from '../ui/primitives'
+import { Select } from '../ui/Select'
 import { hapticTap } from '../platform/haptics'
 
 const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık']
@@ -76,17 +77,15 @@ export function ScopeButton() {
         {years.length > 0 ? (
           <div className="period-picker">
             <Field label="Yıl">
-              <select
-                className="finance-select"
-                value={activeYear}
-                onChange={(event) => setYear(Number(event.target.value))}
-              >
-                {years.map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
+              <Select
+                ariaLabel="Yıl seçimi"
+                value={String(activeYear)}
+                onChange={(next) => setYear(Number(next))}
+                options={years.map((value) => ({
+                  value: String(value),
+                  label: String(value),
+                }))}
+              />
             </Field>
             <fieldset>
               <legend>Ay</legend>

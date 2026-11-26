@@ -94,12 +94,38 @@ export function looksLikeEbcdic(text: string): boolean {
 }
 
 export function decodeEbcdic(text: string): string {
+  return decodeWithOverrides(text, null)
+}
+
+function decodeWithOverrides(text: string, overrides: Record<number, string> | null): string {
   let out = ''
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i)
     // Anything outside the byte range came from a font that already produced
     // real Unicode; pass it through rather than corrupting it.
-    out += code < 256 ? TABLE[code] : text[i]
+    if (code < 256) {
+      out += overrides && code in overrides ? overrides[code] : TABLE[code]
+    } else {
+      out += text[i]
+    }
   }
   return out
+}
+
+/**
+ * Calibrates minor Akbank subset shifts from fixed table-header bytes.
+ *
+ * Akbank embeds Turkish special letters (ı, Ş, ş, İ, ğ) in a dynamic subset
+ * font whose slots can shift by one code point between templates: in some
+ * PDFs "Borç Tutarı" ends with 0xaf (shifting 0xaf→ı and 0xb0→Ş, as seen on
+ * "ŞOK-5665" and "AXESS Chip-Para Kampanyası"). Detecting the exact byte on
+ * "Borç Tutar?" keeps both template revisions exact without breaking either.
+ */
+export function createEbcdicDecoder(sample: string): (text: string) => string {
+  const compact = sample.replace(/[\x20\x40\r\n\t]+/g, '')
+  // "BorçTutar" in EBCDIC is c2 96 99 48 e3 a4 a3 81 99, followed by the 'ı' byte.
+  const shifted = /\xc2\x96\x99\x48\xe3\xa4\xa3\x81\x99\xaf/.test(compact)
+  if (!shifted) return decodeEbcdic
+  const overrides: Record<number, string> = { 0xaf: 'ı', 0xb0: 'Ş' }
+  return (text: string) => decodeWithOverrides(text, overrides)
 }

@@ -382,7 +382,10 @@ function buildMonthly(
     return {
       month,
       label: monthLabel(month, true),
-      spend: bucket.spend,
+      // Net of refunds booked in the same month so returned purchases (e.g. a
+      // cancelled instalment plan) do not inflate monthly charts, MoM trends, or
+      // spending-limit meters beyond what the statement actually billed.
+      spend: Math.max(0, netSpend),
       income: bucket.income,
       refunds: bucket.refunds,
       net: bucket.income - netSpend,

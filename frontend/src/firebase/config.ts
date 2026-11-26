@@ -4,6 +4,7 @@ import {
   browserLocalPersistence, type Auth,
 } from 'firebase/auth'
 import { isNative } from '../platform'
+import { initializeAppCheckOnce } from './appCheck'
 
 /**
  * Firebase Auth opens the workspace. Remote Config checks update policy before
@@ -30,6 +31,7 @@ let authInstance: Auth | null = null
 export function getFirebaseApp(): FirebaseApp {
   if (app) return app
   app = getApps()[0] ?? initializeApp(config)
+  void initializeAppCheckOnce(app)
   return app
 }
 

@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   Bell,
   Check,
-  CreditCard,
   Home,
   LockKeyhole,
   ShieldCheck,
@@ -15,7 +14,6 @@ import {
   Wallet,
 } from 'lucide-react'
 import { useStore } from '../store/AppStore'
-import { CardEditor } from './CardsSheet'
 import { NotificationSettings } from './NotificationSettings'
 import { createEntry, entryAmount } from '../domain/entry'
 import { todayKey, monthOf } from '../core/date'
@@ -25,7 +23,6 @@ import { Button, Field, TextInput } from '../ui/primitives'
 import { MoneyValue } from '../ui/MoneyValue'
 import { AnimatedProgress, resolveBudgetTone } from '../ui/motion'
 import { InteractiveDonutChart, type DonutSlice } from '../ui/charts'
-import { PhysicalCard } from '../ui/PhysicalCard'
 import { setBackInterceptor } from '../platform/native'
 import { trackProductEvent } from '../platform/analytics'
 import { hapticImpact, hapticTap } from '../platform/haptics'
@@ -33,7 +30,6 @@ import './onboarding.css'
 
 const steps = [
   { label: 'Mizan’ı tanı', icon: SlidersHorizontal },
-  { label: 'Kartını ekle', icon: CreditCard },
   { label: 'Gelirini ekle', icon: Wallet },
   { label: 'Hatırlatmaları seç', icon: Bell },
 ]
@@ -87,7 +83,7 @@ function BudgetPlayground() {
         <div className="onb-donut-wrap">
           <InteractiveDonutChart
             data={slices}
-            height={176}
+            height={188}
             activeId={activeSlice}
             onSelect={setActiveSlice}
             totalLabel="Aylık gelir"
@@ -211,7 +207,6 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const hasIncome = state.transactions.some(
     (tx) => tx.kind === 'income' && monthOf(tx.date) === thisMonth,
   )
-  const cards = state.profile.cards ?? []
 
   const finish = (completed = true) => {
     if (finishing.current) return
@@ -225,6 +220,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   useEffect(() => {
+    window.getSelection?.()?.removeAllRanges()
     heading.current?.focus()
   }, [step])
 
@@ -253,7 +249,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     dispatch({ type: 'setFilters', filters: { month: thisMonth } })
     hapticImpact()
     setSavedIncome(true)
-    setStep(3)
+    setStep(2)
   }
 
   return (
@@ -366,60 +362,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             <h2 id="onb-step-title" ref={heading} tabIndex={-1}>
               {[
                 '',
-                'Önce kartını tanıyalım.',
                 'Bu ayki gelirini ekle.',
                 'Tarihleri aklında tutma.',
               ][step]}
             </h2>
 
             {step === 1 && (
-              <>
-                <p>
-                  Tam kart numaran gerekmez. Kartını ekleyip kesim ve hatırlatma günlerini belirle.
-                </p>
-                {cards.length > 0 ? (
-                  <div className="mb-4 space-y-3">
-                    <p className="onb-saved" role="status">
-                      <Check size={16} /> {cards.length} kart hazır. Mevcut kartlarınla devam edebilirsin.
-                    </p>
-                    <PhysicalCard
-                      bank={cards[0].bank}
-                      bankLabel={cards[0].bank.toUpperCase()}
-                      name={cards[0].name}
-                      last4={cards[0].last4}
-                      compact
-                    />
-                  </div>
-                ) : null}
-                <CardEditor
-                  existingCards={cards}
-                  onSave={(card) => {
-                    dispatch({ type: 'upsertCard', card })
-                    setStep(2)
-                  }}
-                  submitLabel={
-                    cards.length
-                      ? 'Yeni kartı kaydet ve devam et'
-                      : 'Kartı kaydet ve devam et'
-                  }
-                />
-                <button
-                  type="button"
-                  className="onb-quiet-action onb-skip"
-                  onClick={() => {
-                    hapticTap()
-                    setStep(2)
-                  }}
-                >
-                  {cards.length
-                    ? 'Mevcut kartlarla devam et'
-                    : 'Şimdilik kart ekleme'}{' '}
-                  <ArrowRight size={15} />
-                </button>
-              </>
-            )}
-
-            {step === 2 && (
               <>
                 <p>
                   Bugünün tarihine gelir kaydı eklenir. Gelirden kalan tutar anında hesaplanır.
@@ -434,7 +382,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                       className="onb-primary w-full"
                       onClick={() => {
                         hapticTap()
-                        setStep(3)
+                        setStep(2)
                       }}
                     >
                       Devam et <ArrowRight size={17} />
@@ -500,7 +448,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                     className="onb-quiet-action onb-skip"
                     onClick={() => {
                       hapticTap()
-                      setStep(3)
+                      setStep(2)
                     }}
                   >
                     Gelirimi sonra ekleyeceğim <ArrowRight size={15} />
@@ -509,7 +457,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               </>
             )}
 
-            {step === 3 && (
+            {step === 2 && (
               <>
                 <p>
                   Kartının ekstre kesim ve veri giriş gününde nazik hatırlatma al. Tarihleri dilediğinde Kartlarım’dan değiştirebilirsin.

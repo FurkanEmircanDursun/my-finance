@@ -1,22 +1,63 @@
-import { CreditCard } from 'lucide-react'
 import { useState } from 'react'
+import { Banknote, CreditCard, Landmark } from 'lucide-react'
 import { identifyBank } from '../domain/banks'
+import { cardOf, type TxSource } from '../domain/types'
 
-const assets = import.meta.glob<string>('../assets/banks/*.svg', { eager: true, query: '?url', import: 'default' })
+const bankLogos = import.meta.glob<string>('../assets/banks/*.svg', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+})
 
-/** Bank mark wrapped in a high-contrast satin badge legible across dark and light modes. */
-export function BankLogo({ bank }: { bank: string }) {
-  const id = identifyBank(bank)
-  const src = id && assets[`../assets/banks/${id}.svg`]
-  const [failedSource, setFailedSource] = useState<string | null>(null)
-  const showLogo = src && failedSource !== src
+/**
+ * Compact bank/card emblem rendered inside transaction rows and summary cards.
+ * Uses the real Turkish bank SVG mark when recognized, or a clean payment-method badge for manual cash/EFT entries.
+ */
+export function BankLogoBadge({
+  bank,
+  accountLabel,
+  source,
+}: {
+  bank: string
+  accountLabel?: string
+  source?: TxSource
+}) {
+  const bankId = identifyBank(bank) ?? (accountLabel ? identifyBank(accountLabel) : null)
+  const src = bankId && bankId !== 'other' ? bankLogos[`../assets/banks/${bankId}.svg`] : undefined
+  const [failed, setFailed] = useState(false)
+  const label = cardOf({ bank, accountLabel })
+
+  if (src && !failed) {
+    return (
+      <span className="tx-card-badge" title={label}>
+        <span className="tx-card-badge__logo" aria-hidden="true">
+          <img
+            src={src}
+            alt=""
+            height={11}
+            onError={() => setFailed(true)}
+          />
+        </span>
+        <span className="tx-card-badge__label">{accountLabel?.trim() || bank}</span>
+      </span>
+    )
+  }
+
+  const isManual = source === 'manual' || bank === 'Manuel'
+  const isTransfer = label.toLowerCase().includes('banka') || label.toLowerCase().includes('eft')
+
   return (
-    <span className={`card-brand-icon${showLogo ? ' card-brand-icon--logo' : ''}`} aria-hidden="true">
-      {showLogo ? (
-        <img src={src} alt="" width={84} height={24} onError={() => setFailedSource(src)} />
+    <span className="tx-card-badge tx-card-badge--fallback" title={label}>
+      {isManual ? (
+        isTransfer ? (
+          <Landmark size={11} aria-hidden="true" />
+        ) : (
+          <Banknote size={11} aria-hidden="true" />
+        )
       ) : (
-        <CreditCard size={22} strokeWidth={1.6} />
+        <CreditCard size={11} aria-hidden="true" />
       )}
+      <span className="tx-card-badge__label">{label}</span>
     </span>
   )
 }

@@ -43,9 +43,31 @@ button.transaction-item__main:hover {
 }
 
 .transaction-item__icon.is-income {
-  background: var(--positive-soft);
-  border-color: transparent;
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.08) 100%);
+  border-color: rgba(16, 185, 129, 0.36);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 6px rgba(16, 185, 129, 0.14);
   color: var(--positive);
+}
+
+.transaction-item__icon.is-payment {
+  background: linear-gradient(145deg, rgba(100, 116, 139, 0.2) 0%, rgba(100, 116, 139, 0.08) 100%);
+  border-color: rgba(100, 116, 139, 0.32);
+  color: var(--text-muted);
+}
+
+.transaction-item__refund-tag {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--positive);
+  color: #FFFFFF;
+  border: 2px solid var(--bg-raised);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
 .transaction-item__dot {
@@ -67,26 +89,92 @@ button.transaction-item__main:hover {
   display: block;
   color: var(--text);
   font-size: 0.9rem;
-  font-weight: 590;
-  line-height: 1.4;
+  font-weight: 500;
+  line-height: 1.38;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.transaction-item__copy > small {
-  display: block;
-  font-size: 0.78rem;
-  line-height: 1.45;
+.transaction-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.transaction-item__meta > small {
+  display: inline;
+  font-size: 0.77rem;
+  line-height: 1.35;
   color: var(--text-muted);
-  margin-top: 2px;
   overflow-wrap: anywhere;
+}
+
+.tx-card-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 148px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.25;
+  vertical-align: middle;
+}
+
+.tx-card-badge__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 15px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+}
+
+.tx-card-badge__logo img {
+  display: block;
+  height: 10px;
+  width: auto;
+  max-width: 38px;
+  object-fit: contain;
+}
+
+.tx-card-badge__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-card-badge--fallback {
+  padding-inline: 6px;
+}
+
+.transaction-item.is-compact .transaction-item__main {
+  min-height: 54px;
+  padding: 9px 6px;
+  margin-inline: -6px;
+  gap: 11px;
+}
+
+.transaction-item.is-compact .transaction-item__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
 }
 
 .transaction-item__amount {
   color: var(--text);
   font-size: 0.925rem;
-  font-weight: 660;
+  font-weight: 600;
   letter-spacing: -0.015em;
   white-space: nowrap;
 }
@@ -98,8 +186,8 @@ button.transaction-item__main:hover {
 .transaction-item__delete {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   border-radius: 11px;
   color: var(--text-faint);

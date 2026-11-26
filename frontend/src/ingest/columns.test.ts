@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildPageLines, groupRows, readPdfTextLayer, type TextGeom } from './extract'
+import { buildPageLines, groupRows, readPdfTextLayer, toTextGeom, type TextGeom } from './extract'
 import { findColumnLayout, splitRewardTags } from './columns'
 import { decodeEbcdic } from '../core/ebcdic'
 import { akbankAdapter } from './banks/akbank'
@@ -169,4 +169,30 @@ it('groups adjacent baselines the same way regardless of PDF glyph order', () =>
   const expected = [['top-left', 'top'], ['bottom']]
   expect(groupRows(page).map(row => row.map(item => item.text))).toEqual(expected)
   expect(groupRows([...page].reverse()).map(row => row.map(item => item.text))).toEqual(expected)
+})
+
+it('tags leading-signed amounts under TUTAR and MAXIPUAN headers', () => {
+  const page: TextGeom[] = [
+    run('İŞLEM TARİHİ', 30, 50, 500),
+    run('AÇIKLAMA', 90, 60, 500),
+    run('TUTAR', 395, 33, 500),
+    run('MAXIPUAN', 520, 47, 500),
+    run('24/10/2026', 30, 40, 480),
+    run('WWW.TRENDYOL.COM', 90, 80, 480),
+    run('-324,95', 537, 30, 480),
+    run('01/11/2026', 30, 40, 468),
+    run('HESAPTAN AKTARIM', 90, 80, 468),
+    run('-1.500,00', 390, 38, 468),
+  ]
+  const lines = buildPageLines(page)
+  expect(lines).toContain('24/10/2026 WWW.TRENDYOL.COM ⟦-324,95⟧')
+  expect(lines).toContain('01/11/2026 HESAPTAN AKTARIM ⟨-1.500,00⟩')
+})
+
+it('filters 90-degree rotated vertical margin stamps out of horizontal text geometry', () => {
+  const items = [
+    { str: '23/11/2026', transform: [8, 0, 0, 8, 30, 500], width: 40, height: 8 },
+    { str: 'Belge Numarası: 999999', transform: [0, 8, -8, 0, 12, 500], width: 0, height: 8 },
+  ]
+  expect(toTextGeom(items).map((g) => g.text)).toEqual(['23/11/2026'])
 })

@@ -18,4 +18,17 @@ describe("explicit merchant phrases before lossy processor normalization", () =>
   it("leaves ambiguous merchants unclassified", () => {
     expect(createCategorizer()("ARAS SHOP")).toBe("other");
   });
+  it("never misclassifies instalment wording TAKSIT as taxi transport", () => {
+    const classify = createCategorizer();
+    expect(classify("ORNEK MAGAZA 1.250,00x2=2.500,00 1.Taksit")).toBe("other");
+    expect(classify("TAKSIDE POS")).toBe("transport");
+  });
+  it("distinguishes doctors from D&R bookstore and classifies ŞOK, fees, and restaurants accurately", () => {
+    const classify = createCategorizer();
+    expect(classify("DR. AHMET KAYA")).toBe("health");
+    expect(classify("DR.COM.TR ISTANBUL")).toBe("education");
+    expect(classify("ŞOK-5665 İSTANBUL FULYA M")).toBe("market");
+    expect(classify("Eğitim Sağlık Kampanyası Ücreti")).toBe("fees");
+    expect(classify("ORNEK REST. GIDA")).toBe("dining");
+  });
 });

@@ -56,6 +56,7 @@ export interface DailyPoint {
 export interface MonthlyPoint {
   month: MonthKey
   label: string
+  /** Net spending in the month (expenses less refunds, floored at zero). */
   spend: Money
   /** Income actually present as rows in the data — usually zero on a card statement. */
   income: Money
@@ -243,6 +244,7 @@ export interface Insight {
 }
 
 export interface Totals {
+  /** Gross spending before refunds. */
   spend: Money
   refunds: Money
   netSpend: Money

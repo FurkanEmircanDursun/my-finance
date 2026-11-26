@@ -1,5 +1,9 @@
 import { akbankAdapter } from './akbank'
 import { garantiAdapter } from './garanti'
+import { isbankAdapter } from './isbank'
+import { dunyaKatilimAdapter } from './dunyakatilim'
+import { qnbAdapter } from './qnb'
+import { halkbankAdapter } from './halkbank'
 import { csvAdapter } from './csv'
 import type { BankAdapter } from './types'
 
@@ -7,7 +11,15 @@ import type { BankAdapter } from './types'
  * Adding a bank means adding one adapter file and one entry here — no changes
  * anywhere else in the pipeline.
  */
-export const ADAPTERS: BankAdapter[] = [akbankAdapter, garantiAdapter, csvAdapter]
+export const ADAPTERS: BankAdapter[] = [
+  akbankAdapter,
+  garantiAdapter,
+  isbankAdapter,
+  dunyaKatilimAdapter,
+  qnbAdapter,
+  halkbankAdapter,
+  csvAdapter,
+]
 
 export const MIN_CONFIDENCE = 0.35
 

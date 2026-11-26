@@ -94,11 +94,28 @@ describe('import reservation before transaction deduplication', () => {
     const repeated = resolveImportCard(parsed, { cards: [], statements: [{ ...statement, cardId: first.id, accountLabel: parsed.accountLabel, periodEnd: parsed.periodEnd }], reservations: new Map() })!
     expect(repeated.id).toBe(first.id)
   })
-  it('requires an explicit known-card or new-card choice when a bank already has saved cards', () => {
-    expect(() => resolveImportCard(parsed, { cards: [card], statements: [], reservations: new Map() })).toThrow('Yeni / farklı kart')
-    expect(resolveImportCard(parsed, { selectedId: card.id, cards: [card], statements: [], reservations: new Map() })).toBe(card)
+  it('auto-binds an unambiguous saved card and creates distinct identities for 1-to-N cards in the same bank', () => {
+    const savedNoLast4 = card
+    expect(resolveImportCard(parsed, { cards: [savedNoLast4], statements: [], reservations: new Map() })).toBe(savedNoLast4)
+    expect(resolveImportCard(parsed, { selectedId: savedNoLast4.id, cards: [savedNoLast4], statements: [], reservations: new Map() })).toBe(savedNoLast4)
+
+    // Saved card has last4 1111; incoming PDF from the same bank has last4 5678 -> distinct 1-to-N card, never rejected.
+    const savedWithLast4: CreditCard = { ...card, last4: '1111' }
+    const reservations = new Map<string, CreditCard>()
+    const otherCardPdf = { ...parsed, reportedCardLast4: '5678' }
+    const resolvedOther = resolveImportCard(otherCardPdf, { cards: [savedWithLast4], statements: [], reservations })!
+    expect(resolvedOther.id).not.toBe(savedWithLast4.id)
+    expect(resolvedOther.last4).toBe('5678')
+
+    // Second statement for the same second physical card (5678) reuses the exact same reservation.
+    const resolvedOtherNextMonth = resolveImportCard({ ...otherCardPdf, periodEnd: '2026-10-31' }, { cards: [savedWithLast4], statements: [], reservations })!
+    expect(resolvedOtherNextMonth.id).toBe(resolvedOther.id)
+
+    // Statement matching the saved card's last4 (1111) binds straight to the saved card.
+    const matchingSaved = resolveImportCard({ ...parsed, reportedCardLast4: '1111' }, { cards: [savedWithLast4], statements: [], reservations })
+    expect(matchingSaved).toBe(savedWithLast4)
   })
-  it('exposes unsaved statement identities and refuses to guess between two matching physical cards', () => {
+  it('exposes unsaved statement identities and refuses to guess between two matching physical cards without last4', () => {
     const first = { ...statement, cardId: 'unsaved-one', accountLabel: parsed.accountLabel, periodEnd: parsed.periodEnd }
     const second = { ...first, id: 'st-two', cardId: 'unsaved-two', fileName: 'second.txt' }
     const choices = importCardChoices([], [first, second])

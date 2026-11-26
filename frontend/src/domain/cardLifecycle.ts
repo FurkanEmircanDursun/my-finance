@@ -27,7 +27,7 @@ export function cardBankFromName(bank: string): CardBank | null {
 }
 export function legacyCardKey(bank: string, label: string): string {
   const id = cardBankFromName(bank)
-  return `legacy-${hash(`${id === 'akbank' || id === 'garanti' ? id : labelKey(bank)}|${labelKey(label)}`)}`
+  return `legacy-${hash(`${id ?? labelKey(bank)}|${labelKey(label)}`)}`
 }
 export function cardCutoffDate(month: MonthKey, day: number): DayKey {
   return makeDayKey(Number(month.slice(0, 4)), Number(month.slice(5, 7)), Math.min(day, daysInMonth(month)))
@@ -105,7 +105,19 @@ export function importedCardDraft(statement: Statement, archivedCards: readonly 
   const previous = statement.cardId ? archivedCards.find(card => card.id === statement.cardId) : undefined
   if (previous) return previous
   const day = statement.periodEnd ? Number(statement.periodEnd.slice(8, 10)) : 0
-  return { id: statement.cardId ?? uid('card-'), bank, name: cardOf(statement), statementDay: day, entryDay: day ? Math.min(31, day + 1) : 0, remindersEnabled: true }
+  const rawName = cardOf(statement)
+  const suffixMatch = /^(.*?)\s*·\s*(\d{4})$/.exec(rawName)
+  const name = suffixMatch ? suffixMatch[1].trim() || rawName : rawName
+  const last4 = suffixMatch?.[2]
+  return {
+    id: statement.cardId ?? uid('card-'),
+    bank,
+    name,
+    ...(last4 ? { last4 } : {}),
+    statementDay: day,
+    entryDay: day ? Math.min(31, day + 1) : 0,
+    remindersEnabled: true,
+  }
 }
 
 export interface ImportCardChoice { card: CreditCard; saved: boolean; fileName?: string }
@@ -125,14 +137,16 @@ export function importCardChoices(cards: readonly CreditCard[], statements: read
   return [...choices.values()]
 }
 
-/** Reserve physical identity before deduplication, independently of saving reminder preferences. */
-export function resolveImportCard(result: ParseResult, { selectedId, newCard = false, cards, statements, reservations, interruptedCard }: {
+/** Reserve physical identity before deduplication, supporting 1-to-N cards per bank automatically. */
+export function resolveImportCard(result: ParseResult, { selectedId, newCard = false, cards, statements, reservations, interruptedCard, claimedLast4ByCardId }: {
   selectedId?: string
   newCard?: boolean
   cards: readonly CreditCard[]
   statements: readonly Statement[]
   reservations: Map<string, CreditCard>
   interruptedCard?: { id: string; name: string }
+  /** Card IDs already claimed by a specific printed last4 during the current batch. */
+  claimedLast4ByCardId?: ReadonlyMap<string, string>
 }): CreditCard | undefined {
   if (interruptedCard && (newCard || (selectedId && interruptedCard.id !== selectedId))) {
     throw new UserFacingError('Bu PDF’nin aktarımı başlamış. Devam etmek için aynı kartı kullan.')
@@ -152,21 +166,71 @@ export function resolveImportCard(result: ParseResult, { selectedId, newCard = f
     return selected
   }
   if (!bank) return undefined
-  if (!newCard && cards.some(card => cardMatchesBank(card, result.bank))) {
-    throw new UserFacingError('Bu banka için kayıtlı kartın var. Ekstrenin ait olduğu kartı veya Yeni / farklı kart seçeneğini seçip tekrar dene.')
+
+  const last4 = result.reportedCardLast4
+  const bankCards = cards.filter(card => cardMatchesBank(card, result.bank))
+  const claimedConflict = (cardId: string) =>
+    Boolean(last4 && claimedLast4ByCardId?.has(cardId) && claimedLast4ByCardId.get(cardId) !== last4)
+
+  if (!newCard && bankCards.length > 0) {
+    if (last4) {
+      // 1. Exact physical match by printed last 4 digits.
+      const exactLast4 = bankCards.filter(card => card.last4 === last4)
+      if (exactLast4.length === 1) return exactLast4[0]
+
+      // 2. Match a saved card of the same bank without last4 when its product name matches.
+      const byName = bankCards.filter(
+        card => !card.last4 && !claimedConflict(card.id) && labelKey(card.name) === labelKey(result.accountLabel),
+      )
+      if (byName.length === 1) return byName[0]
+
+      // 3. If the user has a single saved card for this bank with no last4 recorded
+      //    and it has not been claimed by another physical card in this batch, bind to it.
+      if (bankCards.length === 1 && !bankCards[0].last4 && !claimedConflict(bankCards[0].id)) {
+        return bankCards[0]
+      }
+      // Otherwise this PDF belongs to a distinct physical card in the same bank (1-to-N):
+      // fall through to reserve/create its own provisional card identity automatically.
+    } else {
+      // No last4 on statement (e.g. plain text / legacy export): bind when unambiguous.
+      if (bankCards.length === 1) return bankCards[0]
+      const byName = bankCards.filter(card => labelKey(card.name) === labelKey(result.accountLabel))
+      if (byName.length === 1) return byName[0]
+    }
   }
-  const key = `${bank}|${labelKey(result.accountLabel)}`
+
+  const key = last4 ? `${bank}|last4:${last4}` : `${bank}|${labelKey(result.accountLabel)}`
   const reserved = reservations.get(key)
   if (reserved) return reserved
-  const previousCandidates = newCard ? [] : statements.filter(statement =>
-    cardBankFromName(statement.bank) === bank && labelKey(cardOf(statement)) === labelKey(result.accountLabel),
+
+  // Reuse an existing provisional card identity from prior statements when it does not
+  // conflict with a saved card that has a different last4.
+  const conflictingSavedIds = new Set(
+    last4 ? bankCards.filter(card => card.last4 && card.last4 !== last4).map(card => card.id) : [],
   )
-  const previousIdentities = new Set(previousCandidates.map(statement => statement.cardId ?? legacyCardKey(statement.bank, cardOf(statement))))
-  if (previousIdentities.size > 1) throw new UserFacingError('Bu bankaya ait birden fazla kart ekstresi var. Ekstrenin ait olduğu kartı veya Yeni / farklı kart seçeneğini seçip tekrar dene.')
-  const previous = previousCandidates.find(statement => statement.cardId)
+  const previousCandidates = newCard ? [] : statements.filter(statement => {
+    if (cardBankFromName(statement.bank) !== bank) return false
+    if (statement.cardId && (conflictingSavedIds.has(statement.cardId) || claimedConflict(statement.cardId))) return false
+    if (last4 && statement.accountLabel?.endsWith(`· ${last4}`)) return true
+    return labelKey(cardOf(statement)) === labelKey(result.accountLabel)
+  })
+  const previousIdentities = new Set(
+    previousCandidates.map(statement => statement.cardId ?? legacyCardKey(statement.bank, cardOf(statement))),
+  )
+  if (!last4 && previousIdentities.size > 1) {
+    throw new UserFacingError('Bu bankaya ait aynı isimli birden fazla kart ekstresi var. Ekstrenin ait olduğu kartı seçip tekrar dene.')
+  }
+  const previous = previousIdentities.size === 1 ? previousCandidates.find(statement => statement.cardId) : undefined
   const day = result.periodEnd ? Number(result.periodEnd.slice(8, 10)) : 0
-  const provisional: CreditCard = { id: previous?.cardId ?? uid('card-'), bank, name: result.accountLabel,
-    statementDay: day, entryDay: day ? Math.min(31, day + 1) : 0, remindersEnabled: true }
+  const provisional: CreditCard = {
+    id: previous?.cardId ?? uid('card-'),
+    bank,
+    name: result.accountLabel,
+    ...(last4 ? { last4 } : {}),
+    statementDay: day,
+    entryDay: day ? Math.min(31, day + 1) : 0,
+    remindersEnabled: true,
+  }
   reservations.set(key, provisional)
   return provisional
 }

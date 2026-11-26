@@ -2,7 +2,9 @@ import { useId, useRef, useState } from 'react'
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronDown, Coffee, Home, ShoppingBasket, Receipt, Car, MoreHorizontal } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button, Field, Segmented, TextInput } from '../ui/primitives'
-import { CATEGORIES, categoryColor, categoryLabel, type CategoryId } from '../domain/categories'
+import { Select } from '../ui/Select'
+import { CategoryIcon } from '../ui/CategoryIcon'
+import { SORTED_CATEGORIES, categoryColor, categoryLabel, type CategoryId } from '../domain/categories'
 import { createEntry, entryAmount, entryDateForPeriod, type EntryMethod } from '../domain/entry'
 import { fullDayLabel } from '../core/date'
 import { useStore } from '../store/AppStore'
@@ -12,31 +14,41 @@ import { trackProductEvent } from '../platform/analytics'
 import '../ui/transaction-item.css'
 
 const quickCategories = [
-  { id: 'market', label: 'Market', icon: ShoppingBasket },
-  { id: 'dining', label: 'Yeme içme', icon: Coffee },
-  { id: 'transport', label: 'Ulaşım', icon: Car },
-  { id: 'rent', label: 'Kira', icon: Home },
   { id: 'bills', label: 'Fatura', icon: Receipt },
+  { id: 'rent', label: 'Kira', icon: Home },
+  { id: 'market', label: 'Market', icon: ShoppingBasket },
+  { id: 'transport', label: 'Ulaşım', icon: Car },
+  { id: 'dining', label: 'Yeme içme', icon: Coffee },
   { id: 'other', label: 'Diğer', icon: MoreHorizontal },
 ] as const
+
+export interface EntryPrefill {
+  kind?: 'expense' | 'income'
+  description?: string
+  amount?: string
+  category?: CategoryId
+}
 
 export function EntrySheet({
   onClose,
   initialKind = 'expense',
+  initialDraft,
 }: {
   onClose: () => void
   initialKind?: 'expense' | 'income'
+  initialDraft?: EntryPrefill
 }) {
   const { state, dispatch } = useStore()
   const feedback = useFeedback()
   const submitted = useRef(false)
-  const [kind, setKind] = useState<'expense' | 'income'>(initialKind)
-  const [description, setDescription] = useState('')
-  const [amount, setAmount] = useState('')
+  const resolvedKind = initialDraft?.kind ?? initialKind
+  const [kind, setKind] = useState<'expense' | 'income'>(resolvedKind)
+  const [description, setDescription] = useState(initialDraft?.description ?? '')
+  const [amount, setAmount] = useState(initialDraft?.amount ?? '')
   const [date, setDate] = useState(() => entryDateForPeriod(state.filters.month))
-  const [category, setCategory] = useState<CategoryId>('other')
+  const [category, setCategory] = useState<CategoryId>(initialDraft?.category ?? 'other')
   const [method, setMethod] = useState<EntryMethod>(
-    initialKind === 'income' ? 'Banka / EFT' : 'Nakit',
+    resolvedKind === 'income' ? 'Banka / EFT' : 'Nakit',
   )
   const [error, setError] = useState('')
   const amountErrorId = useId()
@@ -143,7 +155,7 @@ export function EntrySheet({
                   >
                     <Icon size={17} strokeWidth={1.9} />
                   </span>
-                  <span>{label}</span>
+                  <span className="text-center leading-tight">{label}</span>
                   {category === id && <Check className="entry-selected-check" size={13} />}
                 </button>
               ))}
@@ -153,17 +165,20 @@ export function EntrySheet({
                 Diğer kategoriler <ChevronDown size={15} />
               </summary>
               <Field label="Tüm kategoriler">
-                <select
-                  className="finance-select"
+                <Select
+                  ariaLabel="Tüm kategoriler"
                   value={category}
-                  onChange={(event) => setCategory(event.target.value as CategoryId)}
-                >
-                  {CATEGORIES.filter((item) => item.id !== 'rewards').map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(next) => setCategory(next as CategoryId)}
+                  options={SORTED_CATEGORIES.filter((item) => item.id !== 'rewards').map((item) => ({
+                    value: item.id,
+                    label: item.label,
+                    icon: (
+                      <span style={{ color: item.color }}>
+                        <CategoryIcon category={item.id} size={14} />
+                      </span>
+                    ),
+                  }))}
+                />
               </Field>
             </details>
           </fieldset>
@@ -198,15 +213,16 @@ export function EntrySheet({
                 />
               </Field>
               <Field label="Ödeme yöntemi">
-                <select
-                  className="finance-select"
+                <Select
+                  ariaLabel="Ödeme yöntemi"
                   value={method}
-                  onChange={(event) => setMethod(event.target.value as EntryMethod)}
-                >
-                  <option>Nakit</option>
-                  <option>Banka / EFT</option>
-                  <option>Diğer</option>
-                </select>
+                  onChange={(next) => setMethod(next as EntryMethod)}
+                  options={[
+                    { value: 'Nakit', label: 'Nakit' },
+                    { value: 'Banka / EFT', label: 'Banka / EFT' },
+                    { value: 'Diğer', label: 'Diğer' },
+                  ]}
+                />
               </Field>
             </div>
           </div>

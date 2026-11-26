@@ -12,7 +12,7 @@ export function Card({
   className?: string
   padded?: boolean
 }) {
-  return <div className={clsx('surface', padded && 'p-5', className)}>{children}</div>
+  return <div className={clsx('surface min-w-0', padded && 'p-4 sm:p-5', className)}>{children}</div>
 }
 
 export function Section({
@@ -29,14 +29,14 @@ export function Section({
   className?: string
 }) {
   return (
-    <section className={clsx('flex flex-col', className)}>
+    <section className={clsx('flex min-w-0 flex-col', className)}>
       {(title || actions) && (
-        <header className="mb-3.5 flex items-baseline justify-between gap-3">
+        <header className="mb-3.5 flex flex-wrap items-baseline justify-between gap-2 sm:gap-3">
           <div className="min-w-0">
             {title && <h2 className="text-title font-semibold text-ink">{title}</h2>}
-            {description && <p className="mt-1 text-label text-muted">{description}</p>}
+            {description && <p className="mt-1 text-label font-normal text-muted">{description}</p>}
           </div>
-          {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
+          {actions && <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>}
         </header>
       )}
       <div className="min-w-0 flex-1">{children}</div>
@@ -81,18 +81,22 @@ type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md'
 
 const BUTTON_BASE =
-  'inline-flex items-center justify-center gap-2 rounded-[var(--radius)] font-semibold whitespace-nowrap transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100'
+  'inline-flex select-none items-center justify-center gap-2 rounded-[var(--radius)] font-medium whitespace-nowrap transition-all duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:active:scale-100'
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-accent text-inverse hover:bg-accent-hover border border-transparent shadow-glow',
-  secondary: 'bg-raised text-ink border border-line hover:bg-hover hover:border-line-strong',
-  ghost: 'bg-transparent text-muted hover:text-ink hover:bg-hover border border-transparent',
-  danger: 'bg-negative-soft text-negative border border-transparent hover:border-negative/30',
+  primary:
+    'bg-accent text-inverse hover:bg-accent-hover border border-transparent shadow-glow disabled:bg-active disabled:text-faint disabled:border-line disabled:shadow-none',
+  secondary:
+    'bg-raised text-ink border border-line hover:bg-hover hover:border-line-strong disabled:bg-sunken disabled:text-faint disabled:opacity-70',
+  ghost:
+    'bg-transparent text-muted hover:text-ink hover:bg-hover border border-transparent disabled:text-faint disabled:opacity-60',
+  danger:
+    'bg-negative-soft text-negative border border-transparent hover:border-negative/30 disabled:opacity-50',
 }
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'h-9 px-3.5 text-label',
-  md: 'h-11 px-4 text-body',
+  sm: 'min-h-[44px] h-11 px-3.5 text-label',
+  md: 'min-h-[44px] h-11 px-4 text-body',
 }
 
 export function Button({
@@ -121,7 +125,7 @@ export function IconButton({
       aria-label={label}
       title={label}
       className={clsx(
-        'inline-flex h-11 w-11 items-center justify-center rounded-full text-muted',
+        'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted',
         'transition-all duration-200 hover:bg-hover hover:text-ink active:scale-95',
         className,
       )}
@@ -156,7 +160,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-label font-semibold leading-tight',
+        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-label font-medium leading-tight',
         TONE_CLASS[tone],
         className,
       )}
@@ -188,11 +192,11 @@ export function Stat({
   const body = (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div className={clsx('num text-figure font-semibold', valueTone)}>{value}</div>
+        <div className={clsx('num min-w-0 break-words text-figure font-semibold', valueTone)}>{value}</div>
         {action}
       </div>
-      <div className="mt-2 text-body text-muted">{label}</div>
-      {hint && <div className="mt-1 text-label text-faint">{hint}</div>}
+      <div className="mt-2 text-body font-normal text-muted">{label}</div>
+      {hint && <div className="mt-1 text-label font-normal text-faint">{hint}</div>}
     </>
   )
 
@@ -257,7 +261,7 @@ export function Segmented<T extends string>({
   className?: string
 }) {
   return (
-    <div className={clsx('inline-flex rounded-[var(--radius)] border border-line bg-sunken p-1', className)}>
+    <div className={clsx('inline-flex max-w-full min-h-[44px] items-center overflow-x-auto scrollbar-none rounded-[var(--radius)] border border-line bg-sunken p-1', className)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -265,7 +269,7 @@ export function Segmented<T extends string>({
           onClick={() => onChange(option.value)}
           aria-pressed={value === option.value}
           className={clsx(
-            'rounded-[9px] px-3.5 py-1.5 text-label font-semibold transition-all duration-200',
+            'inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-[9px] px-3.5 py-1.5 text-label font-medium whitespace-nowrap transition-all duration-200',
             value === option.value
               ? 'bg-raised text-ink shadow-card'
               : 'text-muted hover:text-ink',
@@ -293,7 +297,7 @@ export function Chip({
       onClick={onClick}
       aria-pressed={selected}
       className={clsx(
-        'inline-flex min-h-10 items-center rounded-full border px-4 text-label font-semibold transition-all duration-200 active:scale-95',
+        'inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-4 text-label font-medium transition-all duration-200 active:scale-95',
         selected
           ? 'border-accent-border bg-accent-soft text-accent-text'
           : 'border-line bg-raised text-ink hover:bg-hover hover:border-line-strong',
@@ -308,7 +312,7 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return (
     <input
       className={clsx(
-        'h-11 w-full rounded-[var(--radius)] border border-line bg-sunken px-3.5 text-body text-ink transition-all duration-200',
+        'h-11 w-full min-w-0 rounded-[var(--radius)] border border-line bg-sunken px-3.5 text-body text-ink transition-all duration-200',
         'placeholder:text-faint hover:border-line-strong focus:border-accent focus:bg-raised focus:outline-none focus:ring-2 focus:ring-accent/20',
         className,
       )}
@@ -327,10 +331,10 @@ export function Field({
   children: ReactNode
 }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-label font-semibold text-muted">{label}</span>
+    <label className="block min-w-0">
+      <span className="mb-1.5 block text-label font-medium text-muted">{label}</span>
       {children}
-      {hint && <span className="mt-1.5 block text-label text-faint">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-label font-normal text-faint">{hint}</span>}
     </label>
   )
 }
@@ -353,8 +357,8 @@ export function Empty({
   return (
     <div
       className={clsx(
-        'flex flex-col items-center justify-center gap-3.5 rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-sunken/50 px-6 text-center',
-        compact ? 'py-8' : 'py-14',
+        'flex flex-col items-center justify-center gap-3.5 rounded-[var(--radius-lg)] border border-dashed border-line-strong bg-sunken/50 px-5 text-center sm:px-6',
+        compact ? 'py-8' : 'py-12 sm:py-14',
       )}
     >
       {icon && (
@@ -363,7 +367,7 @@ export function Empty({
         </div>
       )}
       <p className="text-title font-semibold text-ink">{title}</p>
-      {description && <p className="max-w-sm text-body text-muted">{description}</p>}
+      {description && <p className="max-w-sm text-body font-normal text-muted">{description}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   )

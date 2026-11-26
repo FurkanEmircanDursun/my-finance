@@ -26,6 +26,11 @@ for (const [targetId, target, infoFile, entitlementsFile] of [
   const info = plist.readFileSync(path(infoFile)), entitlements = plist.readFileSync(path(entitlementsFile))
   assert.equal(info.MizanAppGroup, group)
   assert.deepEqual(entitlements['com.apple.security.application-groups'], [group])
+  if (targetId === appId) {
+    assert.deepEqual(entitlements['com.apple.developer.applesignin'], ['Default'])
+    assert.equal(info.ITSAppUsesNonExemptEncryption, false)
+    assert.ok(existsSync(path('App/Native/PrivacyInfo.xcprivacy')), 'App Store privacy manifest must exist in synchronized Native folder')
+  }
   const configurations = objects.XCConfigurationList[target.buildConfigurationList].buildConfigurations
   for (const { value } of configurations) {
     const settings = objects.XCBuildConfiguration[value].buildSettings

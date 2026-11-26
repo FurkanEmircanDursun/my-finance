@@ -89,6 +89,13 @@ export function detectAnomalies(
 }
 
 /**
+ * Contactless public-transit fare taps naturally charge the exact same small
+ * ticket multiple times on the same day (e.g. Ankara EGO, İstanbulkart, Belbim).
+ */
+const TRANSIT_FARE_RE = /\b(?:EGO\s+KART|ARAC\s+ICI\s+GECIS|ISTANBULKART|ISTANBUL\s+KART|BELBIM|TOPLU\s+TASIMA|ANKARAKART|IZMIRIM|KENTKART|BURSAKART)\b/
+const MAX_TRANSIT_FARE: Money = 15_000 // ₺150
+
+/**
  * Same merchant, same amount, within a few days — the shape of a double charge
  * or an accidental repeat order. Recurring payments are excluded by the caller
  * passing their merchant keys in `ignoreMerchants`.
@@ -105,6 +112,9 @@ export function detectDuplicates(
     const txs = all.filter((t) => t.kind === 'expense' && !t.installment)
     if (txs.length < 2) continue
 
+    const isTransitFareMerchant =
+      TRANSIT_FARE_RE.test(merchant) || txs.some((t) => TRANSIT_FARE_RE.test(t.description.toUpperCase()))
+
     const byAmount = new Map<Money, Transaction[]>()
     for (const tx of txs) {
       const bucket = byAmount.get(tx.amount)
@@ -114,6 +124,7 @@ export function detectDuplicates(
 
     for (const [amount, bucket] of byAmount) {
       if (bucket.length < 2 || amount < 1_000) continue // below ₺10 not worth a flag
+      if (isTransitFareMerchant && amount <= MAX_TRANSIT_FARE) continue
 
       const sorted = [...bucket].sort((a, b) => (a.date < b.date ? -1 : 1))
       let run: Transaction[] = [sorted[0]]

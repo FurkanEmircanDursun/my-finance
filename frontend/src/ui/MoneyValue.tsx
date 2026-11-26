@@ -36,11 +36,11 @@ export function MoneyValue({
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-    // Subtle count-up from 82% on first mount for hero tactile polish
+    // Subtle count-up from 84% on first mount for hero tactile polish; snap immediately when zeroed
     const from = mounted.current ? displayed.current : Math.round(value * 0.84)
     mounted.current = true
 
-    if (reduced || from === value) {
+    if (reduced || from === value || value === 0) {
       displayed.current = value
       setDisplay(value)
       return

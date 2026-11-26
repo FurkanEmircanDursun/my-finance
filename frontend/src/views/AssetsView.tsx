@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Coins, Edit3, Plus, RefreshCw, Trash2, WifiOff } from 'lucide-react'
+import { ArrowLeftRight, ArrowRight, ArrowUpRight, Coins, Compass, Edit3, Plus, RefreshCw, Trash2, WifiOff } from 'lucide-react'
 import { useStore } from '../store/AppStore'
+import { navigateTo } from '../app/navigation'
 import { useNow } from '../app/useNow'
 import {
   ASSET_INSTRUMENTS,
@@ -11,11 +12,13 @@ import {
   type AssetHolding,
   type AssetInstrument,
   type AssetQuote,
+  type AssetQuotes,
 } from '../domain/assets'
 import { cachedAssetRates, isQuoteAvailable, isQuoteStale, refreshAssetRates, type RateSnapshot } from '../platform/rates'
 import { uid } from '../core/hash'
 import { money2 } from '../core/money'
 import { Button, Empty, Field, TextInput } from '../ui/primitives'
+import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { MoneyValue } from '../ui/MoneyValue'
 import { InteractiveDonutChart, type DonutSlice } from '../ui/charts'
@@ -45,8 +48,8 @@ const quoteStamp = (value: AssetQuote) =>
 const provider = (value: AssetQuote) =>
   value.source === 'truncgil' ? 'Truncgil' : value.source === 'frankfurter' ? 'Frankfurter' : 'ExchangeRate-API'
 
-export function AssetsView() {
-  const { state, dispatch } = useStore()
+export function AssetsView({ embedded = false }: { embedded?: boolean } = {}) {
+  const { state, dispatch, overall } = useStore()
   const feedback = useFeedback()
   const now = useNow(60_000)
   const holdings = state.profile.assets ?? []
@@ -164,21 +167,48 @@ export function AssetsView() {
     })
   }
 
+  // Total statement debt & open installment load for Net Worth comparison
+  const liabilities = useMemo(() => {
+    const statementDebt = state.statements.reduce((sum, st) => {
+      const debt = st.summary?.totalDebt ?? st.reconciliation?.printedDebt ?? 0
+      return sum + Math.max(0, debt)
+    }, 0)
+    const installmentRemaining = overall.installments
+      .filter((i) => i.remainingCount > 0)
+      .reduce((sum, i) => sum + i.remainingAmount, 0)
+    return { statementDebt, installmentRemaining }
+  }, [state.statements, overall.installments])
+
+  const assetTotalMinor = portfolio.total ?? portfolio.knownValue ?? 0
+  const netWorthMinor = assetTotalMinor - liabilities.statementDebt
+
   return (
-    <div className="assets-page">
-      <header className="dashboard-title">
-        <div>
-          <h1>Varlıklar</h1>
-          <p>Altın, gümüş ve döviz portföyün</p>
+    <div className="assets-page space-y-5">
+      {!embedded ? (
+        <header className="dashboard-title">
+          <div>
+            <h1>Varlıklar & Portföy</h1>
+            <p>Altın, gümüş, döviz portföyün, net varlık dengen ve canlı kur çevirici</p>
+          </div>
+          <Button variant="primary" onClick={() => setEditor({ holding: null })}>
+            <Plus size={17} /> Varlık ekle
+          </Button>
+        </header>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-title font-semibold text-ink">Altın, Gümüş & Döviz Portföyü</h2>
+            <p className="text-label text-muted">Canlı piyasa kurlarıyla varlıkların ve net bilanço</p>
+          </div>
+          <Button variant="primary" onClick={() => setEditor({ holding: null })}>
+            <Plus size={16} /> Varlık ekle
+          </Button>
         </div>
-        <Button variant="primary" onClick={() => setEditor({ holding: null })}>
-          <Plus size={17} /> Varlık ekle
-        </Button>
-      </header>
+      )}
 
       <Stagger index={0}>
         <section className="bento-hero bento-hero--gold assets-summary" aria-labelledby="assets-total-title">
-          <div className="assets-summary-value">
+          <div className="assets-summary-value min-w-0 flex-1">
             <h2 id="assets-total-title">
               {portfolio.missing ? 'Portföy değerini tamamlıyoruz' : 'Varlıklarının TL karşılığı'}
             </h2>
@@ -196,7 +226,10 @@ export function AssetsView() {
                   {portfolio.knownValue !== null && portfolio.knownValue > 0 && (
                     <>
                       {' '}
-                      Fiyatlanabilen bölüm: <span className="num font-semibold text-white">{money2(portfolio.knownValue)}</span>.
+                      Fiyatlanabilen bölüm:{' '}
+                      <span className="num font-semibold text-[var(--hero-surface-text)]">
+                        {money2(portfolio.knownValue)}
+                      </span>.
                     </>
                   )}
                 </>
@@ -206,6 +239,33 @@ export function AssetsView() {
                 'Altın, gümüş veya dövizini ekleyerek birikim portföyünü canlı izle.'
               )}
             </p>
+
+            {/* Net Worth vs Liabilities Mini Wells */}
+            <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              <div className="overview-hero__metric">
+                <span className="overview-hero__metric-label">Portföy Toplamı</span>
+                <span className="overview-hero__metric-value">
+                  <MoneyValue value={assetTotalMinor} />
+                </span>
+                <span className="overview-hero__metric-sub">{holdings.length} varlık kalemi</span>
+              </div>
+              <div className="overview-hero__metric">
+                <span className="overview-hero__metric-label">Kayıtlı Ekstre Borcu</span>
+                <span className="overview-hero__metric-value">
+                  <MoneyValue value={liabilities.statementDebt} />
+                </span>
+                <span className="overview-hero__metric-sub">
+                  Açık taksit: {money2(liabilities.installmentRemaining)}
+                </span>
+              </div>
+              <div className="overview-hero__metric">
+                <span className="overview-hero__metric-label">Net Varlık (Portföy − Borç)</span>
+                <span className="overview-hero__metric-value">
+                  <MoneyValue value={netWorthMinor} />
+                </span>
+                <span className="overview-hero__metric-sub">360° servet dengesi</span>
+              </div>
+            </div>
           </div>
 
           <div className="assets-summary-state">
@@ -363,6 +423,33 @@ export function AssetsView() {
         </div>
       )}
 
+      <LiveRateConverter quotes={quotes} />
+
+      {/* ── Bridge between Assets & Future What-If Scenario ────────────────── */}
+      <section className="bento-card flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-1 items-start gap-3.5">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-accent-border bg-accent-soft text-accent-text">
+            <Compass size={20} />
+          </span>
+          <div className="min-w-0">
+            <span className="text-micro font-medium uppercase text-accent-text">
+              Varlıklar × Gelecek Senaryo Köprüsü
+            </span>
+            <h2 className="mt-0.5 text-body font-semibold text-ink">
+              Portföyün tasarruf hedefini ne kadar hızlandırıyor?
+            </h2>
+            <p className="mt-0.5 text-label text-muted">
+              {assetTotalMinor > 0
+                ? `${money2(assetTotalMinor)} portföy değerini ve aylık ek tasarruf senaryolarını Plan & Bütçe Merkezindeki canlı "Ne Olur?" simülatöründe test et.`
+                : 'Varlık portföyünü ve aylık ek tasarruflarını birleştirerek hedef tarihini kaç ay öne çekebileceğini canlı simüle et.'}
+            </p>
+          </div>
+        </div>
+        <Button size="sm" variant="primary" onClick={() => navigateTo('future')}>
+          What-If Simülatöründe Test Et <ArrowRight size={14} />
+        </Button>
+      </section>
+
       <details className="assets-methodology">
         <summary>Fiyatlar nasıl hesaplanıyor?</summary>
         <div>
@@ -399,6 +486,109 @@ export function AssetsView() {
         />
       )}
     </div>
+  )
+}
+
+function LiveRateConverter({ quotes }: { quotes: AssetQuotes }) {
+  const [amountText, setAmountText] = useState('10000')
+  const [sourceUnit, setSourceUnit] = useState<'try' | AssetInstrument>('try')
+
+  const numericAmount = useMemo(() => {
+    const cleaned = amountText.trim().replace(/\./g, '').replace(',', '.')
+    const parsed = Number(cleaned)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+  }, [amountText])
+
+  const amountInTry = useMemo(() => {
+    if (sourceUnit === 'try') return numericAmount
+    const q = quotes[sourceUnit]
+    return q && q.tryPerUnit > 0 ? numericAmount * q.tryPerUnit : 0
+  }, [numericAmount, sourceUnit, quotes])
+
+  const fmtQty = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 })
+
+  return (
+    <section className="bento-card" aria-label="Canlı altın ve döviz çevirici">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span className="text-micro font-medium uppercase text-gold">Canlı Kur & Altın Masası</span>
+          <h2 className="mt-0.5 text-title font-semibold text-ink">
+            Anlık Döviz & Altın Çevirici
+          </h2>
+        </div>
+        <ArrowLeftRight size={18} className="text-gold" />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-5">
+        {ASSET_INSTRUMENTS.map((inst) => {
+          const q = quotes[inst.id]
+          return (
+            <div
+              key={inst.id}
+              className="min-w-0 rounded-[var(--radius)] border border-line bg-sunken px-3 py-2.5"
+            >
+              <div className="flex items-center gap-1.5 truncate text-xs font-medium text-muted">
+                <i className="h-2 w-2 shrink-0 rounded-full" style={{ background: inst.color }} />
+                <span className="truncate">{inst.label}</span>
+              </div>
+              <strong className="num mt-1 block break-words text-body font-semibold text-ink">
+                {q ? money2(Math.round(q.tryPerUnit * 100)) : '—'}
+              </strong>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_200px]">
+        <Field label="Çevrilecek miktar">
+          <TextInput
+            inputMode="decimal"
+            value={amountText}
+            onChange={(e) => setAmountText(e.target.value)}
+            placeholder="10000"
+          />
+        </Field>
+        <Field label="Kaynak birim">
+          <Select
+            ariaLabel="Kaynak birim"
+            value={sourceUnit}
+            onChange={(next) => setSourceUnit(next as 'try' | AssetInstrument)}
+            options={[
+              { value: 'try', label: 'Türk Lirası (₺)', dot: 'var(--accent)' },
+              ...ASSET_INSTRUMENTS.map((inst) => ({
+                value: inst.id,
+                label: `${inst.label} (${inst.unit})`,
+                dot: inst.color,
+              })),
+            ]}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="min-w-0 rounded-[var(--radius)] border border-accent-border bg-accent-soft p-3">
+          <span className="block truncate text-xs font-medium text-accent-text">Türk Lirası</span>
+          <strong className="num mt-1 block break-words text-body font-semibold text-ink">
+            {money2(Math.round(amountInTry * 100))}
+          </strong>
+        </div>
+        {ASSET_INSTRUMENTS.map((inst) => {
+          const q = quotes[inst.id]
+          const converted = q && q.tryPerUnit > 0 ? amountInTry / q.tryPerUnit : null
+          return (
+            <div
+              key={inst.id}
+              className="min-w-0 rounded-[var(--radius)] border border-line bg-sunken p-3"
+            >
+              <span className="block truncate text-xs font-medium text-muted">{inst.label}</span>
+              <strong className="num mt-1 block break-words text-body font-semibold text-ink">
+                {converted !== null ? `${fmtQty.format(converted)} ${inst.unit}` : '—'}
+              </strong>
+            </div>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -449,23 +639,22 @@ function AssetEditor({
         }}
       >
         <Field label="Varlık türü">
-          <select
-            className="finance-select"
+          <Select
+            ariaLabel="Varlık türü"
             value={instrument}
             disabled={Boolean(holding)}
-            onChange={(event) => {
-              const next = event.target.value as AssetInstrument
-              setInstrument(next)
-              const row = holdings.find((item) => item.instrument === next)
+            onChange={(next) => {
+              const id = next as AssetInstrument
+              setInstrument(id)
+              const row = holdings.find((item) => item.instrument === id)
               setQuantity(row ? quantityInput(row.quantityMicros) : '')
             }}
-          >
-            {ASSET_INSTRUMENTS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+            options={ASSET_INSTRUMENTS.map((item) => ({
+              value: item.id,
+              label: item.label,
+              dot: item.color,
+            }))}
+          />
         </Field>
         <Field
           label={`Elindeki toplam miktar (${definition.unit})`}

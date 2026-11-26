@@ -10,12 +10,13 @@ import {
   useMemo,
   useState,
   type ReactNode,
+  type SyntheticEvent,
 } from 'react'
 import { ImportSheet } from './ImportSheet'
 import { useStore } from '../store/AppStore'
 import { categoryLabel, type CategoryId } from '../domain/categories'
 import { effectiveDate, type TxKind } from '../domain/types'
-import { EntrySheet } from './EntrySheet'
+import { EntrySheet, type EntryPrefill } from './EntrySheet'
 import { useSharedPdfImport } from '../hooks/useSharedPdfImport'
 import { Modal } from '../ui/Modal'
 
@@ -68,7 +69,7 @@ export interface TransactionQuery {
 }
 
 interface SheetApi {
-  openEntry: () => void
+  openEntry: (draft?: EntryPrefill | SyntheticEvent) => void
   openIncomeEntry: () => void
   openImport: (cardId?: string, repairStatementId?: string) => void
   openSettings: () => void
@@ -99,8 +100,21 @@ export function SheetProvider({ children }: { children: ReactNode }) {
   const [importCardId, setImportCardId] = useState<string | undefined>()
   const [repairStatementId, setRepairStatementId] = useState<string>()
   const [entryOpen, setEntryOpen] = useState<'expense' | 'income' | null>(null)
-  const openEntry = useCallback(() => { stopExplore(); setEntryOpen('expense') }, [stopExplore])
-  const openIncomeEntry = useCallback(() => { stopExplore(); setEntryOpen('income') }, [stopExplore])
+  const [entryDraft, setEntryDraft] = useState<EntryPrefill | undefined>(undefined)
+  const openEntry = useCallback((draft?: EntryPrefill | SyntheticEvent) => {
+    stopExplore()
+    const cleanDraft =
+      draft && typeof draft === 'object' && !('nativeEvent' in draft)
+        ? (draft as EntryPrefill)
+        : undefined
+    setEntryDraft(cleanDraft)
+    setEntryOpen(cleanDraft?.kind ?? 'expense')
+  }, [stopExplore])
+  const openIncomeEntry = useCallback(() => {
+    stopExplore()
+    setEntryDraft(undefined)
+    setEntryOpen('income')
+  }, [stopExplore])
   const [accountPanel, setAccountPanel] = useState<'account' | 'delete' | null>(() =>
     new URLSearchParams(window.location.search).has('delete-account') ? 'delete' : null,
   )
@@ -201,7 +215,11 @@ export function SheetProvider({ children }: { children: ReactNode }) {
       {entryOpen && (
         <EntrySheet
           initialKind={entryOpen}
-          onClose={() => setEntryOpen(null)}
+          initialDraft={entryDraft}
+          onClose={() => {
+            setEntryOpen(null)
+            setEntryDraft(undefined)
+          }}
         />
       )}
 

@@ -126,6 +126,7 @@ export function InteractiveDonutChart({
   activeId,
   onSelect,
   totalLabel = 'Toplam',
+  totalValue,
   privateMode = false,
 }: {
   data: DonutSlice[]
@@ -133,13 +134,16 @@ export function InteractiveDonutChart({
   activeId?: string | null
   onSelect?: (id: string | null) => void
   totalLabel?: string
+  /** Optional explicit denominator / center total (e.g. monthly income in 50/30/20). */
+  totalValue?: number
   privateMode?: boolean
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [localActiveId, setLocalActiveId] = useState<string | null>(null)
   const [animate] = useState(prefersMotion)
 
-  const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data])
+  const sliceTotal = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data])
+  const total = totalValue ?? sliceTotal
   const controlled = activeId !== undefined
   const selectedId = controlled ? activeId : localActiveId
   const focusedId = hoveredId ?? selectedId

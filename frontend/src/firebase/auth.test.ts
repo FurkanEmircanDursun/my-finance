@@ -1,10 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRedirectResult, linkWithCredential, signInWithCredential, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth'
+import {
+  getRedirectResult,
+  linkWithCredential,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  signInWithCredential,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+} from 'firebase/auth'
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication'
-import { authErrorMessage, completeRedirectSignIn, signInWithGoogle, signOutSession } from './auth'
+import {
+  authErrorMessage,
+  completeRedirectSignIn,
+  reauthenticate,
+  signInWithApple,
+  signInWithGoogle,
+  signOutSession,
+} from './auth'
 
 const session = vi.hoisted(() => ({
-  auth: { currentUser: null as null | { uid?: string; isAnonymous: boolean } },
+  auth: {
+    currentUser: null as null | {
+      uid?: string
+      email?: string | null
+      isAnonymous: boolean
+      providerData?: Array<{ providerId: string }>
+    },
+  },
   native: false,
   disconnect: vi.fn().mockResolvedValue(undefined),
 }))
@@ -13,7 +36,11 @@ vi.mock('./config', () => ({ getFirebaseAuth: () => session.auth }))
 vi.mock('../platform', () => ({ isNative: () => session.native }))
 vi.mock('../platform/push', () => ({ disconnectCloudPush: session.disconnect }))
 vi.mock('@capacitor-firebase/authentication', () => ({
-  FirebaseAuthentication: { signInWithGoogle: vi.fn(), signOut: vi.fn() },
+  FirebaseAuthentication: {
+    signInWithGoogle: vi.fn(),
+    signInWithApple: vi.fn(),
+    signOut: vi.fn(),
+  },
 }))
 vi.mock('firebase/auth', async (original) => ({
   ...await original<typeof import('firebase/auth')>(),
@@ -22,6 +49,8 @@ vi.mock('firebase/auth', async (original) => ({
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
   getRedirectResult: vi.fn(),
+  reauthenticateWithCredential: vi.fn(),
+  reauthenticateWithPopup: vi.fn(),
   signOut: vi.fn(),
 }))
 
@@ -34,8 +63,11 @@ beforeEach(() => {
   vi.mocked(signInWithPopup).mockResolvedValue({} as never)
   vi.mocked(signInWithRedirect).mockResolvedValue(undefined as never)
   vi.mocked(getRedirectResult).mockResolvedValue(null)
+  vi.mocked(reauthenticateWithCredential).mockResolvedValue({} as never)
+  vi.mocked(reauthenticateWithPopup).mockResolvedValue({} as never)
   vi.mocked(signOut).mockResolvedValue(undefined)
   vi.mocked(FirebaseAuthentication.signInWithGoogle).mockResolvedValue({ user: null, additionalUserInfo: null, credential: { providerId: 'google.com', idToken: 'google-id-token' } })
+  vi.mocked(FirebaseAuthentication.signInWithApple).mockResolvedValue({ user: null, additionalUserInfo: null, credential: { providerId: 'apple.com', idToken: 'apple-id-token', nonce: 'apple-raw-nonce' } })
   vi.mocked(FirebaseAuthentication.signOut).mockResolvedValue(undefined)
 })
 
@@ -138,9 +170,79 @@ describe('sign-out and readable failures', () => {
     expect(signOut).toHaveBeenCalledTimes(1)
   })
 
-  it('explains Android OAuth configuration failures without raw platform text', () => {
+  it('explains Android OAuth and Apple failures without raw platform text', () => {
     expect(authErrorMessage({ message: '10: DEVELOPER_ERROR' })).toContain('yapılandırması doğrulanamadı')
     expect(authErrorMessage({ message: 'NoCredentialException: no credentials available' })).toContain('Google hesabı bulunamadı')
+    expect(authErrorMessage({ code: '1000', message: 'ASAuthorizationError error 1000' })).toContain('iCloud')
+    expect(authErrorMessage({ code: 'auth/operation-not-allowed' })).toContain('şu an etkin değil')
     expect(authErrorMessage({ code: 'auth/network-request-failed' })).toContain('İnternet bağlantısı')
+  })
+})
+
+describe('Apple sign-in across platforms', () => {
+  it('uses native Apple sign-in with idToken + rawNonce and signs into the single JS session', async () => {
+    session.native = true
+    expect(await signInWithApple()).toBe('done')
+    expect(FirebaseAuthentication.signInWithApple).toHaveBeenCalledWith({ skipNativeAuth: true })
+    expect(signInWithCredential).toHaveBeenCalledWith(
+      session.auth,
+      expect.objectContaining({ providerId: 'apple.com', idToken: 'apple-id-token', nonce: 'apple-raw-nonce' }),
+    )
+    expect(signInWithPopup).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing native Apple token instead of silently succeeding', async () => {
+    session.native = true
+    vi.mocked(FirebaseAuthentication.signInWithApple).mockResolvedValue({ user: null, additionalUserInfo: null, credential: null })
+    await expect(signInWithApple()).rejects.toThrow('Apple kimliği alınamadı')
+    expect(signInWithCredential).not.toHaveBeenCalled()
+  })
+
+  it('treats native Apple ASAuthorizationErrorCanceled (1001) as a clean cancellation', async () => {
+    session.native = true
+    vi.mocked(FirebaseAuthentication.signInWithApple).mockRejectedValue({ code: '1001', message: 'ASAuthorizationError error 1001' })
+    expect(await signInWithApple()).toBe('cancelled')
+    expect(signInWithCredential).not.toHaveBeenCalled()
+  })
+
+  it('shares one native Apple sheet across repeated taps', async () => {
+    session.native = true
+    let finish!: (result: never) => void
+    vi.mocked(FirebaseAuthentication.signInWithApple).mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const first = signInWithApple()
+    const second = signInWithApple()
+    expect(first).toBe(second)
+    await vi.waitFor(() => expect(FirebaseAuthentication.signInWithApple).toHaveBeenCalledTimes(1))
+    finish({ credential: { idToken: 'apple-id-token', nonce: 'apple-raw-nonce' } } as never)
+    expect(await first).toBe('done')
+  })
+
+  it('falls back to web redirect when Apple popup is blocked and cancels cleanly when closed', async () => {
+    vi.mocked(signInWithPopup).mockRejectedValueOnce({ code: 'auth/popup-blocked' })
+    expect(await signInWithApple()).toBe('redirecting')
+    expect(signInWithRedirect).toHaveBeenCalledTimes(1)
+
+    vi.mocked(signInWithPopup).mockRejectedValueOnce({ code: 'auth/popup-closed-by-user' })
+    expect(await signInWithApple()).toBe('cancelled')
+    expect(signInWithRedirect).toHaveBeenCalledTimes(1)
+  })
+
+  it('reauthenticates Apple-only accounts via Apple on both native and web', async () => {
+    session.auth.currentUser = { uid: 'apple-u', isAnonymous: false, providerData: [{ providerId: 'apple.com' }] }
+
+    session.native = true
+    await reauthenticate()
+    expect(FirebaseAuthentication.signInWithApple).toHaveBeenCalledWith({ skipNativeAuth: true })
+    expect(reauthenticateWithCredential).toHaveBeenCalledWith(
+      session.auth.currentUser,
+      expect.objectContaining({ providerId: 'apple.com', idToken: 'apple-id-token' }),
+    )
+
+    session.native = false
+    await reauthenticate()
+    expect(reauthenticateWithPopup).toHaveBeenCalledWith(
+      session.auth.currentUser,
+      expect.objectContaining({ providerId: 'apple.com' }),
+    )
   })
 })

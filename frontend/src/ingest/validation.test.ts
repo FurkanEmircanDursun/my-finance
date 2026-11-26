@@ -72,6 +72,74 @@ describe('statement identity before bank transaction parsing', () => {
     expect(parse(`${AKBANK_COLUMNS}\n15/09/2026 GARANTİ BANKASI EFT 100.00`).bank).toBe('Akbank')
   })
 
+  it('does not treat a mid-line customer work address mentioning Dünya Katılım as ambiguous on Akbank', () => {
+    const withWorkAddress = AKBANK_COLUMNS.replace(
+      'AKBANK AXESS HESAP ÖZETİ',
+      'Axess Platinum Hesap Özeti\nKart Numarası 4000 00** **** 1234 DÜNYA KATILIM BANKASI ÖRNEK MAH.',
+    )
+    expect(parse(withWorkAddress).bank).toBe('Akbank')
+  })
+
+  it('accepts İş Bankası, Dünya Katılım, and QNB statement structures', () => {
+    const isbank = [
+      'KREDİ KARTI HESAP ÖZETİ',
+      'Kart Numarası: 6000********1234',
+      'TROY KLASİK DİJİTAL Hesap Özetiniz',
+      'SN. DENİZ KAYA Hesap Kesim Tarihi: 23.11.2026',
+      'Son Ödeme Tarihi: 03.12.2026',
+      'Hesap Özeti Borcu: 500,00 TL',
+      'Toplam MaxiPuan: 1,20 TL',
+      'İŞLEM TARİHİ AÇIKLAMA TUTAR TAKSİT BİLGİSİ MAXIPUAN',
+      '******** BİR ÖNCEKİ HESAP ÖZETİ BAKİYENİZ *** 0,00',
+      '10/11/2026 ORNEK MARKET ISTANBUL TR 500,00',
+      'www.isbank.com.tr',
+    ].join('\n')
+    expect(parse(isbank)).toMatchObject({ bank: 'Türkiye İş Bankası', reportedCardLast4: '1234', cardholderName: 'Deniz Kaya' })
+
+    const dunya = [
+      'Dünya Katılım Paraf Kredi Kartı',
+      'Hesap Kesim Tarihi : 24.11.2026 Sayın MERT DEMİR',
+      'Son Ödeme Tarihi : 04.12.2026',
+      'Dönem Borcu : 300,00 TL',
+      'Kart Numarası : 900000******4321',
+      'Devir Bakiyesi : 0,00 TL',
+      'İşlem Tarihi Açıklama Tutar (TL) ParafPara',
+      '10/11/2026 ORNEK MARKET İSTANBUL TR 300,00 0.00',
+      'dunyakatilim.com.tr/kampanyalar',
+    ].join('\n')
+    expect(parse(dunya)).toMatchObject({ bank: 'Dünya Katılım', reportedCardLast4: '4321', cardholderName: 'Mert Demir' })
+
+    const qnb = [
+      'QNB Trendyol',
+      'Kredi Kartı Numarası : 5100 00** **** 5678 Son Ödeme Tarihi: 23 Kasım 2026, Pazartesi',
+      'Hesap Kesim Tarihi : 12/11/2026',
+      'Dönem Borcu : 250.00 TL',
+      'Asgari Ödeme Oranı : TL %40.00 Sn. SELİN AYDIN',
+      'İşlem Tarihi İşlem Açıklaması Tutar Taksit ParaPuan',
+      'Önceki Dönem Bakiyeniz 0.00',
+      '10/11/2026 ORNEK KAFE 250.00',
+      'www.qnb.com.tr',
+    ].join('\n')
+    expect(parse(qnb)).toMatchObject({ bank: 'QNB', reportedCardLast4: '5678', cardholderName: 'Selin Aydın' })
+
+    const halkbank = [
+      'Müşteri Bilgileriniz',
+      'Sayın BURAK ŞAHİN',
+      'Hesap Kesim Tarihi : 10/11/2026',
+      'Son Ödeme Tarihi : 20/11/2026',
+      'Hesap Bakiyesi : 400.00 TL',
+      'Bir Önceki Dönem : 0.00 TL',
+      'Dönem İçi Borç Tutarı : 400.00 TL',
+      'Dönemsel Alacak : 0.00 TL',
+      'Türkiye Halk Bankası A.Ş. www.paraf.com.tr',
+      'İşlem Tarihi Açıklama TUTAR(TL) KALAN BORÇ(TL) / TAKSİT ParafPara',
+      'KART NO :4900-00##-',
+      '####-7788/ BURAK SAHIN',
+      '05/11/2026 ORNEK MARKET ISTANBUL ⟨400.00⟩ ⟦0.00⟧',
+    ].join('\n')
+    expect(parse(halkbank)).toMatchObject({ bank: 'Halkbank', reportedCardLast4: '7788', cardholderName: 'Burak Şahin' })
+  })
+
   it('preserves short CSV exports from any bank for text files', () => {
     expect(parse('Tarih,Açıklama,Tutar\n01/09/2026,A,10.00', 'text').transactions).toHaveLength(1)
   })

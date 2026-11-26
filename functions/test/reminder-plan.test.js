@@ -1,6 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cleanupExpiredDeliveries, deliverOnce, deliveryId, dueReminders, istanbulDate, messageFor } from '../src/reminder-plan.js'
+import {
+  cleanupExpiredDeliveries,
+  cleanupExpiredFailedStatements,
+  deliverOnce,
+  deliveryId,
+  dueReminders,
+  isExpiredFailedStatementObject,
+  istanbulDate,
+  messageFor,
+} from '../src/reminder-plan.js'
 
 const card = { id: 'card-a', bank: 'akbank', name: 'PRIVATE CARD NAME', statementDay: 31, entryDay: 29, remindersEnabled: true }
 const device = { enabled: true, hour: 9, timeZone: 'Europe/Istanbul' }
@@ -86,4 +95,28 @@ test('invalid tokens are removed and ambiguous errors retain dedup receipt', asy
     invalidate: async () => { events.push('invalidated') }, finish: async (_id, status) => { events.push(status) },
   }, 'id', {})
   assert.deepEqual(events, ['invalidated', 'failed'])
+})
+
+test('failed-statement 30-day storage retention matches only valid dropbox paths older than 30 days', async () => {
+  const now = Date.parse('2026-12-31T00:00:00Z')
+  const sha = 'a'.repeat(64)
+  const oldIso = '2026-11-30T23:59:59Z'
+  const freshIso = '2026-12-15T00:00:00Z'
+
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/source.pdf`, oldIso, now), true)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/source.csv`, oldIso, now), true)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/source.txt`, oldIso, now), true)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/report.json`, oldIso, now), true)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/source.pdf`, freshIso, now), false)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/short/source.pdf`, oldIso, now), false)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/failed-statements/${sha}/other.exe`, oldIso, now), false)
+  assert.equal(isExpiredFailedStatementObject(`users/u1/other/${sha}/source.pdf`, oldIso, now), false)
+
+  let ran = 0
+  for (let hour = 1; hour < 24; hour++) {
+    assert.equal(await cleanupExpiredFailedStatements(hour, async () => ++ran), 0)
+  }
+  assert.equal(ran, 0)
+  assert.equal(await cleanupExpiredFailedStatements(0, async (max) => { ran = max; return 3 }), 3)
+  assert.equal(ran, 500)
 })

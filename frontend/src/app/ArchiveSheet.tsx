@@ -246,7 +246,7 @@ function PeriodRow({
       >
         <ChevronDown size={16} className={clsx('shrink-0 text-faint transition-transform duration-200', open && 'rotate-180')} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-body font-semibold text-ink">{monthLabel(period.key)}</span>
+          <span className="block truncate text-body font-medium text-ink">{monthLabel(period.key)}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-label text-faint">
             <span>
               {count(summary.counts.total)} işlem · {count(statements.length)} ekstre
@@ -258,7 +258,7 @@ function PeriodRow({
       </button>
 
       {open && (
-        <div className="rise-in space-y-5 px-2 pb-5 pl-9">
+        <div className="rise-in space-y-5 px-2 pb-5 pl-6 sm:pl-9">
           {top.length > 0 && (
             <p className="text-label leading-relaxed text-muted">
               {top.map((c, i) => (
@@ -295,8 +295,8 @@ function PeriodRow({
 }
 
 function StatusDot({ status }: { status: ReconStatus }) {
-  if (status === 'match') return <span className="font-semibold text-positive">✓ tutuyor</span>
-  if (status === 'mismatch') return <span className="font-semibold text-negative">⚠ fark var</span>
+  if (status === 'match') return <span className="font-medium text-positive">✓ tutuyor</span>
+  if (status === 'mismatch') return <span className="font-medium text-negative">⚠ fark var</span>
   return <span>kontrol edilemedi</span>
 }
 
@@ -309,9 +309,9 @@ function StatementCard({ statement, onDelete }: { statement: Statement; onDelete
 
   return (
     <div className="rounded-[var(--radius-lg)] bg-sunken p-4">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2 sm:gap-3">
         <div className="min-w-0">
-          <p className="truncate text-body font-semibold text-ink">{statement.accountLabel ?? statement.bank}</p>
+          <p className="truncate text-body font-medium text-ink">{statement.accountLabel ?? statement.bank}</p>
           <p className="mt-0.5 text-label text-faint">
             {statement.periodStart && statement.periodEnd
               ? `${dayLabel(statement.periodStart)} – ${dayLabel(statement.periodEnd)}`
@@ -333,7 +333,7 @@ function StatementCard({ statement, onDelete }: { statement: Statement; onDelete
           type="button"
           onClick={() => setDetail((v) => !v)}
           aria-expanded={detail}
-          className="mt-3 flex h-9 items-center gap-1.5 text-label font-semibold text-muted transition-colors duration-200 hover:text-ink"
+          className="mt-2 flex min-h-[44px] items-center gap-1.5 text-label font-medium text-muted transition-colors duration-200 hover:text-ink"
         >
           Ayrıntı
           <ChevronDown size={14} className={clsx('transition-transform duration-200', detail && 'rotate-180')} />
@@ -362,14 +362,14 @@ function StatementCard({ statement, onDelete }: { statement: Statement; onDelete
               <button
                 type="button"
                 onClick={() => setShowIgnored((v) => !v)}
-                className="mt-1 text-label font-semibold text-accent hover:underline"
+                className="mt-1 min-h-[36px] text-label font-medium text-accent hover:underline"
               >
                 {showIgnored ? 'Gizle' : `${count(ignored.length)} satırı göster`}
               </button>
               {showIgnored && (
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-2 space-y-1.5">
                   {ignored.map((row, i) => (
-                    <li key={`${row.date}-${i}`} className="flex items-baseline justify-between gap-3">
+                    <li key={`${row.date}-${i}`} className="flex flex-wrap items-baseline justify-between gap-2">
                       <span className="min-w-0 truncate text-label text-muted">
                         {dayLabel(row.date)} · {row.description}
                       </span>
@@ -386,7 +386,7 @@ function StatementCard({ statement, onDelete }: { statement: Statement; onDelete
             </Block>
           )}
 
-          <p className="text-label text-faint">
+          <p className="break-words text-label text-faint">
             {statement.fileName} · {statement.engine} · {count(statement.transactionCount)} işlem
             {statement.skippedCount > 0 && ` · ${count(statement.skippedCount)} satır okunamadı`}
           </p>
@@ -404,7 +404,7 @@ function StatementCard({ statement, onDelete }: { statement: Statement; onDelete
 function Block({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <p className="mb-1.5 text-label font-semibold text-ink">{title}</p>
+      <p className="mb-1.5 text-label font-medium text-ink">{title}</p>
       {children}
     </div>
   )

@@ -2,6 +2,7 @@ import { extractText, type ExtractResult, type ProgressFn } from './extract'
 import { isPdfFile, pdfExtractionError, validateStatementFile, validateStatementText } from './validation'
 import { createCategorizer } from './categorize'
 import { assignIds } from './identity'
+import { extractCardholderName } from './ownership'
 import { reconcile } from './reconcile'
 import { fold, normalizeMerchant } from '../core/text'
 import { monthLabel, monthOf } from '../core/date'
@@ -42,10 +43,10 @@ export interface TextParseOptions {
 
 /** Read only explicitly labelled, masked card numbers; ambiguous numbers prove nothing. */
 function maskedCardSuffix(text: string): string | undefined {
-  const header = fold(text.split('\n', 60).join('\n'))
+  const header = fold(text.split('\n', 80).join('\n'))
   const suffixes = new Set(Array.from(
-    header.matchAll(/\bKART[ \t]+(?:NUMARASI|NO\.?)[ \t]*:?[ \t]*(?:\n[ \t]*)?(?:\d{4}|[*X•●]{4})[ \t-]*(?:[\d*X•●]{4}[ \t-]*){2}(\d{4})(?![\d*X•●])/g),
-  ).filter(match => /[*X•●]/.test(match[0])).map(match => match[1]))
+    header.matchAll(/\bKARTI?[ \t]+(?:NUMARAS[A-Z]|NO\.?)[ \t]*:?[ \t]*(?:\n[ \t]*)?(?:\d{4}|[*X#•●]{4})[ \t-]*(?:\n[ \t]*)?(?:[\d*X#•●]{4}[ \t-]*(?:\n[ \t]*)?){2}(\d{4})(?![\d*X#•●])/g),
+  ).filter(match => /[*X#•●]/.test(match[0])).map(match => match[1]))
   return suffixes.size === 1 ? [...suffixes][0] : undefined
 }
 
@@ -141,11 +142,13 @@ export function parseStatementText(text: string, options: TextParseOptions): Par
     : `${output.accountLabel} · ${options.fileName}`
 
   const reportedCardLast4 = adapter.id === 'csv' ? undefined : maskedCardSuffix(text)
+  const cardholderName = adapter.id === 'csv' ? undefined : extractCardholderName(text)
   return {
     bank,
     engine: options.engine,
     accountLabel: output.accountLabel,
     ...(reportedCardLast4 ? { reportedCardLast4 } : {}),
+    ...(cardholderName ? { cardholderName } : {}),
     transactions,
     skipped: output.skipped,
     periodStart: output.periodStart,

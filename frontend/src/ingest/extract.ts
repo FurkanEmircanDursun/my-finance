@@ -1,5 +1,6 @@
 import { detectAdapter } from './banks'
-import { decodeEbcdic, looksLikeEbcdic } from '../core/ebcdic'
+import { createEbcdicDecoder, looksLikeEbcdic } from '../core/ebcdic'
+import { createControlTurkishDecoder, decodeControlTurkish } from '../core/qnbFont'
 import { continuationLayout, findColumnLayout, tagStatementColumns, type ColumnLayout } from './columns'
 import type { Block } from 'tesseract.js'
 import { hasReadableText, isPdfFile } from './validation'
@@ -52,7 +53,7 @@ async function readAsText(file: File): Promise<string> {
 
 let pdfjsPromise: Promise<any> | null = null
 
-async function loadPdfjs(): Promise<any> {
+export async function loadPdfjs(): Promise<any> {
   if (!pdfjsPromise) {
     pdfjsPromise = (async () => {
       // Native WebViews can lack newer APIs such as Promise.withResolvers.
@@ -208,6 +209,14 @@ function pageLines(items: TextGeom[], decode: (text: string) => string, previous
 export function toTextGeom(items: ReadonlyArray<any>): TextGeom[] {
   return items
     .filter((i) => typeof i.str === 'string' && i.str.length)
+    // Skip 90°-rotated vertical margin stamps ("Belge Numarası", vertical V.D.
+    // footers, form IDs) that share a y coordinate with horizontal transaction
+    // rows and otherwise weld onto the date or description.
+    .filter((i) => {
+      const tr = i.transform
+      if (!Array.isArray(tr) || tr.length < 6) return true
+      return Math.abs(tr[1]) <= Math.abs(tr[0]) && Math.abs(tr[2]) <= Math.abs(tr[3])
+    })
     .map((i) => ({
       text: i.str as string,
       fontName: typeof i.fontName === 'string' ? i.fontName : undefined,
@@ -235,6 +244,11 @@ export function readPdfTextLayer(pages: readonly TextGeom[][]) {
     if (collected.length < 4000) fontText.set(fontName, (collected + text).slice(0, 4000))
   }
   const encodedFonts = new Set([...fontText].filter(([, sample]) => looksLikeEbcdic(sample)).map(([name]) => name))
+  const fullRawSample = pages.map((items) => items.map((i) => i.text).join('')).join('\n')
+  const ebcdicDecode = createEbcdicDecoder(fullRawSample)
+  const controlDecode = encodedFonts.size === 0 && !looksLikeEbcdic(fullRawSample)
+    ? createControlTurkishDecoder(pages.map((items) => buildLines(items).join('\n')).join('\n'))
+    : null
   const identity = (text: string) => text
   let previousLayout: ColumnLayout | undefined
   let encoded = false
@@ -247,12 +261,13 @@ export function readPdfTextLayer(pages: readonly TextGeom[][]) {
     const byFont = hasEncodedFont && (hasUnicodeFont || !encodedSample)
     const pageEncoded = !byFont && encodedSample
     const input = byFont ? items.map(item => item.fontName && encodedFonts.has(item.fontName)
-      ? { ...item, text: decodeEbcdic(item.text) } : item) : items
-    const { lines, layout } = pageLines(input, pageEncoded ? decodeEbcdic : identity, previousLayout)
+      ? { ...item, text: ebcdicDecode(item.text) } : item) : items
+    const decode = pageEncoded ? ebcdicDecode : (controlDecode ?? identity)
+    const { lines, layout } = pageLines(input, decode, previousLayout)
     previousLayout = layout ?? undefined
     encoded ||= byFont || pageEncoded
     const rendered = lines.join('\n')
-    return pageEncoded ? decodeEbcdic(rendered) : rendered
+    return pageEncoded ? ebcdicDecode(rendered) : controlDecode ? controlDecode(rendered) : rendered
   })
   const text = pageText.join('\n')
   return { pageText, text, engine: encoded ? 'pdf-ebcdic' : 'pdf-text' }
@@ -312,17 +327,18 @@ async function extractPdfPages(file: File, onProgress?: ProgressFn): Promise<Tex
  * means neither worked and the caller should reach for OCR.
  */
 export function recogniseLayerText(layerText: string, onProgress?: ProgressFn): ExtractResult | null {
-  if (isRecognised(layerText)) return { text: layerText, engine: 'pdf-text' }
+  const cleaned = decodeControlTurkish(layerText) ?? layerText
+  if (isRecognised(cleaned)) return { text: cleaned, engine: 'pdf-text' }
 
   // Akbank ships its statements as EBCDIC bytes with no ToUnicode map. The text
   // is complete, just in the wrong code page — decode before reaching for OCR.
   if (looksLikeEbcdic(layerText)) {
     onProgress?.('Ana bilgisayar kodlaması çözülüyor…')
-    const decoded = decodeEbcdic(layerText)
+    const decoded = createEbcdicDecoder(layerText)(layerText)
     if (isRecognised(decoded) || hasReadableText(decoded)) return { text: decoded, engine: 'pdf-ebcdic' }
   }
 
-  if (hasReadableText(layerText)) return { text: layerText, engine: 'pdf-text' }
+  if (hasReadableText(cleaned)) return { text: cleaned, engine: 'pdf-text' }
 
   return null
 }

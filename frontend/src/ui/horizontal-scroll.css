@@ -1,0 +1,82 @@
+/* ── Reusable Horizontal Scroll Strip (Wheel + Chevron Buttons + Edge Fades) ── */
+.hscroll-strip {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+}
+
+.hscroll-viewport {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+}
+
+.hscroll-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+/* Soft edge fade indicators when more content exists off-screen */
+.hscroll-strip.can-scroll-left .hscroll-viewport {
+  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
+}
+
+.hscroll-strip.can-scroll-right .hscroll-viewport {
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
+}
+
+.hscroll-strip.can-scroll-left.can-scroll-right .hscroll-viewport {
+  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+}
+
+.hscroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-elevated);
+  transition:
+    background-color var(--dur-micro) var(--ease-smooth),
+    border-color var(--dur-micro) var(--ease-smooth),
+    color var(--dur-micro) var(--ease-smooth),
+    transform var(--dur-micro) var(--ease-spring);
+}
+
+.hscroll-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+.hscroll-btn:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+.hscroll-btn--left {
+  left: 2px;
+}
+
+.hscroll-btn--right {
+  right: 2px;
+}
+
+@media (max-width: 799px) {
+  /* Keep buttons subtle on narrow touch viewports while still tappable */
+  .hscroll-btn {
+    width: 30px;
+    height: 30px;
+    opacity: 0.92;
+  }
+}

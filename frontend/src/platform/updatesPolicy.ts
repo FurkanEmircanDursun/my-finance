@@ -1,6 +1,10 @@
 export interface UpdatePolicy {
   minRequiredVersion: string
   latestVersion: string
+  minRequiredVersionAndroid?: string
+  latestVersionAndroid?: string
+  minRequiredVersionIos?: string
+  latestVersionIos?: string
   updateUrl: string
   updateUrlAndroid: string
   updateUrlIos: string
@@ -57,6 +61,14 @@ export function safeUpdateUrl(value: unknown): string | null {
   return null
 }
 
+function optionalVersion(value: unknown): string | undefined | null {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  return compareVersions(trimmed, trimmed) === null ? null : trimmed
+}
+
 /** A malformed remote policy must never lock a person out of their local records. */
 export function parseUpdatePolicy(raw: Record<string, unknown>): UpdatePolicy | null {
   const minimum = raw.min_required_version
@@ -64,7 +76,12 @@ export function parseUpdatePolicy(raw: Record<string, unknown>): UpdatePolicy | 
   if (typeof minimum !== 'string' || typeof latest !== 'string') return null
   const order = compareVersions(minimum, latest)
   if (order === null || order > 0) return null
-  const disabled = minimum === '0.0.0' && latest === '0.0.0'
+  const minAndroid = optionalVersion(raw.min_required_version_android)
+  const latestAndroid = optionalVersion(raw.latest_version_android)
+  const minIos = optionalVersion(raw.min_required_version_ios)
+  const latestIos = optionalVersion(raw.latest_version_ios)
+  if (minAndroid === null || latestAndroid === null || minIos === null || latestIos === null) return null
+  const disabled = minimum === '0.0.0' && latest === '0.0.0' && !minAndroid && !latestAndroid && !minIos && !latestIos
   const updateUrl = safeUpdateUrl(raw.update_url)
   const updateUrlAndroid = safeUpdateUrl(raw.update_url_android)
   const iosCandidate = safeUpdateUrl(raw.update_url_ios)
@@ -73,11 +90,37 @@ export function parseUpdatePolicy(raw: Record<string, unknown>): UpdatePolicy | 
   return {
     minRequiredVersion: minimum,
     latestVersion: latest,
+    ...(minAndroid ? { minRequiredVersionAndroid: minAndroid } : {}),
+    ...(latestAndroid ? { latestVersionAndroid: latestAndroid } : {}),
+    ...(minIos ? { minRequiredVersionIos: minIos } : {}),
+    ...(latestIos ? { latestVersionIos: latestIos } : {}),
     updateUrl: updateUrl ?? '',
     updateUrlAndroid: updateUrlAndroid ?? '',
     updateUrlIos: updateUrlIos ?? '',
     message: typeof raw.update_message === 'string' ? raw.update_message.trim().slice(0, 500) : '',
   }
+}
+
+/** Resolves effective minimum and latest versions for a platform, applying optional per-platform overrides. */
+export function resolvePolicyVersions(
+  policy: UpdatePolicy,
+  platform: UpdatePlatform,
+): { minRequiredVersion: string; latestVersion: string } | null {
+  const minRequiredVersion =
+    platform === 'android'
+      ? (policy.minRequiredVersionAndroid || policy.minRequiredVersion)
+      : platform === 'ios'
+        ? (policy.minRequiredVersionIos || policy.minRequiredVersion)
+        : policy.minRequiredVersion
+  const latestVersion =
+    platform === 'android'
+      ? (policy.latestVersionAndroid || policy.latestVersion)
+      : platform === 'ios'
+        ? (policy.latestVersionIos || policy.latestVersion)
+        : policy.latestVersion
+  const order = compareVersions(minRequiredVersion, latestVersion)
+  if (order === null || order > 0) return null
+  return { minRequiredVersion, latestVersion }
 }
 
 /** An empty native destination disables native prompts until a usable link is configured. */
@@ -95,8 +138,10 @@ export function resolveUpdateUrl(policy: UpdatePolicy, platform: UpdatePlatform)
 
 export function updateDecision(currentVersion: string | null, policy: UpdatePolicy | null, platform: UpdatePlatform = 'web'): UpdateDecision {
   if (!currentVersion || !policy || !resolveUpdateUrl(policy, platform)) return 'none'
-  const minimum = compareVersions(currentVersion, policy.minRequiredVersion)
-  const latest = compareVersions(currentVersion, policy.latestVersion)
+  const versions = resolvePolicyVersions(policy, platform)
+  if (!versions) return 'none'
+  const minimum = compareVersions(currentVersion, versions.minRequiredVersion)
+  const latest = compareVersions(currentVersion, versions.latestVersion)
   if (minimum === null || latest === null) return 'none'
   if (minimum < 0) return 'hard'
   return latest < 0 ? 'soft' : 'none'
@@ -109,7 +154,18 @@ export function readCachedUpdatePolicy(storage: Pick<Storage, 'getItem'>): Updat
     const cached = record as { schema?: unknown; policy?: unknown }
     if (cached.schema !== 1 || !cached.policy || typeof cached.policy !== 'object') return null
     const policy = cached.policy as Partial<UpdatePolicy>
-    return parseUpdatePolicy({ min_required_version: policy.minRequiredVersion, latest_version: policy.latestVersion, update_url: policy.updateUrl, update_url_android: policy.updateUrlAndroid, update_url_ios: policy.updateUrlIos, update_message: policy.message })
+    return parseUpdatePolicy({
+      min_required_version: policy.minRequiredVersion,
+      latest_version: policy.latestVersion,
+      min_required_version_android: policy.minRequiredVersionAndroid,
+      latest_version_android: policy.latestVersionAndroid,
+      min_required_version_ios: policy.minRequiredVersionIos,
+      latest_version_ios: policy.latestVersionIos,
+      update_url: policy.updateUrl,
+      update_url_android: policy.updateUrlAndroid,
+      update_url_ios: policy.updateUrlIos,
+      update_message: policy.message,
+    })
   } catch { return null }
 }
 

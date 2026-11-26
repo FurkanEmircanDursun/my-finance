@@ -129,13 +129,14 @@ service cloud.firestore {
       return isValidTombstone(data) || (isLive(data) &&
         data.keys().hasOnly(['id', 'label', 'fileName', 'bank', 'transactionCount',
           'skippedCount', 'periodStart', 'periodEnd', 'dueDate', 'importedAt', 'engine',
-          'accountLabel', 'cardId', 'summary', 'reconciliation', 'ignored', 'pdfSha256', '_u']) &&
+          'accountLabel', 'cardId', 'cardholderName', 'summary', 'reconciliation', 'ignored', 'pdfSha256', '_u']) &&
         validString(data.id, 1, 256) && data.id == id && validString(data.label, 0, 1024) &&
         validString(data.fileName, 0, 1024) && validString(data.bank, 0, 256) &&
         nonNegativeInteger(data.transactionCount) && nonNegativeInteger(data.skippedCount) &&
         nullableDay(data.periodStart) && nullableDay(data.periodEnd) && nullableDay(data.dueDate) &&
         milliseconds(data.importedAt) && validString(data.engine, 0, 256) &&
         optionalString(data, 'accountLabel', 0, 256) && optionalString(data, 'cardId', 1, 256) &&
+        optionalString(data, 'cardholderName', 1, 120) &&
         (!('pdfSha256' in data) || (data.pdfSha256 is string && data.pdfSha256.matches('^[0-9a-f]{64}$'))) &&
         (!('summary' in data) || isValidSummary(data.summary)) &&
         (!('reconciliation' in data) || isValidReconciliation(data.reconciliation)) &&

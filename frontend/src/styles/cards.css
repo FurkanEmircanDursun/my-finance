@@ -3,6 +3,78 @@
   min-width: 0;
 }
 
+.cards-wallet-hero {
+  display: grid;
+  gap: 18px;
+}
+
+.cards-cycle-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hero-surface-line);
+}
+
+.cards-cycle-strip__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  color: var(--hero-surface-text);
+  opacity: 0.86;
+}
+
+.cards-cycle-strip__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cards-cycle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 6px 13px;
+  border-radius: 999px;
+  background: var(--hero-surface-well);
+  border: 1px solid var(--hero-surface-line);
+  font-size: 0.79rem;
+  font-weight: 500;
+  color: var(--hero-surface-text);
+  box-shadow: 0 1px 2px rgba(10, 19, 31, 0.06);
+  transition: all var(--dur-micro) var(--ease-smooth);
+}
+
+.cards-cycle-chip:hover {
+  background: var(--hero-surface-well-hover);
+  border-color: var(--accent-border);
+}
+
+.cards-cycle-chip span {
+  color: var(--hero-surface-text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cards-cycle-chip strong {
+  color: var(--accent-text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cards-cycle-chip--missing strong {
+  color: var(--warning);
+}
+
 .cards-missing-notice {
   display: flex;
   align-items: center;
@@ -104,15 +176,24 @@
   object-fit: contain;
 }
 
+/* Card-Color-Adaptive Frosted Status Pill (high contrast on red, green, blue, purple, gold, obsidian) */
 .card-statement-status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  gap: 6px;
+  padding: 5px 11px;
   border-radius: 999px;
   font-size: 0.72rem;
-  font-weight: 640;
+  font-weight: 660;
   line-height: 1.25;
+  letter-spacing: 0.01em;
+  color: #FFFFFF;
+  background: rgba(8, 12, 20, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.30);
+  backdrop-filter: blur(12px) saturate(145%);
+  -webkit-backdrop-filter: blur(12px) saturate(145%);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
 }
 
 .card-statement-status svg {
@@ -120,29 +201,38 @@
 }
 
 .card-statement-status--missing {
-  background: rgba(251, 191, 36, 0.18);
+  background: rgba(42, 24, 4, 0.58);
+  color: #FEF3C7;
+  border-color: rgba(252, 211, 77, 0.56);
+}
+
+.card-statement-status--missing svg {
   color: #FCD34D;
-  border: 1px solid rgba(251, 191, 36, 0.35);
 }
 
 .card-statement-status--ready {
-  background: rgba(52, 211, 153, 0.18);
+  background: rgba(8, 14, 22, 0.38);
+  color: #FFFFFF;
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.card-statement-status--ready svg {
   color: #6EE7B7;
-  border: 1px solid rgba(52, 211, 153, 0.32);
 }
 
 .card-statement-status--upcoming,
 .card-statement-status--untracked {
-  background: rgba(255, 255, 255, 0.10);
-  color: rgba(244, 247, 250, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(8, 12, 20, 0.28);
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .card-period-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px 10px;
   padding: 10px 8px 4px;
 }
 
@@ -159,15 +249,15 @@
 }
 
 .card-inline-action {
-  min-height: 38px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 0 11px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  border-radius: 9px;
+  padding: 0 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: 10px;
   color: var(--text-muted);
   transition: all var(--dur-micro) var(--ease-smooth);
 }
@@ -201,12 +291,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 44px;
   list-style: none;
   cursor: pointer;
   color: var(--text-muted);
   font-size: 0.78rem;
-  font-weight: 560;
+  font-weight: 500;
 }
 
 .card-management summary::-webkit-details-marker {
@@ -260,9 +350,9 @@
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--accent-text);
-  min-height: 40px;
-  padding: 0 10px;
-  margin-inline-start: -10px;
+  min-height: 44px;
+  padding: 0 12px;
+  margin-inline-start: -12px;
   border-radius: var(--radius-sm);
 }
 
@@ -383,5 +473,11 @@
   .card-detail-records,
   .card-detail-categories {
     padding: 18px;
+  }
+  .card-document-link {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    padding: 10px 4px;
+    margin-inline: -4px;
   }
 }

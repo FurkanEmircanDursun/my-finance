@@ -42,39 +42,87 @@ export function buildInstallmentPlans(
   /** The month a row was billed in. Defaults to its effective date's month. */
   billedMonthOf: (tx: Transaction) => MonthKey = (tx) => monthOf(effectiveDate(tx)),
 ): InstallmentPlan[] {
-  // One statement line per instalment; the latest line describes the plan state.
-  interface Draft {
+  // One statement line per instalment; refunds of the same plan cancel matching
+  // instalment steps so returned/cancelled plans do not create phantom obligations.
+  interface StepDraft {
     tx: Transaction
     current: number
-    total: number
     billedMonth: MonthKey
   }
+  interface PlanBucket {
+    id: string
+    merchant: string
+    amount: Money
+    total: number
+    netByStep: Map<number, number>
+    draftByStep: Map<number, StepDraft>
+    maxSeenStep: number
+  }
 
-  const drafts = new Map<string, Draft>()
+  const buckets: PlanBucket[] = []
 
   for (const tx of transactions) {
     const inst = tx.installment
-    if (!inst || tx.kind !== 'expense' || inst.total <= 1) continue
+    if (!inst || inst.total <= 1 || (tx.kind !== 'expense' && tx.kind !== 'refund')) continue
 
-    // A plan is identified by merchant + monthly amount + length, which stays
-    // stable across the statements the plan spans.
-    const key = `${tx.merchant}|${tx.amount}|${inst.total}`
-    const existing = drafts.get(key)
+    // A plan is identified by merchant + monthly amount + length. Allow a few
+    // kuruş of rounding variance because banks absorb division remainders on
+    // the final instalment (e.g. 349,33 / 349,33 / 349,34 for a ₺1.048 / 3 plan).
+    const tolerance = Math.max(5, inst.total)
+    let bucket = buckets.find(
+      (b) => b.merchant === tx.merchant && b.total === inst.total && Math.abs(b.amount - tx.amount) <= tolerance,
+    )
+    if (!bucket) {
+      bucket = {
+        id: `${tx.merchant}|${tx.amount}|${inst.total}`,
+        merchant: tx.merchant,
+        amount: tx.amount,
+        total: inst.total,
+        netByStep: new Map(),
+        draftByStep: new Map(),
+        maxSeenStep: 0,
+      }
+      buckets.push(bucket)
+    }
 
-    if (!existing || inst.current > existing.current) {
-      drafts.set(key, { tx, current: inst.current, total: inst.total, billedMonth: billedMonthOf(tx) })
+    const delta = tx.kind === 'expense' ? 1 : -1
+    bucket.netByStep.set(inst.current, (bucket.netByStep.get(inst.current) ?? 0) + delta)
+    if (inst.current > bucket.maxSeenStep) bucket.maxSeenStep = inst.current
+
+    if (tx.kind === 'expense') {
+      const billedMonth = billedMonthOf(tx)
+      const prev = bucket.draftByStep.get(inst.current)
+      if (!prev || billedMonth >= prev.billedMonth) {
+        bucket.draftByStep.set(inst.current, { tx, current: inst.current, billedMonth })
+      }
     }
   }
 
   const plans: InstallmentPlan[] = []
 
-  for (const [key, draft] of drafts) {
-    const { tx, current, total, billedMonth } = draft
+  for (const bucket of buckets) {
+    const key = bucket.id
+    // Pick the highest un-refunded instalment step; if every billed step was
+    // cancelled/refunded (e.g. accelerated 1/5..5/5 return), omit the plan.
+    let draft: StepDraft | null = null
+    for (const [step, net] of bucket.netByStep) {
+      if (net <= 0) continue
+      const candidate = bucket.draftByStep.get(step)
+      if (candidate && (!draft || step > draft.current)) draft = candidate
+    }
+    if (!draft) continue
+
+    const { tx, current, billedMonth } = draft
+    const total = bucket.total
+    // When later steps of the same plan were billed and cancelled/refunded
+    // (e.g. 1/4 paid, then 2/4..4/4 cancelled), no further instalments remain.
+    const cancelledAfter =
+      bucket.maxSeenStep > current && (bucket.netByStep.get(bucket.maxSeenStep) ?? 0) <= 0
 
     // Instalments not yet billed on any statement we hold — the bank's own count
     // when the statement prints one, otherwise what the plan length implies.
     const stated = tx.installment?.remaining
-    const unbilled = stated ? stated.count : Math.max(0, total - current)
+    const unbilled = cancelledAfter ? 0 : (stated ? stated.count : Math.max(0, total - current))
     // Of those, the ones whose due month has already passed within our data.
     const elapsed = Math.max(0, monthDiff(billedMonth, asOfMonth))
     const remainingCount = Math.max(0, unbilled - elapsed)
@@ -87,7 +135,7 @@ export function buildInstallmentPlans(
       label: displayMerchant(tx.merchant),
       category: tx.category,
       monthlyAmount: tx.amount,
-      paidCount: Math.min(total, current + elapsed),
+      paidCount: cancelledAfter ? current : Math.min(total, current + elapsed),
       totalCount: total,
       remainingCount,
       // The bank's remaining figure is per instalment and can differ from the

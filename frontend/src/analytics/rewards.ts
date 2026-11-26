@@ -56,8 +56,12 @@ function programmeOf(statement: Statement): string | null {
   const printed = statement.summary?.loyalty?.programme
   if (printed) return printed
   const bank = fold(statement.bank)
-  if (bank.includes('akbank')) return 'Chip-para'
-  if (bank.includes('garanti')) return 'Bonus'
+  if (bank.includes('AKBANK')) return 'Chip-para'
+  if (bank.includes('GARANTI')) return 'Bonus'
+  if (bank.includes('IS BANKASI')) return 'MaxiPuan'
+  if (bank.includes('DUNYA KATILIM')) return 'ParafPara'
+  if (bank.includes('HALKBANK')) return 'ParafPara'
+  if (bank.includes('QNB')) return 'ParaPuan'
   return null
 }
 

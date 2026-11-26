@@ -46,7 +46,7 @@ export function SpendingView() {
           description={
             state.transactions.length
               ? 'Başka bir ay seçebilir veya bu döneme yeni bir kayıt ekleyebilirsin.'
-              : 'İlk giderini ekle ya da Akbank veya Garanti ekstreni yükle. Harcamaların burada kategorilere ayrılır.'
+              : 'İlk giderini ekle ya da banka ekstreni yükle. Harcamaların burada kategorilere ayrılır.'
           }
           action={
             <div className="flex flex-wrap justify-center gap-2">
@@ -70,19 +70,19 @@ export function SpendingView() {
       <Stagger index={0}>
         <section className="bento-card">
           <div className="grid gap-3.5 sm:grid-cols-2">
-            <div className="rounded-[var(--radius)] border border-line bg-sunken p-5">
-              <div className="text-micro font-semibold uppercase text-faint">Net harcama</div>
-              <div className="mt-2 text-figure font-bold text-ink">
+            <div className="rounded-[var(--radius)] border border-line bg-sunken p-4 sm:p-5">
+              <div className="text-micro font-medium uppercase text-faint">Net harcama</div>
+              <div className="mt-2 text-figure font-semibold text-ink">
                 <MoneyValue value={totals.netSpend} />
               </div>
             </div>
 
             {totals.income > 0 ? (
-              <div className="rounded-[var(--radius)] border border-line bg-sunken p-5">
-                <div className="text-micro font-semibold uppercase text-faint">Gelirden kalan</div>
+              <div className="rounded-[var(--radius)] border border-line bg-sunken p-4 sm:p-5">
+                <div className="text-micro font-medium uppercase text-faint">Gelirden kalan</div>
                 <div
                   className={clsx(
-                    'mt-2 text-figure font-bold',
+                    'mt-2 text-figure font-semibold',
                     totals.net >= 0 ? 'text-positive' : 'text-negative',
                   )}
                 >
@@ -93,11 +93,11 @@ export function SpendingView() {
               <button
                 type="button"
                 onClick={openIncomeEntry}
-                className="rounded-[var(--radius)] border border-line bg-sunken p-5 text-left transition-all duration-200 hover:border-accent-border hover:bg-hover"
+                className="rounded-[var(--radius)] border border-line bg-sunken p-4 text-left transition-all duration-200 hover:border-accent-border hover:bg-hover sm:p-5"
               >
-                <div className="text-micro font-semibold uppercase text-faint">Gelirden kalan</div>
-                <div className="num mt-2 text-figure font-bold text-faint">—</div>
-                <div className="mt-1 text-label font-semibold text-accent-text">Gelirini gir →</div>
+                <div className="text-micro font-medium uppercase text-faint">Gelirden kalan</div>
+                <div className="num mt-2 text-figure font-semibold text-faint">—</div>
+                <div className="mt-1 text-label font-medium text-accent-text">Gelirini gir →</div>
               </button>
             )}
           </div>
@@ -106,7 +106,7 @@ export function SpendingView() {
             type="button"
             onClick={() => setDetail((v) => !v)}
             aria-expanded={detail}
-            className="mt-3 flex h-10 items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-label font-semibold text-muted transition-colors hover:bg-hover hover:text-ink"
+            className="mt-3 flex min-h-[44px] items-center gap-1.5 rounded-[var(--radius-sm)] px-2 text-label font-medium text-muted transition-colors hover:bg-hover hover:text-ink"
           >
             Harcama hesabını gör
             <ChevronDown size={15} className={clsx('transition-transform duration-200', detail && 'rotate-180')} />
@@ -189,7 +189,7 @@ export function SpendingView() {
 
                       <div className="mt-2 flex items-center gap-3">
                         <AnimatedProgress value={stat.total} max={denom} color={barColor} height={6} className="flex-1" />
-                        <span className="num w-28 shrink-0 text-right text-label text-faint">
+                        <span className="num min-w-[5.5rem] max-w-[8.5rem] shrink-0 text-right text-label text-faint">
                           {budget
                             ? `/ ${money(budget.limit)}`
                             : `${percent(stat.share * 100)} · ${count(stat.count)} işlem`}
@@ -325,11 +325,13 @@ export function SpendingView() {
             <Section title="Geçen aya göre">
               <ul className="-mx-2">
                 {trend.movers.slice(0, 6).map((mover) => (
-                  <li key={mover.id} className="flex min-h-[46px] items-center gap-3 px-2.5">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: mover.color }} />
-                    <span className="min-w-0 flex-1 truncate text-body text-ink">{mover.label}</span>
-                    <span className="num shrink-0 text-body text-muted">{money(mover.delta, { sign: true })}</span>
-                    <span className="shrink-0 text-right">
+                  <li key={mover.id} className="flex min-h-[46px] flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
+                    <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: mover.color }} />
+                      <span className="truncate text-body text-ink">{mover.label}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="num text-body text-muted">{money(mover.delta, { sign: true })}</span>
                       <TrendPill value={mover.deltaPct} />
                     </span>
                   </li>

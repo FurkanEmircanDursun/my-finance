@@ -50,20 +50,37 @@ const CURRENCY_SYMBOLS: Record<string, string> = { $: 'USD', '€': 'EUR', '£':
 const FOREIGN_NOTE_RE =
   /\(?\s*orjinal\s+tutar\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*([$€£]|USD|EUR|GBP)?\s*\)?/i
 
+/** QNB prints "(USD 5.00)" or "(EUR 12.99)" beside the merchant name. */
+const PAREN_CURRENCY_RE = /\(\s*(USD|EUR|GBP)\s+(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)\s*\)/i
+
 export function readForeignAmount(description: string): ForeignAmount | undefined {
   const match = FOREIGN_NOTE_RE.exec(description)
-  if (!match) return undefined
+  if (match) {
+    const value = Number.parseFloat(match[1].replace(/,/g, ''))
+    if (Number.isFinite(value) && value > 0) {
+      const symbol = (match[2] ?? '').toUpperCase()
+      return { amount: Math.round(value * 100), currency: CURRENCY_SYMBOLS[symbol] ?? (symbol || 'USD') }
+    }
+  }
 
-  const value = Number.parseFloat(match[1].replace(/,/g, ''))
-  if (!Number.isFinite(value) || value <= 0) return undefined
+  const paren = PAREN_CURRENCY_RE.exec(description)
+  if (paren) {
+    const value = Number.parseFloat(paren[2].replace(/,/g, ''))
+    if (Number.isFinite(value) && value > 0) {
+      return { amount: Math.round(value * 100), currency: paren[1].toUpperCase() }
+    }
+  }
 
-  const symbol = (match[2] ?? '').toUpperCase()
-  return { amount: Math.round(value * 100), currency: CURRENCY_SYMBOLS[symbol] ?? (symbol || 'USD') }
+  return undefined
 }
 
-/** Removes the "(orjinal tutar …)" note from a description once it has been read. */
+/** Removes foreign-currency notes such as "(orjinal tutar …)" or "(USD 5.00)". */
 export function stripForeignNote(description: string): string {
-  return description.replace(FOREIGN_NOTE_RE, ' ').replace(/\s{2,}/g, ' ').trim()
+  return description
+    .replace(FOREIGN_NOTE_RE, ' ')
+    .replace(PAREN_CURRENCY_RE, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 export interface BankAdapter {
@@ -136,7 +153,7 @@ export function resolvePeriodStart({
  * Treated as `payment` so they never distort spend totals.
  */
 export const PAYMENT_PATTERNS =
-  /(ÖDEMENİZ|ODEMENIZ|TEŞEKKÜR|TESEKKUR|TAHSİLAT|TAHSILAT|KREDİ KARTI ÖDEME|KREDI KARTI ODEME|HESAPTAN ÖDEME|HESAPTAN ODEME|PAYMENT RECEIVED|BORÇ ÖDEME|BORC ODEME|OTOMATİK ÖDEME TALİMATI)/i
+  /(ÖDEMENİZ|ODEMENIZ|TEŞEKKÜR|TESEKKUR|TAHSİLAT|TAHSILAT|KREDİ KARTI ÖDEME|KREDI KARTI ODEME|HESAPTAN ÖDEME|HESAPTAN ODEME|HESAPTAN AKTARIM|PAYMENT RECEIVED|BORÇ ÖDEME|BORC ODEME|OTOMATİK ÖDEME TALİMATI|OTOMATIK ODEME TALIMATI|OTOMAT[İI]K TAHS[İI]LAT)/i
 
 /**
  * Loyalty currency that never touched real money.

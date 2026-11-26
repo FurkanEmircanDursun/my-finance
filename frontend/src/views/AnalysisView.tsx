@@ -1,26 +1,48 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, ArrowUpRight, BarChart3, CalendarClock, ChevronDown, Coins, Minus, Plus, RefreshCw } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpRight,
+  BarChart3,
+  CalendarRange,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Minus,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Store,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
+import { clsx } from 'clsx'
 import { Area, Bar, CartesianGrid, ComposedChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useStore } from '../store/AppStore'
 import { useSheets } from '../app/sheets'
 import { useNow } from '../app/useNow'
 import type { ViewId } from '../app/navigation'
-import { buildLongitudinalAnalysis, compareMonthlySpending, dailyNetSpending, type LongitudinalAnalysis, type MonthCoverage } from '../analytics/longitudinal'
+import { buildLongitudinalAnalysis, compareMonthlySpending, dailyNetSpending, type LongitudinalAnalysis, type LongitudinalMonth, type MonthCoverage } from '../analytics/longitudinal'
 import { addMonths, daysInMonth, eachMonth, fullDayLabel, monthLabel } from '../core/date'
-import { money2, moneyCompact } from '../core/money'
+import { count, money, money2, moneyCompact } from '../core/money'
 import { entryAmount } from '../domain/entry'
 import { assetValuationDay, createManualAssetValuation, upsertAssetValuation } from '../domain/assetsHistory'
-import { categoryLabel, type CategoryId } from '../domain/categories'
+import { CATEGORIES, categoryColor, categoryLabel, sortCategoriesTr, type CategoryId } from '../domain/categories'
 import type { Transaction } from '../domain/types'
 import { useAssetValuationCapture } from '../hooks/useAssetValuationCapture'
 import { cachedAssetRates, isQuoteAvailable, refreshAssetRates, type RateSnapshot } from '../platform/rates'
 import { hapticTap } from '../platform/haptics'
-import { Button, Empty, Field, Segmented, TextInput } from '../ui/primitives'
+import { Badge, Button, Empty, Field, Segmented, TextInput } from '../ui/primitives'
+import { Select } from '../ui/Select'
+import { CategoryIcon } from '../ui/CategoryIcon'
+import { HorizontalScrollStrip } from '../ui/HorizontalScrollStrip'
 import { Modal } from '../ui/Modal'
 import { useFeedback } from '../ui/Feedback'
 import { ChartTooltipShell, InteractiveDonutChart } from '../ui/charts'
 import { MoneyValue } from '../ui/MoneyValue'
-import { Stagger } from '../ui/motion'
+import { AnimatedProgress, Stagger } from '../ui/motion'
+import { AssetsView } from './AssetsView'
 import './analysis.css'
 
 const axis = { axisLine: false, tickLine: false, tick: { fill: 'var(--text-faint)', fontSize: 11 } } as const
@@ -41,12 +63,15 @@ const shortMonth = (value: string) => monthLabel(value, true)
 const weekdayShort = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
 
 export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => void }) {
-  const { state } = useStore()
-  const { openImport, openEntry } = useSheets()
+  const { state, overall } = useStore()
+  const { openImport, openEntry, openTransactions } = useSheets()
   const now = useNow(60_000)
   const asOf = assetValuationDay(now)
   const thisMonth = asOf.slice(0, 7)
+  const [subTab, setSubTab] = useState<'trends' | 'portfolio' | 'merchants'>('trends')
   const [windowRange, setWindowRange] = useState('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
   const [category, setCategory] = useState<CategoryId | 'all'>('all')
   const [rates, setRates] = useState<RateSnapshot | null>(() => cachedAssetRates())
   const [rateBusy, setRateBusy] = useState(false)
@@ -91,18 +116,25 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
   const result = useMemo(() => {
     try {
       const fromMonth =
-        windowRange === '6m'
-          ? addMonths(thisMonth, -5)
-          : windowRange === '12m'
-            ? addMonths(thisMonth, -11)
-            : /^\d{4}$/.test(windowRange)
-              ? windowRange + '-01'
-              : undefined
-      const toMonth = /^\d{4}$/.test(windowRange)
-        ? windowRange + '-12'
-        : windowRange === 'all'
-          ? undefined
-          : thisMonth
+        windowRange === 'custom' && customFrom
+          ? customFrom
+          : windowRange === '3m'
+            ? addMonths(thisMonth, -2)
+            : windowRange === '6m'
+              ? addMonths(thisMonth, -5)
+              : windowRange === '12m'
+                ? addMonths(thisMonth, -11)
+                : /^\d{4}$/.test(windowRange)
+                  ? windowRange + '-01'
+                  : undefined
+      const toMonth =
+        windowRange === 'custom' && customTo
+          ? customTo
+          : /^\d{4}$/.test(windowRange)
+            ? windowRange + '-12'
+            : windowRange === 'all'
+              ? undefined
+              : thisMonth
       return {
         report: buildLongitudinalAnalysis({
           transactions: state.transactions,
@@ -122,7 +154,18 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
         error: 'Tutarlar güvenli biçimde hesaplanamadı. Kayıtlarını ve varlık miktarlarını kontrol et.',
       }
     }
-  }, [state.transactions, state.statements, state.profile.assets, state.profile.assetValuations, asOf, thisMonth, windowRange, quotes])
+  }, [
+    state.transactions,
+    state.statements,
+    state.profile.assets,
+    state.profile.assetValuations,
+    asOf,
+    thisMonth,
+    windowRange,
+    customFrom,
+    customTo,
+    quotes,
+  ])
 
   const years = useMemo(
     () =>
@@ -182,66 +225,287 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
     <div className="analysis-page">
       <header className="dashboard-title">
         <div>
-          <h1>Analiz</h1>
-          <p>Gelir, harcama, birikim ve alışkanlıklarının zaman içindeki seyri</p>
+          <h1>Varlık & Analiz Merkezi</h1>
+          <p>Gelir-gider trendlerin, altın/döviz portföyün ve işyeri alışkanlık radarın</p>
         </div>
-        <div className="analysis-destinations" aria-label="İlgili görünümler">
+        <div className="tx-mode-switch" role="tablist" aria-label="Varlık ve analiz bölümleri">
           <button
             type="button"
-            className="analysis-dest-card"
-            onClick={() => onNavigate('spending')}
+            role="tab"
+            aria-selected={subTab === 'trends'}
+            className={subTab === 'trends' ? 'is-active' : ''}
+            onClick={() => {
+              hapticTap()
+              setSubTab('trends')
+            }}
           >
-            <BarChart3 size={16} /> Harcamalar <ArrowUpRight size={14} className="text-faint" />
+            <BarChart3 size={15} /> Harcama Trendi
           </button>
           <button
             type="button"
-            className="analysis-dest-card"
-            onClick={() => onNavigate('assets')}
+            role="tab"
+            aria-selected={subTab === 'portfolio'}
+            className={subTab === 'portfolio' ? 'is-active' : ''}
+            onClick={() => {
+              hapticTap()
+              setSubTab('portfolio')
+            }}
           >
-            <Coins size={16} /> Varlıklar <ArrowUpRight size={14} className="text-faint" />
+            <Coins size={15} /> Altın & Döviz ({count(state.profile.assets?.length ?? 0)})
           </button>
           <button
             type="button"
-            className="analysis-dest-card"
-            onClick={() => onNavigate('future')}
+            role="tab"
+            aria-selected={subTab === 'merchants'}
+            className={subTab === 'merchants' ? 'is-active' : ''}
+            onClick={() => {
+              hapticTap()
+              setSubTab('merchants')
+            }}
           >
-            <CalendarClock size={16} /> Gelecek <ArrowUpRight size={14} className="text-faint" />
+            <Store size={15} /> İşyeri & Alışkanlık
           </button>
         </div>
       </header>
 
-      <div className="analysis-range">
-        <Field label="Analiz dönemi">
-          <select
-            className="finance-select"
-            value={windowRange}
-            onChange={(event) => {
-              hapticTap()
-              setWindowRange(event.target.value)
-              setCategory('all')
-            }}
-          >
-            <option value="all">Tüm geçmiş</option>
-            <option value="6m">Son 6 ay</option>
-            <option value="12m">Son 12 ay</option>
-            {years.length > 0 && (
-              <optgroup label="Kayıtlı yıllar">
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
+      {subTab === 'portfolio' && <AssetsView embedded />}
+
+      {subTab === 'merchants' && (
+        <div className="space-y-5">
+          {/* Top Merchants Leaderboard */}
+          <section className="bento-card">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="text-micro font-medium uppercase text-faint">İşyeri Radarı</span>
+                <h2 className="mt-0.5 text-title font-semibold text-ink">
+                  En Çok Harcama Yapılan İşyerleri
+                </h2>
+              </div>
+              <Button size="sm" onClick={() => onNavigate('spending')}>
+                Kategori detayı
+              </Button>
+            </div>
+
+            {overall.merchants.length > 0 ? (
+              <ul className="mt-4 divide-y divide-line">
+                {overall.merchants.slice(0, 10).map((m, idx) => (
+                  <li key={m.merchant}>
+                    <button
+                      type="button"
+                      onClick={() => openTransactions({ merchant: m.merchant, title: m.label, overall: true })}
+                      className="flex w-full flex-col gap-2 rounded-[var(--radius)] px-2 py-3.5 text-left transition-colors hover:bg-hover"
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="flex min-w-0 items-center gap-2.5">
+                          <span className="num flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sunken text-xs font-medium text-muted">
+                            {idx + 1}
+                          </span>
+                          <strong className="truncate text-body font-medium text-ink">
+                            {m.label}
+                          </strong>
+                          {m.label.toLocaleLowerCase('tr-TR') !==
+                            categoryLabel(m.category).toLocaleLowerCase('tr-TR') && (
+                            <Badge dot={categoryColor(m.category)}>
+                              {categoryLabel(m.category)}
+                            </Badge>
+                          )}
+                        </span>
+                        <span className="num shrink-0 text-body font-semibold text-ink">
+                          {money2(m.total)}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-8">
+                        <AnimatedProgress
+                          value={m.total}
+                          max={overall.merchants[0]?.total || 1}
+                          color={categoryColor(m.category)}
+                          height={5}
+                          className="min-w-[80px] flex-1"
+                        />
+                        <span className="num shrink-0 text-xs text-muted">
+                          {count(m.count)} işlem · ortanca {money2(m.median)}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
                 ))}
-              </optgroup>
+              </ul>
+            ) : (
+              <Empty
+                compact
+                title="İşyeri analizi için henüz harcama yok"
+                description="Ekstre veya gider eklediğinde en sık alışveriş yaptığın işyerleri ve ortanca fiş tutarları burada sıralanır."
+              />
             )}
-          </select>
-        </Field>
-        <p>
-          {report?.range.fromMonth && report.range.toMonth
-            ? monthLabel(report.range.fromMonth) + ' – ' + monthLabel(report.range.toMonth)
-            : 'Geçmişin, ilk kaydınla başlar.'}
-          <small>Aylık özet filtresinden bağımsız, kaydedilen veriler.</small>
-        </p>
-      </div>
+          </section>
+
+          {/* Recurring Habit Annual Footprint */}
+          <section className="bento-card">
+            <span className="text-micro font-medium uppercase text-faint">Alışkanlık İzi</span>
+            <h2 className="mt-0.5 text-title font-semibold text-ink">
+              Sık Tekrarlanan Harcamaların Yıllık Maliyeti
+            </h2>
+            {overall.habits.length > 0 ? (
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {overall.habits.slice(0, 6).map((h) => (
+                  <li
+                    key={h.merchant}
+                    className="rounded-[var(--radius)] border border-line bg-sunken p-4"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="truncate text-body font-medium text-ink">
+                        {h.label}
+                      </strong>
+                      <Badge dot={categoryColor(h.category)}>{categoryLabel(h.category)}</Badge>
+                    </div>
+                    <p className="mt-1 text-label text-muted">
+                      Ayda ~{h.perMonth.toLocaleString('tr-TR', { maximumFractionDigits: 1 })} kez ·
+                      ortanca {money(h.medianAmount)}
+                    </p>
+                    <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-2.5">
+                      <span className="text-xs text-faint">Yıllık projeksiyon</span>
+                      <strong className="num text-body font-semibold text-warning">
+                        {money(h.annualProjection)} / yıl
+                      </strong>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 text-label text-muted">
+                Aynı işyerinde en az birkaç kez tekrarlanan günlük alışkanlıklar yakalandığında yıllık toplam maliyetleri burada hesaplanır.
+              </p>
+            )}
+          </section>
+        </div>
+      )}
+
+      {subTab === 'trends' && (
+        <>
+          <section className="analysis-period-card" aria-label="Dinamik analiz dönemi seçimi">
+            <div className="analysis-period-top">
+              <div className="analysis-period-presets" role="group" aria-label="Hızlı dönem seçenekleri">
+                {(
+                  [
+                    ['all', 'Tüm geçmiş'],
+                    ['3m', 'Son 3 ay'],
+                    ['6m', 'Son 6 ay'],
+                    ['12m', 'Son 12 ay'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={windowRange === value}
+                    className={clsx('analysis-period-pill', windowRange === value && 'is-active')}
+                    onClick={() => {
+                      hapticTap()
+                      setWindowRange(value)
+                      setCategory('all')
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {years.map((year) => (
+                  <button
+                    key={year}
+                    type="button"
+                    aria-pressed={windowRange === year}
+                    className={clsx('analysis-period-pill num', windowRange === year && 'is-active')}
+                    onClick={() => {
+                      hapticTap()
+                      setWindowRange(year)
+                      setCategory('all')
+                    }}
+                  >
+                    {year}
+                  </button>
+                ))}
+                {windowRange !== 'all' && (
+                  <button
+                    type="button"
+                    className="analysis-period-pill"
+                    onClick={() => {
+                      hapticTap()
+                      setWindowRange('all')
+                      setCustomFrom('')
+                      setCustomTo('')
+                      setCategory('all')
+                    }}
+                    title="Tüm geçmişe dön"
+                  >
+                    <RotateCcw size={13} /> Sıfırla
+                  </button>
+                )}
+              </div>
+
+              <div className="analysis-period-meta">
+                <span className="analysis-period-dot" aria-hidden="true" />
+                <span>
+                  {report?.range.fromMonth && report.range.toMonth
+                    ? report.range.fromMonth === report.range.toMonth
+                      ? monthLabel(report.range.fromMonth)
+                      : `${monthLabel(report.range.fromMonth)} – ${monthLabel(report.range.toMonth)}`
+                    : 'Geçmişin ilk kaydınla başlar'}
+                </span>
+                {report && report.totals.spendingMonths > 0 && (
+                  <Badge tone="accent">{count(report.totals.spendingMonths)} harcama ayı</Badge>
+                )}
+              </div>
+            </div>
+
+            {report && report.availableMonths.length > 1 && (
+              <HorizontalScrollStrip
+                className="analysis-month-strip-wrap"
+                scrollerClassName="analysis-month-strip"
+                role="group"
+                ariaLabel="Aylara dokunarak özel aralık seç"
+              >
+                <span className="mr-1 inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-faint">
+                  <CalendarRange size={13} />
+                  {windowRange === 'custom' && customFrom && customFrom === customTo
+                    ? 'Bitiş ayı seç:'
+                    : 'Özel aralık:'}
+                </span>
+                {report.availableMonths.map((m) => {
+                  const activeFrom = report.range.fromMonth
+                  const activeTo = report.range.toMonth
+                  const inRange = Boolean(activeFrom && activeTo && m >= activeFrom && m <= activeTo)
+                  const isEdge =
+                    windowRange === 'custom' && (m === customFrom || m === customTo)
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      aria-pressed={inRange}
+                      className={clsx(
+                        'analysis-month-chip num',
+                        inRange && 'is-in-range',
+                        isEdge && 'is-edge',
+                      )}
+                      onClick={() => {
+                        hapticTap()
+                        setCategory('all')
+                        if (windowRange !== 'custom' || (customFrom && customTo && customFrom !== customTo)) {
+                          setWindowRange('custom')
+                          setCustomFrom(m)
+                          setCustomTo(m)
+                        } else if (customFrom) {
+                          const start = m < customFrom ? m : customFrom
+                          const end = m < customFrom ? customFrom : m
+                          setCustomFrom(start)
+                          setCustomTo(end)
+                        }
+                      }}
+                    >
+                      {shortMonth(m)}
+                    </button>
+                  )
+                })}
+              </HorizontalScrollStrip>
+            )}
+          </section>
 
       {result.error && (
         <div role="alert" className="analysis-notice">
@@ -420,9 +684,11 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
                             onClick={() => openCategory(row.id)}
                             aria-pressed={activeCategory === row.id}
                           >
-                            <span>
-                              <i style={{ background: row.color }} aria-hidden="true" />
-                              {row.label}
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0" style={{ color: row.color }}>
+                                <CategoryIcon category={row.id} size={14} />
+                              </span>
+                              <span className="truncate">{row.label}</span>
                             </span>
                             <strong className="num">{amount(row.net)}</strong>
                             <span className="analysis-key-share num">
@@ -455,6 +721,13 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
           </Stagger>
 
           <Stagger index={2}>
+            <MonthOverMonthCategoryRadar
+              monthly={report.monthly}
+              onSelectCategory={openCategory}
+            />
+          </Stagger>
+
+          <Stagger index={2}>
             <DailySpending
               report={report}
               transactions={state.transactions}
@@ -479,18 +752,27 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
               {report.categories.length > 0 && (
                 <div className="analysis-category-control">
                   <Field label="Trend kategorisi">
-                    <select
-                      className="finance-select"
+                    <Select
+                      ariaLabel="Trend kategorisi"
                       value={activeCategory}
-                      onChange={(event) => setCategory(event.target.value as CategoryId | 'all')}
-                    >
-                      <option value="all">Toplam net harcama</option>
-                      {report.categories.map((row) => (
-                        <option value={row.id} key={row.id}>
-                          {row.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(next) => setCategory(next as CategoryId | 'all')}
+                      options={[
+                        {
+                          value: 'all',
+                          label: 'Toplam net harcama',
+                          icon: <BarChart3 size={14} />,
+                        },
+                        ...sortCategoriesTr(report.categories).map((row) => ({
+                          value: row.id,
+                          label: row.label,
+                          icon: (
+                            <span style={{ color: row.color }}>
+                              <CategoryIcon category={row.id} size={14} />
+                            </span>
+                          ),
+                        })),
+                      ]}
+                    />
                   </Field>
                 </div>
               )}
@@ -818,6 +1100,8 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
           </Panel>
         </>
       )}
+        </>
+      )}
 
       {historyEditor && <AssetHistoryEditor onClose={() => setHistoryEditor(false)} />}
     </div>
@@ -910,56 +1194,95 @@ function DailySpending({
   const [chart, setChart] = useState<'line' | 'bar'>('line')
   const gradId = useId().replace(/:/g, '')
   const months = report.monthly.filter((row) => row.hasSpendingEvidence)
+  const isLongTerm = selectedMonth === 'all'
   const focus = months.find((row) => row.month === selectedMonth) ?? months[months.length - 1]
-  const month = focus?.month ?? ''
+  const month = isLongTerm ? 'all' : (focus?.month ?? '')
+
   const days = useMemo(
-    () => dailyNetSpending(transactions, month, asOf, category),
-    [transactions, month, asOf, category],
+    () => (isLongTerm ? [] : dailyNetSpending(transactions, month, asOf, category)),
+    [transactions, month, asOf, category, isLongTerm],
   )
+
+  const longTermPoints = useMemo(() => {
+    if (!isLongTerm) return []
+    return months.map((row) => ({
+      date: row.month,
+      net: category === 'all' ? row.netSpend : (row.categories[category] ?? 0),
+      count: row.purchaseCount,
+    }))
+  }, [isLongTerm, months, category])
+
+  const chartData = isLongTerm ? longTermPoints : days
   const categoryName = category === 'all' ? 'Net harcama' : categoryLabel(category)
   const chartColor = report.categories.find((row) => row.id === category)?.color ?? 'var(--accent)'
-  const total = compareMonthlySpending(report.monthly, month, 'all')
-  const selected = category !== 'all' ? compareMonthlySpending(report.monthly, month, category) : null
+  const total = !isLongTerm ? compareMonthlySpending(report.monthly, month, 'all') : null
+  const selected = !isLongTerm && category !== 'all' ? compareMonthlySpending(report.monthly, month, category) : null
+
+  const longTermTotal = useMemo(
+    () => longTermPoints.reduce((sum, p) => sum + (p.net ?? 0), 0),
+    [longTermPoints],
+  )
+  const longTermAverage =
+    longTermPoints.length > 0 ? Math.round(longTermTotal / longTermPoints.length) : 0
 
   return (
     <section className="analysis-panel" aria-labelledby="daily-spending-heading">
       <header>
         <div>
           <h2 id="daily-spending-heading" tabIndex={-1}>
-            Günlük harcamalar
+            {isLongTerm ? 'Uzun dönem harcamalar' : 'Günlük harcamalar'}
           </h2>
-          <p>Kesim dönemine yansıtılan taksitler, kaydedilen harcamalar ve iadeler.</p>
+          <p>
+            {isLongTerm
+              ? 'Seçili analiz dönemindeki tüm ayların uzun dönem harcama seyri.'
+              : 'Kesim dönemine yansıtılan taksitler, kaydedilen harcamalar ve iadeler.'}
+          </p>
         </div>
       </header>
-      {total ? (
+      {months.length > 0 ? (
         <>
           <div className="analysis-daily-controls">
-            <Field label="Harcama ayı">
-              <select
-                className="finance-select"
+            <Field label="Harcama dönemi">
+              <Select
+                ariaLabel="Harcama dönemi"
                 value={month}
-                onChange={(event) => setSelectedMonth(event.target.value)}
-              >
-                {[...months].reverse().map((row) => (
-                  <option key={row.month} value={row.month}>
-                    {row.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => setSelectedMonth(next)}
+                options={[
+                  {
+                    value: 'all',
+                    label: 'Tüm dönem (Uzun dönem)',
+                    icon: <CalendarRange size={14} />,
+                    badge: `${count(months.length)} ay`,
+                  },
+                  ...[...months].reverse().map((row) => ({
+                    value: row.month,
+                    label: row.label,
+                  })),
+                ]}
+              />
             </Field>
-            <Field label="Günlük kategori">
-              <select
-                className="finance-select"
+            <Field label="Kategori">
+              <Select
+                ariaLabel="Kategori"
                 value={category}
-                onChange={(event) => onCategory(event.target.value as CategoryId | 'all')}
-              >
-                <option value="all">Tüm kategoriler</option>
-                {report.categories.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {row.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => onCategory(next as CategoryId | 'all')}
+                options={[
+                  {
+                    value: 'all',
+                    label: 'Tüm kategoriler',
+                    icon: <BarChart3 size={14} />,
+                  },
+                  ...sortCategoriesTr(report.categories).map((row) => ({
+                    value: row.id,
+                    label: row.label,
+                    icon: (
+                      <span style={{ color: row.color }}>
+                        <CategoryIcon category={row.id} size={14} />
+                      </span>
+                    ),
+                  })),
+                ]}
+              />
             </Field>
             <Segmented
               value={chart}
@@ -974,15 +1297,15 @@ function DailySpending({
             />
           </div>
 
-          {days.some((day) => day.count > 0) ? (
+          {chartData.some((pt) => pt.count > 0 || (pt.net ?? 0) !== 0) ? (
             <figure>
               <div
                 className="analysis-chart"
                 role="img"
-                aria-label={`${monthLabel(month)}, ${categoryName}, günlük ${chart === 'line' ? 'çizgi' : 'sütun'} grafiği`}
+                aria-label={`${isLongTerm ? 'Tüm dönem' : monthLabel(month)}, ${categoryName}, ${chart === 'line' ? 'çizgi' : 'sütun'} grafiği`}
               >
                 <ResponsiveContainer width="100%" height={230}>
-                  <ComposedChart data={days} margin={{ top: 14, right: 10, bottom: 0, left: -6 }}>
+                  <ComposedChart data={chartData} margin={{ top: 14, right: 10, bottom: 0, left: -6 }}>
                     <defs>
                       <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor={chartColor} stopOpacity={0.30} />
@@ -993,8 +1316,10 @@ function DailySpending({
                     <XAxis
                       {...axis}
                       dataKey="date"
-                      tickFormatter={(date) => String(Number(date.slice(-2)))}
-                      minTickGap={14}
+                      tickFormatter={(value: string) =>
+                        isLongTerm ? shortMonth(value) : String(Number(value.slice(-2)))
+                      }
+                      minTickGap={isLongTerm ? 24 : 14}
                     />
                     <YAxis {...axis} width={60} tickFormatter={(value: number) => moneyCompact(value)} />
                     <ReferenceLine y={0} stroke="var(--line-strong)" />
@@ -1007,7 +1332,7 @@ function DailySpending({
                         stroke={chartColor}
                         strokeWidth={2.4}
                         fill={`url(#${gradId})`}
-                        dot={false}
+                        dot={isLongTerm ? { r: 3.5, fill: chartColor, stroke: 'var(--bg-raised)', strokeWidth: 1.5 } : false}
                         activeDot={{ r: 5, fill: chartColor, stroke: 'var(--bg-raised)', strokeWidth: 2 }}
                         isAnimationActive={false}
                       />
@@ -1017,7 +1342,7 @@ function DailySpending({
                         name={categoryName}
                         fill={chartColor}
                         radius={[5, 5, 0, 0]}
-                        maxBarSize={22}
+                        maxBarSize={isLongTerm ? 36 : 22}
                         isAnimationActive={false}
                       />
                     )}
@@ -1025,46 +1350,30 @@ function DailySpending({
                 </ResponsiveContainer>
               </div>
               <figcaption className="analysis-caption">
-                Gün numarası yatay eksendedir. Kayıt bulunmayan günler grafikte sıfır görünür.
+                {isLongTerm
+                  ? `${count(months.length)} harcama ayı · Toplam ${money2(longTermTotal)} · Aylık ortalama ${money2(longTermAverage)}.`
+                  : 'Gün numarası yatay eksendedir. Kayıt bulunmayan günler grafikte sıfır görünür.'}
               </figcaption>
-              <details className="analysis-history-data">
-                <summary>
-                  Günlük tutarları gör <ChevronDown size={14} aria-hidden="true" />
-                </summary>
-                <table className="analysis-table analysis-daily-table">
-                  <caption className="sr-only">
-                    {monthLabel(month)} · {categoryName}
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">Gün</th>
-                      <th scope="col">Kayıt</th>
-                      <th scope="col">Net harcama</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {days.map((day) => (
-                      <tr key={day.date}>
-                        <th scope="row">{fullDayLabel(day.date)}</th>
-                        <td>{day.count}</td>
-                        <td className="num">{amount(day.net)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </details>
             </figure>
           ) : (
-            <p className="analysis-placeholder">Bu ay bu seçimde harcama veya iade kaydı yok.</p>
+            <p className="analysis-placeholder">
+              {isLongTerm
+                ? 'Seçili uzun dönemde bu kategori için kayıt yok.'
+                : 'Bu ay bu seçimde harcama veya iade kaydı yok.'}
+            </p>
           )}
 
-          <div className="analysis-daily-comparisons">
-            <MonthlyBaselines label="Toplam net harcama" comparison={total} />
-            {selected && <MonthlyBaselines label={categoryName} comparison={selected} />}
-          </div>
-          <p className="analysis-caption">
-            Ortalama, seçili aralıktaki önceki kayıtlı harcama aylarını kapsar. Kısmi aylar ve kapsamı bilinmeyen aylar dahil.
-          </p>
+          {total && (
+            <>
+              <div className="analysis-daily-comparisons">
+                <MonthlyBaselines label="Toplam net harcama" comparison={total} />
+                {selected && <MonthlyBaselines label={categoryName} comparison={selected} />}
+              </div>
+              <p className="analysis-caption">
+                Ortalama, seçili aralıktaki önceki kayıtlı harcama aylarını kapsar. Kısmi aylar ve kapsamı bilinmeyen aylar dahil.
+              </p>
+            </>
+          )}
         </>
       ) : (
         <p className="analysis-placeholder">
@@ -1310,5 +1619,280 @@ function AssetHistoryEditor({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </Modal>
+  )
+}
+
+
+function MonthOverMonthCategoryRadar({
+  monthly,
+  onSelectCategory,
+}: {
+  monthly: readonly LongitudinalMonth[]
+  onSelectCategory: (category: CategoryId) => void
+}) {
+  const spendingMonths = useMemo(
+    () => monthly.filter((m) => m.hasSpendingEvidence),
+    [monthly],
+  )
+
+  // Index of the "current" month in `spendingMonths` (defaults to the latest available)
+  const [pairOffset, setPairOffset] = useState(0)
+  const [filter, setFilter] = useState<'all' | 'up' | 'down'>('all')
+
+  const maxOffset = Math.max(0, spendingMonths.length - 2)
+  const clampedOffset = Math.min(pairOffset, maxOffset)
+  const currentIdx = spendingMonths.length - 1 - clampedOffset
+  const prevIdx = currentIdx - 1
+
+  const currentMonth = currentIdx >= 0 ? spendingMonths[currentIdx] : null
+  const prevMonth = prevIdx >= 0 ? spendingMonths[prevIdx] : null
+
+  const movers = useMemo(() => {
+    if (!currentMonth || !prevMonth) return []
+    return CATEGORIES.map((cat) => {
+      const before = prevMonth.categories[cat.id] ?? 0
+      const after = currentMonth.categories[cat.id] ?? 0
+      const delta = after - before
+      const deltaPct = before > 0 ? (delta / before) * 100 : after > 0 ? null : 0
+      return {
+        id: cat.id,
+        label: cat.label,
+        color: cat.color,
+        before,
+        after,
+        delta,
+        deltaPct,
+      }
+    })
+      .filter((row) => row.before !== 0 || row.after !== 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+  }, [currentMonth, prevMonth])
+
+  if (!currentMonth || !prevMonth) {
+    return (
+      <section className="analysis-panel">
+        <header>
+          <div>
+            <h2>Aydan Aya Kategorisel Değişim (%)</h2>
+            <p>
+              Kategorilerdeki artış ve azalışları yüzdesel olarak karşılaştırmak için seçili dönemde en az 2 harcama ayı gerekir.
+            </p>
+          </div>
+        </header>
+      </section>
+    )
+  }
+
+  const totalDelta = currentMonth.netSpend - prevMonth.netSpend
+  const totalPct =
+    prevMonth.netSpend > 0 ? (totalDelta / prevMonth.netSpend) * 100 : null
+  const upItems = movers.filter((m) => m.delta > 0)
+  const downItems = movers.filter((m) => m.delta < 0)
+
+  const visibleMovers =
+    filter === 'up' ? upItems : filter === 'down' ? downItems : movers
+  const maxAbsDelta = Math.max(1, ...movers.map((m) => Math.abs(m.delta)))
+
+  return (
+    <section className="analysis-panel" aria-labelledby="mom-radar-heading">
+      <div className="mom-header">
+        <div>
+          <span className="text-micro font-semibold uppercase text-accent-text">
+            Aydan Aya Kategori Değişimi (%)
+          </span>
+          <h2 id="mom-radar-heading" className="mt-0.5">
+            Harcama Artış &amp; Azalış Radarı
+          </h2>
+          <p className="mt-1 text-label text-muted">
+            Her kategorinin bir önceki aya göre yüzdesel ve TL bazlı değişimini incele; satıra dokunarak günlük detaya in.
+          </p>
+        </div>
+
+        <div className="mom-pair-nav" role="group" aria-label="Karşılaştırılan aylar">
+          <button
+            type="button"
+            disabled={clampedOffset >= maxOffset}
+            aria-label="Önceki ay çiftine git"
+            onClick={() => {
+              hapticTap()
+              setPairOffset((v) => Math.min(maxOffset, v + 1))
+            }}
+          >
+            <ChevronLeft size={17} />
+          </button>
+          <span className="mom-pair-label">
+            {shortMonth(prevMonth.month)} → {shortMonth(currentMonth.month)}
+          </span>
+          <button
+            type="button"
+            disabled={clampedOffset <= 0}
+            aria-label="Sonraki ay çiftine git"
+            onClick={() => {
+              hapticTap()
+              setPairOffset((v) => Math.max(0, v - 1))
+            }}
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      </div>
+
+      {/* Overall Month-over-Month Summary Strip */}
+      <div className="mom-summary-strip">
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <span className="block text-xs font-medium text-muted">
+              Toplam Net Harcama ({monthLabel(prevMonth.month)} → {monthLabel(currentMonth.month)})
+            </span>
+            <div className="mt-0.5 flex flex-wrap items-baseline gap-2">
+              <span className="num text-body font-medium text-muted">
+                {money2(prevMonth.netSpend)}
+              </span>
+              <span className="text-faint">→</span>
+              <strong className="num text-body font-semibold text-ink">
+                {money2(currentMonth.netSpend)}
+              </strong>
+              <span
+                className={clsx(
+                  'mom-pct-badge num',
+                  totalDelta > 0 ? 'is-up' : totalDelta < 0 ? 'is-down' : 'is-flat',
+                )}
+              >
+                {totalDelta > 0 ? (
+                  <TrendingUp size={13} />
+                ) : totalDelta < 0 ? (
+                  <TrendingDown size={13} />
+                ) : null}
+                {totalPct !== null ? pct(totalPct) : 'Yeni'} ({money2(totalDelta, { sign: true })})
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mom-filter-tabs" role="tablist" aria-label="Değişim yönü filtresi">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === 'all'}
+            className={clsx('mom-filter-tab', filter === 'all' && 'is-active')}
+            onClick={() => {
+              hapticTap()
+              setFilter('all')
+            }}
+          >
+            Tümü ({count(movers.length)})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === 'up'}
+            className={clsx('mom-filter-tab', filter === 'up' && 'is-active')}
+            onClick={() => {
+              hapticTap()
+              setFilter('up')
+            }}
+          >
+            <ArrowUp size={13} className="text-negative" /> Artanlar ({count(upItems.length)})
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={filter === 'down'}
+            className={clsx('mom-filter-tab', filter === 'down' && 'is-active')}
+            onClick={() => {
+              hapticTap()
+              setFilter('down')
+            }}
+          >
+            <ArrowDown size={13} className="text-positive" /> Azalanlar ({count(downItems.length)})
+          </button>
+        </div>
+      </div>
+
+      {visibleMovers.length > 0 ? (
+        <ul className="mom-list">
+          {visibleMovers.map((row) => {
+            const isUp = row.delta > 0
+            const isDown = row.delta < 0
+            const widthPct = Math.max(6, Math.round((Math.abs(row.delta) / maxAbsDelta) * 100))
+            return (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  className="mom-row"
+                  onClick={() => {
+                    hapticTap()
+                    onSelectCategory(row.id)
+                  }}
+                >
+                  <div className="mom-row__cat">
+                    <span
+                      className="mom-row__icon"
+                      style={{
+                        background: `${row.color}18`,
+                        borderColor: `${row.color}36`,
+                        color: row.color,
+                      }}
+                    >
+                      <CategoryIcon category={row.id} size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <strong className="block truncate text-body font-medium text-ink">
+                        {row.label}
+                      </strong>
+                      <span className="num block text-xs text-muted">
+                        {money2(row.before)} → <strong className="font-medium text-ink">{money2(row.after)}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mom-row__bar-track" aria-hidden="true">
+                    <div
+                      className="mom-row__bar-fill"
+                      style={{
+                        width: `${widthPct}%`,
+                        background: isUp
+                          ? 'var(--negative)'
+                          : isDown
+                            ? 'var(--positive)'
+                            : 'var(--text-faint)',
+                      }}
+                    />
+                  </div>
+
+                  <div className="mom-row__delta">
+                    <span
+                      className={clsx(
+                        'mom-pct-badge num',
+                        isUp ? 'is-up' : isDown ? 'is-down' : 'is-flat',
+                      )}
+                    >
+                      {isUp ? <ArrowUp size={12} /> : isDown ? <ArrowDown size={12} /> : null}
+                      {row.before === 0 && row.after > 0
+                        ? 'Yeni'
+                        : row.after === 0 && row.before > 0
+                          ? '−%100'
+                          : pct(row.deltaPct)}
+                    </span>
+                    <span
+                      className={clsx(
+                        'num text-xs font-medium',
+                        isUp ? 'text-negative' : isDown ? 'text-positive' : 'text-muted',
+                      )}
+                    >
+                      {money2(row.delta, { sign: true })}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="py-4 text-center text-label text-muted">
+          Bu yönde değişim gösteren kategori bulunmuyor.
+        </p>
+      )}
+    </section>
   )
 }

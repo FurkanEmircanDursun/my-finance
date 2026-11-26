@@ -110,4 +110,18 @@ describe('Remote Config update lifecycle', () => {
     expect(changed).not.toHaveBeenCalled()
     expect(mocks.fetch).not.toHaveBeenCalled()
   })
+  it('applies per-platform Android override from Remote Config independently of global minimum', async () => {
+    mocks.values.min_required_version = '2.0.0'
+    mocks.values.latest_version = '2.5.0'
+    mocks.values.min_required_version_android = '2.6.0'
+    mocks.values.latest_version_android = '2.7.0'
+    const { watchUpdates } = await import('./updates')
+    const changed = vi.fn(), watcher = watchUpdates(changed)
+    await vi.waitFor(() =>
+      expect(changed).toHaveBeenLastCalledWith(
+        expect.objectContaining({ currentVersion: '2.5.0', decision: 'hard', platform: 'android', status: 'ready' }),
+      ),
+    )
+    watcher.dispose()
+  })
 })

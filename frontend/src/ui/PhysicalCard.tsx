@@ -15,65 +15,130 @@ interface BankFoilTheme {
   glow: string
 }
 
-/** Subtle brushed-obsidian metallic finishes tuned to each Turkish bank's identity. */
+/** Authentic signature color gradients tuned to each Turkish bank's identity. */
 const BANK_FOILS: Record<CardBank, BankFoilTheme> = {
   akbank: {
-    foil: 'linear-gradient(135deg, #241319 0%, #101116 52%, #1C1016 100%)',
-    glow: 'rgba(239, 68, 68, 0.24)',
+    foil: 'linear-gradient(135deg, #C81E1E 0%, #991B1B 54%, #6D1414 100%)',
+    glow: 'rgba(239, 68, 68, 0.36)',
   },
   garanti: {
-    foil: 'linear-gradient(135deg, #0E221B 0%, #0B1214 54%, #10261F 100%)',
-    glow: 'rgba(43, 212, 155, 0.28)',
+    foil: 'linear-gradient(135deg, #059669 0%, #047857 54%, #064E3B 100%)',
+    glow: 'rgba(16, 185, 129, 0.38)',
   },
   isbank: {
-    foil: 'linear-gradient(135deg, #101B2E 0%, #0B1018 55%, #12213A 100%)',
-    glow: 'rgba(59, 130, 246, 0.26)',
+    foil: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 54%, #172554 100%)',
+    glow: 'rgba(59, 130, 246, 0.36)',
   },
   yapikredi: {
-    foil: 'linear-gradient(135deg, #101E30 0%, #0A1018 55%, #0F233A 100%)',
-    glow: 'rgba(56, 189, 248, 0.24)',
+    foil: 'linear-gradient(135deg, #0284C7 0%, #0369A1 54%, #0C4A6E 100%)',
+    glow: 'rgba(56, 189, 248, 0.36)',
   },
   ziraat: {
-    foil: 'linear-gradient(135deg, #251316 0%, #110F13 55%, #201216 100%)',
-    glow: 'rgba(225, 29, 72, 0.24)',
+    foil: 'linear-gradient(135deg, #BE123C 0%, #9F1239 54%, #6B0F28 100%)',
+    glow: 'rgba(225, 29, 72, 0.36)',
   },
   vakifbank: {
-    foil: 'linear-gradient(135deg, #231D11 0%, #121113 55%, #221B0E 100%)',
-    glow: 'rgba(234, 179, 8, 0.24)',
+    foil: 'linear-gradient(135deg, #CA8A04 0%, #A16207 54%, #713F12 100%)',
+    glow: 'rgba(234, 179, 8, 0.38)',
   },
   qnb: {
-    foil: 'linear-gradient(135deg, #1B152A 0%, #0E0F17 55%, #1B1630 100%)',
-    glow: 'rgba(139, 92, 246, 0.26)',
+    foil: 'linear-gradient(135deg, #4F46E5 0%, #3730A3 54%, #251F6E 100%)',
+    glow: 'rgba(129, 140, 248, 0.38)',
   },
   enpara: {
-    foil: 'linear-gradient(135deg, #20142A 0%, #100F18 55%, #231632 100%)',
-    glow: 'rgba(192, 132, 252, 0.25)',
+    foil: 'linear-gradient(135deg, #9333EA 0%, #7E22CE 54%, #581C87 100%)',
+    glow: 'rgba(192, 132, 252, 0.38)',
   },
   teb: {
-    foil: 'linear-gradient(135deg, #0F221C 0%, #0B1215 55%, #0F261F 100%)',
-    glow: 'rgba(16, 185, 129, 0.25)',
+    foil: 'linear-gradient(135deg, #0D9488 0%, #0F766E 54%, #115E59 100%)',
+    glow: 'rgba(20, 184, 166, 0.36)',
   },
   denizbank: {
-    foil: 'linear-gradient(135deg, #0E1D2C 0%, #0B1118 55%, #0F2438 100%)',
-    glow: 'rgba(14, 165, 233, 0.26)',
+    foil: 'linear-gradient(135deg, #0EA5E9 0%, #0284C7 54%, #075985 100%)',
+    glow: 'rgba(56, 189, 248, 0.36)',
   },
   dunyakatilim: {
-    foil: 'linear-gradient(135deg, #0E2125 0%, #0B1216 55%, #10262B 100%)',
-    glow: 'rgba(45, 212, 191, 0.24)',
+    foil: 'linear-gradient(135deg, #0891B2 0%, #0E7490 54%, #155E75 100%)',
+    glow: 'rgba(34, 211, 238, 0.36)',
   },
   halkbank: {
-    foil: 'linear-gradient(135deg, #101D2E 0%, #0B1118 55%, #102438 100%)',
-    glow: 'rgba(56, 189, 248, 0.24)',
+    foil: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 54%, #1E3A8A 100%)',
+    glow: 'rgba(96, 165, 250, 0.36)',
   },
   kuveytturk: {
-    foil: 'linear-gradient(135deg, #0E231D 0%, #0B1214 55%, #122820 100%)',
-    glow: 'rgba(52, 211, 153, 0.25)',
+    foil: 'linear-gradient(135deg, #059669 0%, #047857 54%, #065F46 100%)',
+    glow: 'rgba(52, 211, 153, 0.36)',
   },
   other: {
-    foil: 'linear-gradient(135deg, #18202B 0%, #0C1016 55%, #141C26 100%)',
-    glow: 'rgba(226, 194, 125, 0.20)',
+    foil: 'linear-gradient(135deg, #475569 0%, #334155 54%, #1E293B 100%)',
+    glow: 'rgba(148, 163, 184, 0.30)',
   },
 }
+
+export const CARD_COLOR_PRESETS: Array<{
+  id: string
+  label: string
+  swatch: string
+  foil: string
+  glow: string
+}> = [
+  {
+    id: 'crimson',
+    label: 'Kızıl',
+    swatch: '#C81E1E',
+    foil: 'linear-gradient(135deg, #C81E1E 0%, #991B1B 54%, #6D1414 100%)',
+    glow: 'rgba(239, 68, 68, 0.36)',
+  },
+  {
+    id: 'emerald',
+    label: 'Zümrüt',
+    swatch: '#059669',
+    foil: 'linear-gradient(135deg, #059669 0%, #047857 54%, #064E3B 100%)',
+    glow: 'rgba(16, 185, 129, 0.38)',
+  },
+  {
+    id: 'sapphire',
+    label: 'Safir',
+    swatch: '#1D4ED8',
+    foil: 'linear-gradient(135deg, #1D4ED8 0%, #1E40AF 54%, #172554 100%)',
+    glow: 'rgba(59, 130, 246, 0.36)',
+  },
+  {
+    id: 'ocean',
+    label: 'Okyanus',
+    swatch: '#0284C7',
+    foil: 'linear-gradient(135deg, #0284C7 0%, #0369A1 54%, #0C4A6E 100%)',
+    glow: 'rgba(56, 189, 248, 0.36)',
+  },
+  {
+    id: 'turquoise',
+    label: 'Turkuaz',
+    swatch: '#0D9488',
+    foil: 'linear-gradient(135deg, #0D9488 0%, #0F766E 54%, #115E59 100%)',
+    glow: 'rgba(20, 184, 166, 0.36)',
+  },
+  {
+    id: 'violet',
+    label: 'Mor',
+    swatch: '#7E22CE',
+    foil: 'linear-gradient(135deg, #9333EA 0%, #7E22CE 54%, #581C87 100%)',
+    glow: 'rgba(192, 132, 252, 0.38)',
+  },
+  {
+    id: 'gold',
+    label: 'Altın',
+    swatch: '#CA8A04',
+    foil: 'linear-gradient(135deg, #CA8A04 0%, #A16207 54%, #713F12 100%)',
+    glow: 'rgba(234, 179, 8, 0.38)',
+  },
+  {
+    id: 'slate',
+    label: 'Grafit',
+    swatch: '#475569',
+    foil: 'linear-gradient(135deg, #475569 0%, #334155 54%, #1E293B 100%)',
+    glow: 'rgba(148, 163, 184, 0.30)',
+  },
+]
 
 function EmvChip() {
   const gradId = `mizan-emv-${useId().replace(/:/g, '')}`
@@ -97,6 +162,7 @@ export function PhysicalCard({
   bankLabel,
   name,
   last4,
+  color,
   amount,
   amountLabel,
   badge,
@@ -109,6 +175,7 @@ export function PhysicalCard({
   bankLabel: string
   name: string
   last4?: string
+  color?: string
   amount?: number | null
   amountLabel?: string
   badge?: ReactNode
@@ -118,10 +185,15 @@ export function PhysicalCard({
   className?: string
 }) {
   const bankId = identifyBank(bank) ?? 'other'
-  const foil = BANK_FOILS[bankId]
+  const customPreset = color ? CARD_COLOR_PRESETS.find((c) => c.id === color) : undefined
+  const foil = customPreset ?? BANK_FOILS[bankId]
   const src = bankLogos[`../assets/banks/${bankId}.svg`]
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const showLogo = Boolean(src && failedSrc !== src)
+  const cleanName =
+    last4 && name.endsWith(`· ${last4}`)
+      ? name.slice(0, -(`· ${last4}`.length)).trim()
+      : name
 
   return (
     <div
@@ -148,7 +220,7 @@ export function PhysicalCard({
 
       <div className="physical-card__chip-row">
         <EmvChip />
-        <Wifi size={16} style={{ transform: 'rotate(90deg)', opacity: 0.45 }} aria-hidden="true" />
+        <Wifi size={16} style={{ transform: 'rotate(90deg)', opacity: 0.55 }} aria-hidden="true" />
         <span className="physical-card__digits num">
           {last4 ? `•••• ${last4}` : '•••• ••••'}
         </span>
@@ -157,7 +229,7 @@ export function PhysicalCard({
       <div className="physical-card__bottom">
         <div className="physical-card__name">
           <span>{bankLabel}</span>
-          <strong>{name}</strong>
+          <strong>{cleanName}</strong>
         </div>
         {amount !== undefined && (
           <div className="physical-card__amount">

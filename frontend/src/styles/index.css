@@ -12,6 +12,7 @@
   body,
   #root {
     min-height: 100%;
+    overflow-x: clip;
   }
 
   body {
@@ -40,6 +41,23 @@
   }
 
   button,
+  a,
+  summary,
+  label,
+  nav,
+  [role='tab'],
+  [role='tablist'],
+  input[type='range'],
+  .workspace-rail,
+  .workspace-toolbar,
+  .workspace-bottom-nav,
+  .foryou-strip,
+  .physical-card {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  button,
   a {
     touch-action: manipulation;
   }
@@ -50,7 +68,7 @@
 
   ::selection {
     background: var(--accent-soft);
-    color: var(--accent-text);
+    color: var(--text);
   }
 
   input,

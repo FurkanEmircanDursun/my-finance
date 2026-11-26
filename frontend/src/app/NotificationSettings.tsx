@@ -7,6 +7,7 @@ import {
 } from '../platform/reminders'
 import { useStore } from '../store/AppStore'
 import { Button, Field } from '../ui/primitives'
+import { Select } from '../ui/Select'
 import { getPushStatus, PUSH_UPDATED } from '../platform/push'
 import { firebaseErrorMessage } from '../firebase/errors'
 
@@ -72,7 +73,9 @@ export function NotificationSettings() {
         </div>
       </div>
       {status && !status.supported ? (
-        <p className="text-label text-muted">Otomatik bildirimler Android ve iOS uygulamalarında kullanılabilir.</p>
+        <p className="text-label leading-relaxed text-muted">
+          Web tarayıcısında kart kesim ve son ödeme günlerin Finansal Takvim ile Kokpit’te gösterilir. Otomatik bildirimler Android ve iOS uygulamalarında kullanılabilir.
+        </p>
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
@@ -90,11 +93,17 @@ export function NotificationSettings() {
           </div>
           {active && (
             <Field label="Hatırlatma saati" hint={cloudActive ? 'Türkiye saatine göre. Gün sonu önerimiz 20:00; ağ ve cihaz kısıtlamaları teslimi geciktirebilir.' : 'Telefonunun yerel saatine göre. Gün sonu önerimiz 20:00; pil tasarrufu teslimi geciktirebilir.'}>
-              <select className="finance-select" value={preferences.hour} onChange={(event) => {
-                dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, hour: Number(event.target.value) } } })
-              }}>
-                {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>)}
-              </select>
+              <Select
+                ariaLabel="Hatırlatma saati"
+                value={String(preferences.hour)}
+                onChange={(next) => {
+                  dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, hour: Number(next) } } })
+                }}
+                options={Array.from({ length: 24 }, (_, hour) => ({
+                  value: String(hour),
+                  label: `${String(hour).padStart(2, '0')}:00`,
+                }))}
+              />
               <Button size="sm" className="mt-2" disabled={preferences.hour === 20} onClick={() => {
                 dispatch({ type: 'setSettings', settings: { reminders: { ...preferences, hour: 20 } } })
                 setMessage('Hatırlatma saatin gün sonu 20:00 olarak ayarlandı.')

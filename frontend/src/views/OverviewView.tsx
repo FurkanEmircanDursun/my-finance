@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ArrowRight,
   Check,
@@ -12,12 +12,17 @@ import {
   X,
 } from 'lucide-react'
 import { useSheets } from '../app/sheets'
+import { useStore } from '../store/AppStore'
 import { cardDisplayName } from '../domain/cards'
-import { daysInMonth, fullDayLabel, monthOf } from '../core/date'
+import { portfolioValue } from '../domain/assets'
+import { fullDayLabel, monthOf } from '../core/date'
 import { money2 } from '../core/money'
 import { categoryLabel } from '../domain/categories'
+import { cachedAssetRates } from '../platform/rates'
+import { hapticTap } from '../platform/haptics'
 import { OverviewDaily } from './OverviewDaily'
 import { OverviewCategories, OverviewReview, type PeriodAdvice } from './OverviewReview'
+import { ForYouStories } from './ForYouStories'
 import './overview.css'
 import { TransactionItem } from '../ui/TransactionItem'
 import { useTransactionDelete } from '../ui/useTransactionDelete'
@@ -37,7 +42,9 @@ export function OverviewView({
   privateMode: boolean
 }) {
   const sheets = useSheets()
+  const { overall } = useStore()
   const remove = useTransactionDelete()
+  const [heroMode, setHeroMode] = useState<'cashflow' | 'networth'>('cashflow')
   const {
     state,
     demo,
@@ -153,15 +160,6 @@ export function OverviewView({
         action(sheets.openBudgets),
       )
     }
-    if (scopedBudget && limit > spend && month !== 'all' && month === monthOf(today)) {
-      const remainingDays = daysInMonth(month) - Number(today.slice(-2))
-      if (remainingDays > 0) {
-        addAdvice(
-          'Kalan bütçeyi günlere böl',
-          `Ayın kalan ${remainingDays} günü için günlük ortalama alan ${money2(Math.floor((limit - Math.max(0, spend)) / remainingDays))}. Yaklaşan sabit ödemeleri önce ayır.`,
-        )
-      }
-    }
     if (unknown.length > 0) {
       addAdvice(
         'Diğer kategorisini gözden geçir',
@@ -205,24 +203,60 @@ export function OverviewView({
   const spendIncomeRatio = income > 0 ? Math.min(1, Math.max(0, spend / income)) : 0
   const overIncome = income > 0 && spend > income
 
+  // Mode 2: Net Worth & Liabilities calculations
+  const portfolioSummary = useMemo(() => {
+    const quotes = cachedAssetRates()?.quotes ?? {}
+    return portfolioValue(state.profile.assets ?? [], quotes)
+  }, [state.profile.assets])
+  const portfolioTotal = portfolioSummary.total ?? portfolioSummary.knownValue ?? 0
+  const openInstallmentDebt = useMemo(
+    () =>
+      overall.installments
+        .filter((i) => i.remainingCount > 0)
+        .reduce((s, i) => s + i.remainingAmount, 0),
+    [overall.installments],
+  )
+  const netWorthEstimate = portfolioTotal + Math.max(0, income - spend) - (displayedDebt ?? 0)
+
   return (
     <div className="month-overview">
       <header className="overview-title">
         <div>
-          <h1>Ay Özeti</h1>
-          <p>{period} · Finansal kokpitin</p>
+          <h1>Finansal Kokpit</h1>
+          <p>{period} · 360° nakit akışı ve varlık dengen</p>
         </div>
-        {!demo && spending.gross > 0 && !privateMode && (
-          <button
-            type="button"
-            className="quiet-button"
-            onClick={() => setDetail('findings')}
-          >
-            <ShieldCheck size={16} className="text-accent-text" />
-            Bütçe bulguları
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {!demo && spending.gross > 0 && !privateMode && (
+            <button
+              type="button"
+              className="quiet-button"
+              onClick={() => setDetail('findings')}
+            >
+              <ShieldCheck size={16} className="text-accent-text" />
+              Bütçe bulguları
+            </button>
+          )}
+        </div>
       </header>
+
+      {/* ── Live Financial Stories Shelf ───────────────────────────────────── */}
+      <ForYouStories
+        period={period}
+        month={month}
+        today={today}
+        spend={spend}
+        income={income}
+        analysis={current}
+        overall={overall}
+        statements={state.statements}
+        assets={state.profile.assets ?? []}
+        privateMode={privateMode}
+        onOpenIncome={sheets.openIncomeEntry}
+        onOpenFindings={() => setDetail('findings')}
+        onNavigatePlan={() => onNavigate('future')}
+        onNavigateAssets={() => onNavigate('analysis')}
+        onNavigateTransactions={showTransactions}
+      />
 
       {demo && (
         <div className="demo-banner" role="status">
@@ -242,109 +276,205 @@ export function OverviewView({
         </div>
       )}
 
-      {/* ── Bento Row 1: Hero Vault Balance + Budget Gauge ──────────────────── */}
+      {/* ── Bento Row 1: 2-Mode 360° Hero Vault + Budget Gauge ─────────────── */}
       <div className="overview-bento-top" key={period}>
         <Stagger index={0} className="overview-col-7">
           <section className="bento-hero overview-hero" aria-label={period}>
             <div>
               <div className="overview-hero__header">
-                <span className="overview-hero__eyebrow">Gelirden kalan</span>
+                <div className="overview-hero__modes" role="tablist" aria-label="Kokpit görünüm modu">
+                  {(
+                    [
+                      ['cashflow', 'Nakit Akışı'],
+                      ['networth', 'Varlık & Borç'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      aria-selected={heroMode === id}
+                      className={`overview-hero__mode-btn ${heroMode === id ? 'is-active' : ''}`}
+                      onClick={() => {
+                        hapticTap()
+                        setHeroMode(id)
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <span className="overview-hero__period">{period}</span>
               </div>
 
-              <div
-                className={`overview-hero__figure ${
-                  overIncome ? 'overview-hero__figure--negative' : ''
-                }`}
-              >
-                {income ? (
-                  <MoneyValue value={income - spend} />
-                ) : (
-                  <span className="num">—</span>
-                )}
-              </div>
-
-              <p className="overview-hero__note">
-                {income
-                  ? 'Kaydedilen gelir eksi net harcama · banka bakiyesi değildir'
-                  : 'Gelir eklediğinde ay sonu dengen anında hesaplanır'}
-              </p>
-
-              {income > 0 && (
-                <div className="overview-hero__ratio">
-                  <div className="overview-hero__ratio-bar" aria-hidden="true">
-                    <span
-                      style={{
-                        transform: `scaleX(${spendIncomeRatio})`,
-                        background: overIncome
-                          ? '#FB7185'
-                          : spendIncomeRatio > 0.8
-                            ? '#FBBF24'
-                            : '#2BD49B',
-                      }}
-                    />
+              {heroMode === 'cashflow' && (
+                <>
+                  <span className="overview-hero__eyebrow mt-3 block">Gelirden kalan</span>
+                  <div
+                    className={`overview-hero__figure ${
+                      overIncome ? 'overview-hero__figure--negative' : ''
+                    }`}
+                  >
+                    {income ? (
+                      <MoneyValue value={income - spend} />
+                    ) : (
+                      <span className="num">—</span>
+                    )}
                   </div>
-                  <div className="overview-hero__ratio-meta num">
-                    <span>Gelirin %{Math.round(spendIncomeRatio * 100)}&apos;i harcandı</span>
-                    <span>{overIncome ? 'Gelir aşıldı' : 'Dengede'}</span>
+
+                  <p className="overview-hero__note">
+                    {income
+                      ? 'Kaydedilen gelir eksi net harcama · banka bakiyesi değildir'
+                      : 'Gelir eklediğinde ay sonu dengen anında hesaplanır'}
+                  </p>
+
+                  {income > 0 && (
+                    <div className="overview-hero__ratio">
+                      <div className="overview-hero__ratio-bar" aria-hidden="true">
+                        <span
+                          style={{
+                            transform: `scaleX(${spendIncomeRatio})`,
+                            background: overIncome
+                              ? '#FB7185'
+                              : spendIncomeRatio > 0.8
+                                ? '#FBBF24'
+                                : '#2BD49B',
+                          }}
+                        />
+                      </div>
+                      <div className="overview-hero__ratio-meta num">
+                        <span>Gelirin %{Math.round(spendIncomeRatio * 100)}&apos;i harcandı</span>
+                        <span>{overIncome ? 'Gelir aşıldı' : 'Dengede'}</span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {heroMode === 'networth' && (
+                <>
+                  <span className="overview-hero__eyebrow mt-3 block">
+                    360° Net Varlık & Dönem Dengesi
+                  </span>
+                  <div
+                    className={`overview-hero__figure ${
+                      netWorthEstimate < 0 ? 'overview-hero__figure--negative' : ''
+                    }`}
+                  >
+                    <MoneyValue value={netWorthEstimate} />
                   </div>
-                </div>
+                  <p className="overview-hero__note">
+                    Altın/döviz portföyün ({money2(portfolioTotal)}) ve dönem nakit fazlan eksi ekstre borçların
+                  </p>
+                </>
               )}
             </div>
 
-            <div className="overview-hero__metrics">
-              <button
-                type="button"
-                className="overview-hero__metric"
-                onClick={sheets.openIncomeEntry}
-              >
-                <span className="overview-hero__metric-label">
-                  Kaydedilen gelir <ChevronRight size={14} />
-                </span>
-                <span className="overview-hero__metric-value">
-                  {income ? <MoneyValue value={income} /> : <span className="num">—</span>}
-                </span>
-                <span className="overview-hero__metric-sub">Gelir ekle</span>
-              </button>
+            {heroMode === 'cashflow' && (
+              <div className="overview-hero__metrics">
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={sheets.openIncomeEntry}
+                >
+                  <span className="overview-hero__metric-label">
+                    Kaydedilen gelir <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    {income ? <MoneyValue value={income} /> : <span className="num">—</span>}
+                  </span>
+                  <span className="overview-hero__metric-sub">Gelir ekle</span>
+                </button>
 
-              <button
-                type="button"
-                className="overview-hero__metric"
-                onClick={() => setDetail('sources')}
-              >
-                <span className="overview-hero__metric-label">
-                  Net harcama <ChevronRight size={14} />
-                </span>
-                <span className="overview-hero__metric-value">
-                  <MoneyValue value={spend} />
-                </span>
-                <span className="overview-hero__metric-sub">Kaynak dökümü</span>
-              </button>
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={() => setDetail('sources')}
+                >
+                  <span className="overview-hero__metric-label">
+                    Net harcama <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    <MoneyValue value={spend} />
+                  </span>
+                  <span className="overview-hero__metric-sub">Kaynak dökümü</span>
+                </button>
 
-              <button
-                type="button"
-                className="overview-hero__metric"
-                onClick={showDebt}
-              >
-                <span className="overview-hero__metric-label">
-                  Dönem borcu <ChevronRight size={14} />
-                </span>
-                <span className="overview-hero__metric-value">
-                  {displayedDebt === null ? (
-                    <span className="num">—</span>
-                  ) : (
-                    <MoneyValue value={displayedDebt} />
-                  )}
-                </span>
-                <span className="overview-hero__metric-sub">
-                  {displayedDebt !== null
-                    ? 'Yüklü ekstrelerden'
-                    : state.filters.month === 'all'
-                      ? 'Ay seç'
-                      : 'Borç kaydı yok'}
-                </span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={showDebt}
+                >
+                  <span className="overview-hero__metric-label">
+                    Dönem borcu <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    {displayedDebt === null ? (
+                      <span className="num">—</span>
+                    ) : (
+                      <MoneyValue value={displayedDebt} />
+                    )}
+                  </span>
+                  <span className="overview-hero__metric-sub">
+                    {displayedDebt !== null
+                      ? 'Yüklü ekstrelerden'
+                      : state.filters.month === 'all'
+                        ? 'Ay seç'
+                        : 'Borç kaydı yok'}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {heroMode === 'networth' && (
+              <div className="overview-hero__metrics">
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={() => onNavigate('analysis')}
+                >
+                  <span className="overview-hero__metric-label">
+                    Varlık portföyü <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    <MoneyValue value={portfolioTotal} />
+                  </span>
+                  <span className="overview-hero__metric-sub">Altın & Döviz</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={showDebt}
+                >
+                  <span className="overview-hero__metric-label">
+                    Ekstre borcu <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    {displayedDebt === null ? (
+                      <span className="num">—</span>
+                    ) : (
+                      <MoneyValue value={displayedDebt} />
+                    )}
+                  </span>
+                  <span className="overview-hero__metric-sub">Kart cüzdanı</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="overview-hero__metric"
+                  onClick={() => onNavigate('future')}
+                >
+                  <span className="overview-hero__metric-label">
+                    Açık taksit yükü <ChevronRight size={14} />
+                  </span>
+                  <span className="overview-hero__metric-value">
+                    <MoneyValue value={openInstallmentDebt} />
+                  </span>
+                  <span className="overview-hero__metric-sub">Taksit planları</span>
+                </button>
+              </div>
+            )}
           </section>
         </Stagger>
 
@@ -391,6 +521,7 @@ export function OverviewView({
             key={`${demo ? 'demo' : 'account'}:${month}`}
             days={spending.days}
             peak={spending.peak}
+            transactions={demo ? sampleRows : rows}
             privateMode={privateMode}
             unavailable={
               month === 'all'
@@ -577,7 +708,7 @@ export function OverviewView({
                 Örnek bütçeyi dene <ArrowRight size={15} />
               </button>
               <button type="button" className="text-button" onClick={sheets.openIncome}>
-                Sabit gelir ve giderler <ArrowRight size={15} />
+                Gelir kayıtları <ArrowRight size={15} />
               </button>
               <button type="button" className="text-button" onClick={sheets.openRewards}>
                 Bonus ve puanlar <ArrowRight size={15} />
@@ -628,7 +759,7 @@ export function OverviewView({
         title="Örnek hareketler"
         description="Yalnızca keşif için. Bu veriler kaydedilmez."
       >
-        <div className="divide-y divide-line">
+        <ul className="divide-y divide-line">
           {sampleRows
             .filter(
               (tx) =>
@@ -637,12 +768,11 @@ export function OverviewView({
                   (tx.category === demoSelection.category && tx.kind === 'expense')),
             )
             .map((tx) => (
-              <div className="flex items-center justify-between gap-3 py-3 text-body" key={tx.id}>
-                <span className="text-ink">{tx.description}</span>
-                <strong className="num text-ink">{money2(tx.amount)}</strong>
-              </div>
+              <li key={tx.id}>
+                <TransactionItem transaction={tx} compact />
+              </li>
             ))}
-        </div>
+        </ul>
         <button type="button" className="primary-button mt-5 w-full" onClick={startReal}>
           Kendi bütçeme başla <ArrowRight size={16} />
         </button>

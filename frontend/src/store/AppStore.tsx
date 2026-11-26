@@ -60,7 +60,7 @@ interface StoreValue {
 }
 
 const StoreContext = createContext<StoreValue | null>(null)
-const pendingError = 'Buluta kaydedilmeyi bekleyen deÄŸiÅŸikliklerin var. BaÄŸlantÄ±n geldiÄŸinde eÅŸitleyip tekrar dene.'
+const pendingError = 'Buluta kaydedilmeyi bekleyen değişikliklerin var. Bağlantın geldiğinde eşitleyip tekrar dene.'
 
 async function clearAccountSession(cleanPush = true) {
   const { clearFirebaseDeviceCache } = await import('../firebase/db')
@@ -201,7 +201,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }).catch(() => {
       if (cancelled) return
       acceptAuthUser(null)
-      setAuthError('Hesap servisi aÃ§Ä±lamadÄ±. BaÄŸlantÄ±nÄ± kontrol edip yeniden dene.')
+      setAuthError('Hesap servisi açılamadı. Bağlantını kontrol edip yeniden dene.')
     })
     return () => {
       cancelled = true
@@ -232,7 +232,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (!current()) return
       const migrated = stored == null || (owner && owner !== uid) ? null : migratePersisted(stored)
       if (stored != null && (!owner || owner === uid) && !migrated) {
-        throw new UserFacingError('Eski cihaz kayÄ±tlarÄ± bu sÃ¼rÃ¼mde okunamÄ±yor. KayÄ±tlarÄ±n korunuyor.')
+        throw new UserFacingError('Eski cihaz kayıtları bu sürümde okunamıyor. Kayıtların korunuyor.')
       }
       if (migrated && allowMigrationFor.current !== uid) {
         const { lockPinHash, lockPinSalt } = migrated.state.settings ?? {}
@@ -401,11 +401,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       if (legacyMigration.pinRequired) {
         const stored = migratePersisted(await dbReadFinancialState<unknown>())?.state.settings
         if (!stored?.lockPinHash || !stored.lockPinSalt || !pin || !await verifyPin(pin, stored.lockPinSalt, stored.lockPinHash)) {
-          throw new UserFacingError('Eski uygulama PINâ€™i yanlÄ±ÅŸ.')
+          throw new UserFacingError('Eski uygulama PIN’i yanlış.')
         }
       }
       if (generation !== sessionEpoch.current || !await dbClaimLegacyState(uid)) {
-        throw new UserFacingError('Cihaz kayÄ±tlarÄ±nÄ±n hesabÄ± deÄŸiÅŸti. Yeniden yÃ¼kleyip tekrar dene.')
+        throw new UserFacingError('Cihaz kayıtlarının hesabı değişti. Yeniden yükleyip tekrar dene.')
       }
       allowMigrationFor.current = uid
     } else skipMigrationFor.current = uid
@@ -433,7 +433,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     try {
       const auth = await import('../firebase/auth')
       if (generation !== sessionEpoch.current || auth.getCurrentAuthUser()?.uid !== uid) {
-        throw new UserFacingError('Hesap deÄŸiÅŸti. LÃ¼tfen iÅŸlemi yeniden baÅŸlat.')
+        throw new UserFacingError('Hesap değişti. Lütfen işlemi yeniden başlat.')
       }
       if (action !== 'logout') {
         const { wipeCloudData } = await import('../sync/cloudAdmin')

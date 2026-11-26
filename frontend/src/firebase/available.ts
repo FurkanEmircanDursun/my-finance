@@ -10,3 +10,7 @@ export const cloudAvailable: boolean = Boolean(
     import.meta.env.VITE_FIREBASE_PROJECT_ID &&
     import.meta.env.VITE_FIREBASE_APP_ID,
 )
+
+export const storageAvailable: boolean = Boolean(
+  cloudAvailable && import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+)

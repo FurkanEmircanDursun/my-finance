@@ -6,7 +6,7 @@ import { Modal } from '../ui/Modal'
 import { useStore } from '../store/AppStore'
 import { money } from '../core/money'
 import { monthLabel, monthOf, todayKey, yearOf } from '../core/date'
-import { CATEGORIES, type CategoryId } from '../domain/categories'
+import { SORTED_CATEGORIES, type CategoryId } from '../domain/categories'
 import { buildLedgerSeries, buildMonthLedgers, monthsOfYear } from '../domain/ledger'
 import { entryAmount } from '../domain/entry'
 import type { MonthKey } from '../core/date'
@@ -202,7 +202,7 @@ function MonthEntries({
                 setCategory(quick.category)
               }}
               className={clsx(
-                'h-9 rounded-[var(--radius)] px-3 text-label font-semibold transition-colors duration-200',
+                'min-h-[44px] rounded-[var(--radius)] px-3 text-label font-medium transition-colors duration-200 sm:min-h-[38px]',
                 label === quick.label ? 'bg-accent-soft text-accent-text' : 'bg-sunken text-muted hover:text-ink',
               )}
             >
@@ -233,17 +233,17 @@ function MonthEntries({
       {kind === 'expense' && (
         <Field label="Kategori">
           <div className="flex flex-wrap gap-1.5">
-            {CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
+            {SORTED_CATEGORIES.filter((c) => c.nature !== 'neutral').map((def) => (
               <button
                 key={def.id}
                 type="button"
                 onClick={() => setCategory(def.id)}
                 className={clsx(
-                  'flex h-9 items-center gap-2 rounded-[var(--radius)] px-3 text-label font-semibold transition-colors duration-200',
+                  'flex min-h-[44px] items-center gap-2 rounded-[var(--radius)] px-3 text-label font-medium transition-colors duration-200 sm:min-h-[38px]',
                   category === def.id ? 'bg-accent-soft text-accent-text' : 'bg-sunken text-muted hover:text-ink',
                 )}
               >
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: def.color }} />
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: def.color }} />
                 {def.label}
               </button>
             ))}

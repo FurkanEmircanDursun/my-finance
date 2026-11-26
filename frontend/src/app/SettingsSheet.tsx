@@ -75,7 +75,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
             title="Görünüm ve tema"
             note="Obsidian Studio (Koyu) veya Alabaster Vault (Açık) temasını seç."
           >
-            <div className="grid grid-cols-3 gap-2.5" role="group" aria-label="Tema">
+            <div className="grid grid-cols-3 gap-2 sm:gap-2.5" role="group" aria-label="Tema">
               {(
                 [
                   { value: 'dark', label: 'Koyu', desc: 'Obsidian', icon: Moon },
@@ -91,15 +91,15 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
                     aria-pressed={active}
                     onClick={() => setTheme(value)}
                     className={clsx(
-                      'flex flex-col items-center gap-1.5 rounded-[var(--radius)] border p-3.5 text-center transition-all duration-200 active:scale-[0.97]',
+                      'flex min-h-[44px] flex-col items-center gap-1.5 rounded-[var(--radius)] border p-2.5 text-center transition-all duration-200 active:scale-[0.97] sm:p-3.5',
                       active
                         ? 'border-accent-border bg-accent-soft text-accent-text shadow-card'
                         : 'border-line bg-sunken text-muted hover:border-line-strong hover:text-ink',
                     )}
                   >
                     <Icon size={18} />
-                    <span className="text-label font-semibold">{label}</span>
-                    <span className="text-[11px] opacity-75">{desc}</span>
+                    <span className="text-label font-medium">{label}</span>
+                    <span className="text-[11px] font-normal opacity-75">{desc}</span>
                   </button>
                 )
               })}

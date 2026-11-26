@@ -16,7 +16,7 @@ const COPY: Record<StatementValidationCode, [string, string]> = {
   unreadable_pdf: ['PDF okunamadı.', 'Dosyanın açılabildiğini kontrol edin veya bankanızdan yeniden indirin.'],
   unreadable_text: ['Ekstre metni okunamadı.', 'Daha net bir PDF yükleyin. Taranmış ekstreler için Ayarlar’dan yerel OCR servisini kullanabilirsiniz.'],
   not_statement: ['Bu belge bir kredi kartı ekstresi olarak doğrulanamadı.', 'Dekont, fatura veya başka bir belge yerine bankanızın dönemlik kredi kartı ekstresini yükleyin.'],
-  unsupported_bank: ['Bu bankanın PDF ekstre formatı henüz desteklenmiyor.', 'PDF için Akbank/Axess ve Garanti BBVA/Bonus ekstreleri destekleniyor. Diğer bankalar için CSV dışa aktarımını kullanabilirsiniz.'],
+  unsupported_bank: ['Bu bankanın PDF ekstre formatı henüz desteklenmiyor.', 'PDF için Akbank/Axess, Garanti BBVA/Bonus, İş Bankası/Maximum, QNB, Dünya Katılım/Paraf ve Halkbank/Paraf ekstreleri destekleniyor. Diğer bankalar için CSV dışa aktarımını kullanabilirsiniz.'],
   ambiguous_bank: ['Belgede birden fazla bankaya ait ekstre bilgisi bulundu.', 'Her bankanın ekstresini ayrı bir dosya olarak yükleyin.'],
 }
 
@@ -69,7 +69,7 @@ export function hasReadableText(text: string): boolean {
 
 const DATE = String.raw`(?:\d{1,2}[./-]\d{1,2}[./-]\d{4}|\d{1,2}\s+(?:OCAK|SUBAT|MART|NISAN|MAYIS|HAZIRAN|TEMMUZ|AGUSTOS|EYLUL|EKIM|KASIM|ARALIK)\s+\d{4})`
 const ROW_START = new RegExp(String.raw`^(?:BOSLUK\s+)?${DATE}\s+`, 'i')
-const OTHER_ISSUER = /\b(?:YAPI\s*KREDI|IS\s*BANKASI|ISBANK|TURKIYE\s+IS\s+BANKASI|ZIRAAT|VAKIFBANK|HALKBANK|QNB|FINANSBANK|DENIZBANK|TEB|ING\s+BANK|HSBC|KUVEYT\s*TURK|ALBARAKA|ENPARA|ODEABANK|SEKERBANK)\b/
+const OTHER_ISSUER = /\b(?:YAPI\s*KREDI|ZIRAAT|VAKIFBANK|DENIZBANK|TEB|ING\s+BANK|HSBC|KUVEYT\s*TURK|ALBARAKA|ENPARA|ODEABANK|SEKERBANK)\b/
 
 /**
  * Proves the issuer and statement structure before any bank transaction parser runs.
@@ -91,6 +91,9 @@ export function validateStatementText(text: string, options: { allowCsv: boolean
   // Merchant names may contain another bank. They are not issuer evidence.
   const coverLines = lines.filter(line => !ROW_START.test(line))
   const cover = coverLines.slice(0, 80).join('\n')
+  const nonRowText = coverLines.length > 80
+    ? `${cover}\n${coverLines.slice(-40).join('\n')}`
+    : cover
   const compact = lines.join(' ')
   const opening = lines.slice(0, 8).join('\n')
   const otherDocument = /(?:^|\n)(?:E[- ]?(?:ARSIV\s+)?FATURA|FATURA|(?:KREDI\s+KARTI\s+|EFT\s+|HAVALE\s+|ISLEM\s+|ODEME\s+)?DEKONTU?|(?:KREDI\s+KARTI\s+)?ODEME\s+MAKBUZU|TAHSILAT\s+MAKBUZU)(?:\s*(?:NO|NUMARASI|:|$))/m.test(opening)
@@ -102,28 +105,53 @@ export function validateStatementText(text: string, options: { allowCsv: boolean
   const coverLabels = String.raw`(?:(?:SON ODEME TARIHI|DONEM BORCU(?:NUZ)?|MIN\.? ODEME TUTAR(?:I|INIZ)|EN AZ ODEME TUTARI)[\s:]*){0,4}`
   const cycleDate = new RegExp(String.raw`(?<!SONRAKI )(?:HESAP\s+(?:KESIM|OZETI)\s+TARIHI|EKSTRE\s+DONEMI)[\s:]*${coverLabels}${DATE}`).test(compact)
   const dueDate = new RegExp(String.raw`(?<!SONRAKI )SON\s+ODEME\s+TARIHI[\s:]*${DATE}`).test(compact)
-  const balance = /\bDONEM\s+BORCU(?:NUZ)?\s*:?\s*[\d.,]+/.test(compact)
+  const balance = /\b(?:DONEM\s+BORCU(?:NUZ)?|HESAP\s+OZETI\s+BORCU|HESAP\s+BAKIYESI)\s*:?\s*[\d.,]+/.test(compact)
   const table = /\bISLEM\s+TARIHI\b/.test(compact) && /\b(?:DONEM\s+ICI\s+ISLEMLER|TUTAR)\b/.test(compact)
   // Text exporters can separate the cut-date value from its heading by the
   // card/customer columns. A dated due date plus the bank's transaction-table
   // headings still proves the statement layout without guessing that value.
   const columnarCycle = /\bHESAP\s+KESIM\s+TARIHI\b/.test(compact) && dueDate && table
   const statementStructure = (cycleDate || columnarCycle) && (dueDate || balance || table)
-  const akbank = /(?:^|\n)(?:AKBANK\b|(?:AXESS|WINGS|FREE\s+CARD|FISH)\b[^\n]*(?:HESAP\s+OZETI|EKSTRE))/.test(cover)
-    || /\bAKBANK\b[^\n]*\b(?:AXESS|WINGS|FREE\s+CARD)\b/.test(cover)
-  const garanti = /(?:^|\n)(?:T\.\s*)?GARANTI(?:\s+BBVA|\s+BANKASI|\b)/.test(cover)
-    // Garanti's real template may name only the product on its cover.
-    || (/\bBONUS\s+(?:PLATINUM|GOLD|GENC|TRINK)\b[^\n]*\bBILGILERINIZ\b/.test(cover) && table)
 
-  // Some unsupported banks also issue Bonus cards. Their own issuer heading
+  const matchedIds: string[] = []
+  const akbank = /(?:^|\n)(?:AKBANK\b|(?:AXESS|WINGS|FREE\s+CARD|FISH)\b[^\n]*(?:HESAP\s+OZETI|EKSTRE))/.test(nonRowText)
+    || /\bAKBANK\b[^\n]*\b(?:AXESS|WINGS|FREE\s+CARD)\b/.test(nonRowText)
+  if (akbank) matchedIds.push('akbank')
+
+  const garanti = /(?:^|\n)(?:T\.\s*)?GARANTI(?:\s+BBVA|\s+BANKASI|\b)/.test(nonRowText)
+    // Garanti's real template may name only the product on its cover.
+    || (/\bBONUS\s+(?:PLATINUM|GOLD|FLEXI|CLASSIC(?:\s+TROY)?|GENC|TRINK|PLUS|BUSINESS)\b[^\n]*\bBILGILERINIZ\b/.test(nonRowText) && table)
+  if (garanti) matchedIds.push('garanti')
+
+  const isbank = /(?:^|\n)(?:TURKIYE\s+)?IS\s+BANKASI\b/.test(nonRowText)
+    || /\bISBANK\.COM\.TR\b|\bMAXIMUM(?:GENC)?\.COM\.TR\b/.test(nonRowText)
+    || (/\bHESAP\s+OZETI\s+BORCU\b/.test(nonRowText) && /\bMAXIPUAN\b/.test(nonRowText))
+  if (isbank) matchedIds.push('isbank')
+
+  // Guard against a customer's work address on another bank's cover mentioning
+  // "DÜNYA KATILIM BANKASI" mid-line: require a leading heading, domain, or Paraf pairing.
+  const dunyakatilim = /(?:^|\n)DUNYA\s+KATILIM\b/.test(nonRowText)
+    || /\bDUNYAKATILIM\.COM\.TR\b/.test(nonRowText)
+    || (/\bDUNYA\s+KATILIM\b/.test(nonRowText) && /\bPARAF(?:PARA)?\b/.test(nonRowText))
+  if (dunyakatilim) matchedIds.push('dunyakatilim')
+
+  const qnb = /(?:^|\n)QNB\b/.test(nonRowText)
+    || /\bQNB(?:CARD)?\.COM\.TR\b|\bQNB\s+BANK\b|\bQNB\s+(?:TRENDYOL|CARDFINANS|MILES&SMILES|FIRST|FIX|GO)\b/.test(nonRowText)
+  if (qnb) matchedIds.push('qnb')
+
+  const halkbank = /(?:^|\n)(?:TURKIYE\s+)?HALK\s+BANKASI\b|(?:^|\n)HALKBANK\b/.test(nonRowText)
+    || /\bHALKBANK\.COM\.TR\b|\bPARAF\.COM\.TR\b/.test(nonRowText)
+  if (halkbank) matchedIds.push('halkbank')
+
+  // Some unsupported banks also issue Bonus/Paraf cards. Their own issuer heading
   // takes precedence over a shared product name or payment-bank mention.
   if (statementStructure && OTHER_ISSUER.test(coverLines.slice(0, 8).join('\n'))) {
     throw new StatementValidationError('unsupported_bank')
   }
   if (!statementStructure) throw new StatementValidationError('not_statement')
-  if (akbank && garanti) throw new StatementValidationError('ambiguous_bank')
-  if (!akbank && !garanti) throw new StatementValidationError('unsupported_bank')
-  return ADAPTERS.find(adapter => adapter.id === (akbank ? 'akbank' : 'garanti'))!
+  if (matchedIds.length > 1) throw new StatementValidationError('ambiguous_bank')
+  if (matchedIds.length === 0) throw new StatementValidationError('unsupported_bank')
+  return ADAPTERS.find(adapter => adapter.id === matchedIds[0])!
 }
 
 /** PDF.js errors are implementation details; only stable instructions escape. */
