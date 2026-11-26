@@ -132,6 +132,117 @@
   align-items: stretch;
 }
 
+.analysis-top-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.analysis-top-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 520;
+  transition: background-color var(--dur-micro) var(--ease-smooth), border-color var(--dur-micro) var(--ease-smooth);
+}
+
+.analysis-top-chip:hover {
+  background: var(--bg-hover);
+  border-color: var(--line-strong);
+}
+
+.analysis-top-chip.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+
+/* Row 2: Interactive Pie Chart + Bounded Scrollable Category Expenses Split */
+.analysis-explorer-grid {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.95fr) minmax(0, 1.35fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.analysis-explorer-left {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.analysis-explorer-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: var(--bg-sunken);
+  padding: 16px;
+}
+
+.analysis-explorer-right__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.analysis-explorer-txs {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.analysis-explorer-tx {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--dur-micro) var(--ease-smooth);
+}
+
+.analysis-explorer-tx:last-child {
+  border-bottom: 0;
+}
+
+.analysis-explorer-tx:hover {
+  background: var(--bg-hover);
+}
+
+.analysis-deep-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+@media (max-width: 960px) {
+  .analysis-explorer-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .analysis-panel {
   min-width: 0;
   border-radius: var(--radius-lg);

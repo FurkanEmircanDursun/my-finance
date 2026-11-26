@@ -1,16 +1,31 @@
-/* ── Reusable Horizontal Scroll Strip (Wheel + Chevron Buttons + Edge Fades) ── */
+/* ── Reusable Horizontal Scroll Strip (Drag + Wheel + Hold Arrows + Edge Fades) ── */
 .hscroll-strip {
   position: relative;
   min-width: 0;
   width: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .hscroll-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
+  touch-action: pan-x pan-y;
+}
+
+.hscroll-viewport.is-scrollable {
+  cursor: grab;
+}
+
+.hscroll-strip.is-dragging .hscroll-viewport,
+.hscroll-strip.is-dragging .hscroll-viewport * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 .hscroll-viewport::-webkit-scrollbar {
@@ -19,18 +34,28 @@
 
 /* Soft edge fade indicators when more content exists off-screen */
 .hscroll-strip.can-scroll-left .hscroll-viewport {
-  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 36px, #000 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 36px, #000 100%);
 }
 
 .hscroll-strip.can-scroll-right .hscroll-viewport {
-  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 36px), transparent 100%);
 }
 
 .hscroll-strip.can-scroll-left.can-scroll-right .hscroll-viewport {
-  mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 32px, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 36px, #000 calc(100% - 36px), transparent 100%);
+}
+
+/* Subtle inset padding on desktop so arrows never sit heavily over first/last chip text */
+@media (min-width: 640px) {
+  .hscroll-strip.can-scroll-left .hscroll-viewport {
+    padding-left: 34px;
+  }
+  .hscroll-strip.can-scroll-right .hscroll-viewport {
+    padding-right: 34px;
+  }
 }
 
 .hscroll-btn {
@@ -40,13 +65,15 @@
   z-index: 4;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   border: 1px solid var(--line-strong);
-  background: var(--bg-raised);
+  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: var(--text);
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-card);
   transition:
     background-color var(--dur-micro) var(--ease-smooth),
     border-color var(--dur-micro) var(--ease-smooth),
@@ -65,18 +92,17 @@
 }
 
 .hscroll-btn--left {
-  left: 2px;
+  left: 0;
 }
 
 .hscroll-btn--right {
-  right: 2px;
+  right: 0;
 }
 
-@media (max-width: 799px) {
-  /* Keep buttons subtle on narrow touch viewports while still tappable */
+@media (max-width: 639px) {
   .hscroll-btn {
-    width: 30px;
-    height: 30px;
-    opacity: 0.92;
+    width: 26px;
+    height: 26px;
+    opacity: 0.88;
   }
 }

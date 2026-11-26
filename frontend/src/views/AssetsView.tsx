@@ -324,7 +324,7 @@ export function AssetsView({ embedded = false }: { embedded?: boolean } = {}) {
                 <h2 id="holdings-title">Birikimlerin</h2>
                 <span>{holdings.length} kayıt</span>
               </div>
-              <ul>
+              <ul className="mizan-scroll-box mizan-scroll-box--lg">
                 {portfolio.rows.map(({ holding, value }) => {
                   const instrument = ASSET_INSTRUMENTS.find((item) => item.id === holding.instrument)!
                   const currentQuote = quotes[holding.instrument]
@@ -385,7 +385,7 @@ export function AssetsView({ embedded = false }: { embedded?: boolean } = {}) {
                       totalLabel="Portföy"
                     />
                   </div>
-                  <ul>
+                  <ul className="mizan-scroll-box mizan-scroll-box--lg">
                     {distribution.map((item) => (
                       <li
                         key={item.id}

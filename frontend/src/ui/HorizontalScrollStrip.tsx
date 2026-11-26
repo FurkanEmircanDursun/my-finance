@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { clsx } from 'clsx'
 import './horizontal-scroll.css'
@@ -13,10 +21,14 @@ export interface HorizontalScrollStripProps {
   step?: number
 }
 
+const DRAG_THRESHOLD_PX = 6
+
 /**
- * Horizontal scroll strip usable with standard mouse wheel, left/right chevron
- * controls, keyboard focus, and touch swipe — never trapping desktop mouse users
- * behind trackpad-only gestures.
+ * Responsive horizontal scroll strip supporting:
+ * - Mouse/pen press-and-drag scrolling with click suppression after drag
+ * - Touch native swipe
+ * - Standard mouse wheel horizontal translation
+ * - Tap or press-and-hold chevron buttons with non-overlapping edge padding
  */
 export function HorizontalScrollStrip({
   children,
@@ -29,6 +41,28 @@ export function HorizontalScrollStrip({
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [canLeft, setCanLeft] = useState(false)
   const [canRight, setCanRight] = useState(false)
+  const [dragging, setDragging] = useState(false)
+
+  const dragRef = useRef<{
+    pointerId: number
+    startX: number
+    startScrollLeft: number
+    moved: boolean
+  } | null>(null)
+  const suppressClickUntilRef = useRef(0)
+  const holdTimerRef = useRef<number | null>(null)
+  const holdRafRef = useRef<number | null>(null)
+
+  const stopHold = useCallback(() => {
+    if (holdTimerRef.current !== null) {
+      window.clearTimeout(holdTimerRef.current)
+      holdTimerRef.current = null
+    }
+    if (holdRafRef.current !== null) {
+      window.cancelAnimationFrame(holdRafRef.current)
+      holdRafRef.current = null
+    }
+  }, [])
 
   const sync = useCallback(() => {
     const el = scrollerRef.current
@@ -66,12 +100,13 @@ export function HorizontalScrollStrip({
     }
     const raf = window.requestAnimationFrame(sync)
     return () => {
+      stopHold()
       el.removeEventListener('scroll', onScroll)
       el.removeEventListener('wheel', onWheel)
       ro?.disconnect()
       window.cancelAnimationFrame(raf)
     }
-  }, [sync, children])
+  }, [sync, stopHold, children])
 
   const nudge = (direction: -1 | 1) => {
     const el = scrollerRef.current
@@ -80,12 +115,79 @@ export function HorizontalScrollStrip({
     el.scrollBy({ left: direction * delta, behavior: 'smooth' })
   }
 
+  const startHold = (direction: -1 | 1) => {
+    stopHold()
+    holdTimerRef.current = window.setTimeout(() => {
+      const tick = () => {
+        const el = scrollerRef.current
+        if (!el) return
+        el.scrollLeft += direction * 10
+        holdRafRef.current = window.requestAnimationFrame(tick)
+      }
+      holdRafRef.current = window.requestAnimationFrame(tick)
+    }, 220)
+  }
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch' || !event.isPrimary || event.button !== 0) return
+    const el = scrollerRef.current
+    if (!el || el.scrollWidth <= el.clientWidth + 2) return
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startScrollLeft: el.scrollLeft,
+      moved: false,
+    }
+  }
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragRef.current
+    const el = scrollerRef.current
+    if (!state || !el || state.pointerId !== event.pointerId) return
+    const dx = event.clientX - state.startX
+    if (!state.moved && Math.abs(dx) >= DRAG_THRESHOLD_PX) {
+      state.moved = true
+      setDragging(true)
+      try {
+        el.setPointerCapture(event.pointerId)
+      } catch {
+        // Synthetic test events may not support pointer capture.
+      }
+    }
+    if (state.moved) {
+      el.scrollLeft = state.startScrollLeft - dx
+    }
+  }
+
+  const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragRef.current
+    if (!state || state.pointerId !== event.pointerId) return
+    dragRef.current = null
+    if (state.moved) {
+      suppressClickUntilRef.current = Date.now() + 260
+      setDragging(false)
+      try {
+        scrollerRef.current?.releasePointerCapture(event.pointerId)
+      } catch {
+        // Ignore if not captured.
+      }
+    }
+  }
+
+  const onClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (Date.now() < suppressClickUntilRef.current) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
+
   return (
     <div
       className={clsx(
         'hscroll-strip',
         canLeft && 'can-scroll-left',
         canRight && 'can-scroll-right',
+        dragging && 'is-dragging',
         className,
       )}
     >
@@ -94,6 +196,10 @@ export function HorizontalScrollStrip({
           type="button"
           className="hscroll-btn hscroll-btn--left"
           onClick={() => nudge(-1)}
+          onPointerDown={() => startHold(-1)}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
           aria-label="Sola kaydır"
         >
           <ChevronLeft size={16} />
@@ -104,7 +210,12 @@ export function HorizontalScrollStrip({
         ref={scrollerRef}
         role={role}
         aria-label={ariaLabel}
-        className={clsx('hscroll-viewport', scrollerClassName)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onClickCapture={onClickCapture}
+        className={clsx('hscroll-viewport', (canLeft || canRight) && 'is-scrollable', scrollerClassName)}
       >
         {children}
       </div>
@@ -114,6 +225,10 @@ export function HorizontalScrollStrip({
           type="button"
           className="hscroll-btn hscroll-btn--right"
           onClick={() => nudge(1)}
+          onPointerDown={() => startHold(1)}
+          onPointerUp={stopHold}
+          onPointerLeave={stopHold}
+          onPointerCancel={stopHold}
           aria-label="Sağa kaydır"
         >
           <ChevronRight size={16} />

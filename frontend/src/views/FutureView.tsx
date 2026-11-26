@@ -357,7 +357,7 @@ export function FutureView() {
             </div>
 
             {analysis.budgets.items.length > 0 ? (
-              <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+              <ul className="mt-4 grid gap-3 sm:grid-cols-2 mizan-scroll-box mizan-scroll-box--md">
                 {analysis.budgets.items.map((b) => {
                   const over = b.status === 'over'
                   const warn = b.status === 'warning'
@@ -455,7 +455,7 @@ export function FutureView() {
           </div>
 
           {recurring.length > 0 ? (
-            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 mizan-scroll-box mizan-scroll-box--md">
               {recurring.map((sub) => {
                 const hiked = (sub.priceChangePct ?? 0) > 2
                 return (
@@ -624,7 +624,7 @@ export function FutureView() {
           description={`${count(open.length)} plan · kalan toplam ${money(open.reduce((s, p) => s + p.remainingAmount, 0))}`}
           defaultOpen
         >
-          <ul className="-mx-2 divide-y divide-line">
+          <ul className="-mx-2 divide-y divide-line mizan-scroll-box mizan-scroll-box--md">
             {open.map((plan) => (
               <li key={plan.id} className="px-2 py-3.5">
                 <div className="flex items-baseline justify-between gap-3">

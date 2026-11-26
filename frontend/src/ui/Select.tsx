@@ -51,6 +51,7 @@ export function Select<T extends string = string>({
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({})
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const listboxId = useId()
@@ -64,6 +65,8 @@ export function Select<T extends string = string>({
   const positionMenu = useCallback(() => {
     const trigger = triggerRef.current
     if (!trigger) return
+    const dialogHost = trigger.closest('dialog')
+    setPortalHost(dialogHost instanceof HTMLElement ? dialogHost : document.body)
     const rect = trigger.getBoundingClientRect()
     const viewportH = window.innerHeight
     const viewportW = window.innerWidth
@@ -277,7 +280,7 @@ export function Select<T extends string = string>({
               )
             })}
           </div>,
-          document.body,
+          portalHost ?? document.body,
         )}
     </>
   )

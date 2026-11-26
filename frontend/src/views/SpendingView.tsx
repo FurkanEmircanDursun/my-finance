@@ -151,7 +151,7 @@ export function SpendingView() {
                 }
               />
             )}
-            <ul className="-mx-2">
+            <ul className="-mx-2 mizan-scroll-box mizan-scroll-box--lg">
               {shownCategories.map((stat) => {
                 const budget = budgets.items.find((b) => b.category === stat.id)
                 const denom = budget?.limit || categories[0]?.total || 1
@@ -271,7 +271,7 @@ export function SpendingView() {
           description={`${count(merchants.length)} işyeri · sık ödemeler ve geçen aya göre değişimler`}
         >
           <Section title="En çok harcadığın yerler">
-            <ul className="-mx-2">
+            <ul className="-mx-2 mizan-scroll-box mizan-scroll-box--lg">
               {merchants.slice(0, 8).map((merchant) => (
                 <li key={merchant.merchant}>
                   <button
@@ -296,7 +296,7 @@ export function SpendingView() {
 
           {habits.length > 0 && (
             <Section title="Küçük ama sık" description="Tek tek küçük, yıllık toplamı büyük">
-              <ul className="-mx-2">
+              <ul className="-mx-2 mizan-scroll-box mizan-scroll-box--lg">
                 {habits.slice(0, 5).map((habit) => (
                   <li key={habit.merchant}>
                     <button
@@ -323,7 +323,7 @@ export function SpendingView() {
 
           {trend.movers.length > 0 && (
             <Section title="Geçen aya göre">
-              <ul className="-mx-2">
+              <ul className="-mx-2 mizan-scroll-box mizan-scroll-box--lg">
                 {trend.movers.slice(0, 6).map((mover) => (
                   <li key={mover.id} className="flex min-h-[46px] flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-1.5">
                     <span className="flex min-w-0 flex-1 items-center gap-2.5">

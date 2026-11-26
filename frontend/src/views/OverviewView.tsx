@@ -585,7 +585,7 @@ export function OverviewView({
               )}
             </div>
             {recent.length ? (
-              <ul key={period}>
+              <ul key={period} className="mizan-scroll-box mizan-scroll-box--md">
                 {recent.map((tx) => (
                   <li key={tx.id}>
                     <TransactionItem
@@ -638,8 +638,8 @@ export function OverviewView({
             )}
 
             {!demo && cardStatements.length > 0 ? (
-              <ul key={period} className="divide-y divide-line">
-                {cardStatements.slice(0, 3).map((ledger) => (
+              <ul key={period} className="divide-y divide-line mizan-scroll-box mizan-scroll-box--sm">
+                {cardStatements.map((ledger) => (
                   <li key={ledger.statement.id}>
                     <button
                       type="button"

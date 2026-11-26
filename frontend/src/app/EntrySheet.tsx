@@ -162,7 +162,13 @@ export function EntrySheet({
             </div>
             <details>
               <summary>
-                Diğer kategoriler <ChevronDown size={15} />
+                <span>
+                  Diğer kategoriler
+                  {!quickCategories.some((q) => q.id === category) && (
+                    <span className="ml-1.5 font-semibold text-accent-text">· {categoryLabel(category)}</span>
+                  )}
+                </span>
+                <ChevronDown size={15} />
               </summary>
               <Field label="Tüm kategoriler">
                 <Select

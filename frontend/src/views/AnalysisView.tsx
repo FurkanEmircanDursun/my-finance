@@ -69,10 +69,12 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
   const asOf = assetValuationDay(now)
   const thisMonth = asOf.slice(0, 7)
   const [subTab, setSubTab] = useState<'trends' | 'portfolio' | 'merchants'>('trends')
+  const [deepTab, setDeepTab] = useState<'daily' | 'mom' | 'tables'>('daily')
   const [windowRange, setWindowRange] = useState('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
   const [category, setCategory] = useState<CategoryId | 'all'>('all')
+  const [explorerCategory, setExplorerCategory] = useState<CategoryId | null>(null)
   const [rates, setRates] = useState<RateSnapshot | null>(() => cachedAssetRates())
   const [rateBusy, setRateBusy] = useState(false)
   const [rateError, setRateError] = useState('')
@@ -214,11 +216,36 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
     [distributions],
   )
 
+  const selectedExplorerCategory: CategoryId | null = useMemo(() => {
+    if (explorerCategory && report?.categories.some((row) => row.id === explorerCategory)) {
+      return explorerCategory
+    }
+    return distributions[0]?.id ?? report?.categories[0]?.id ?? null
+  }, [explorerCategory, report?.categories, distributions])
+
+  const selectedExplorerRow = useMemo(
+    () => report?.categories.find((row) => row.id === selectedExplorerCategory) ?? null,
+    [report?.categories, selectedExplorerCategory],
+  )
+
+  const explorerTransactions = useMemo(() => {
+    if (!selectedExplorerCategory || !report) return []
+    const { fromMonth, toMonth } = report.range
+    return state.transactions
+      .filter((tx) => {
+        if (tx.kind !== 'expense' && tx.kind !== 'refund') return false
+        if (tx.category !== selectedExplorerCategory) return false
+        const month = (tx.billedOn ?? tx.date).slice(0, 7)
+        if (fromMonth && month < fromMonth) return false
+        if (toMonth && month > toMonth) return false
+        return true
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount)
+  }, [selectedExplorerCategory, report, state.transactions])
+
   function openCategory(id: CategoryId) {
     setCategory(id)
-    const heading = document.getElementById('daily-spending-heading')
-    heading?.focus({ preventScroll: true })
-    heading?.scrollIntoView({ block: 'start' })
+    setExplorerCategory(id)
   }
 
   return (
@@ -287,8 +314,8 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
             </div>
 
             {overall.merchants.length > 0 ? (
-              <ul className="mt-4 divide-y divide-line">
-                {overall.merchants.slice(0, 10).map((m, idx) => (
+              <ul className="mt-4 divide-y divide-line mizan-scroll-box mizan-scroll-box--lg">
+                {overall.merchants.slice(0, 20).map((m, idx) => (
                   <li key={m.merchant}>
                     <button
                       type="button"
@@ -659,50 +686,44 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
                 )}
               </Panel>
 
-              <Panel title="Harcama dağılımı" description="Dilime dokunup incele veya satırla günlük detaya in.">
+              <Panel title="Harcama dağılımı" description="Dilime dokunup seçili kategoriyi öne çıkar.">
                 {report.categories.length ? (
                   <div className="analysis-pie">
                     {donutSlices.length > 0 && (
                       <div className="analysis-chart" role="img" aria-label="Kategorilere göre harcama dağılımı.">
                         <InteractiveDonutChart
                           data={donutSlices}
-                          height={210}
-                          activeId={activeCategory === 'all' ? null : activeCategory}
+                          height={230}
+                          activeId={selectedExplorerCategory}
                           onSelect={(id) => {
-                            if (id) setCategory(id as CategoryId)
+                            if (id) openCategory(id as CategoryId)
                             else setCategory('all')
                           }}
                           totalLabel="Net dağılım"
                         />
                       </div>
                     )}
-                    <ul className="analysis-key">
-                      {report.categories.map((row) => (
-                        <li key={row.id}>
-                          <button
-                            type="button"
-                            onClick={() => openCategory(row.id)}
-                            aria-pressed={activeCategory === row.id}
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span className="shrink-0" style={{ color: row.color }}>
-                                <CategoryIcon category={row.id} size={14} />
-                              </span>
-                              <span className="truncate">{row.label}</span>
-                            </span>
-                            <strong className="num">{amount(row.net)}</strong>
-                            <span className="analysis-key-share num">
-                              {row.pieValue > 0
-                                ? row.share < 0.001
-                                  ? '<%0,1'
-                                  : '%' + percentNumber.format(row.share * 100)
-                                : 'İade kredisi'}
-                            </span>
-                            <ArrowUpRight size={14} aria-hidden="true" />
-                          </button>
-                        </li>
+                    <div className="analysis-top-chips" aria-label="Öne çıkan kategoriler">
+                      {report.categories.slice(0, 4).map((row) => (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => openCategory(row.id)}
+                          className={clsx(
+                            'analysis-top-chip',
+                            selectedExplorerCategory === row.id && 'is-active',
+                          )}
+                        >
+                          <span style={{ color: row.color }}>
+                            <CategoryIcon category={row.id} size={13} />
+                          </span>
+                          <span className="truncate max-w-[110px]">{row.label}</span>
+                          <span className="num text-muted">
+                            {row.pieValue > 0 ? `%${percentNumber.format(row.share * 100)}` : 'İade'}
+                          </span>
+                        </button>
                       ))}
-                    </ul>
+                    </div>
                     {report.categoryRefundCredit > 0 && (
                       <p className="analysis-caption">
                         Negatif kategori bakiyeleri pastaya eklenmez.{' '}
@@ -720,384 +741,564 @@ export function AnalysisView({ onNavigate }: { onNavigate: (view: ViewId) => voi
             </div>
           </Stagger>
 
-          <Stagger index={2}>
-            <MonthOverMonthCategoryRadar
-              monthly={report.monthly}
-              onSelectCategory={openCategory}
-            />
-          </Stagger>
-
-          <Stagger index={2}>
-            <DailySpending
-              report={report}
-              transactions={state.transactions}
-              asOf={asOf}
-              category={activeCategory}
-              onCategory={setCategory}
-            />
-          </Stagger>
-
-          <Stagger index={3}>
-            <Panel
-              title="Aylık kategori trendi"
-              description={
-                report.comparison
-                  ? monthLabel(report.comparison.previousMonth) +
-                    ' ile ' +
-                    monthLabel(report.comparison.currentMonth) +
-                    ' karşılaştırması'
-                  : 'Kategori trendini izle. Karşılaştırma için art arda kayıt bulunan iki ay gerekir.'
-              }
-            >
-              {report.categories.length > 0 && (
-                <div className="analysis-category-control">
-                  <Field label="Trend kategorisi">
-                    <Select
-                      ariaLabel="Trend kategorisi"
-                      value={activeCategory}
-                      onChange={(next) => setCategory(next as CategoryId | 'all')}
-                      options={[
-                        {
-                          value: 'all',
-                          label: 'Toplam net harcama',
-                          icon: <BarChart3 size={14} />,
-                        },
-                        ...sortCategoriesTr(report.categories).map((row) => ({
-                          value: row.id,
-                          label: row.label,
-                          icon: (
-                            <span style={{ color: row.color }}>
-                              <CategoryIcon category={row.id} size={14} />
-                            </span>
-                          ),
-                        })),
-                      ]}
-                    />
-                  </Field>
-                </div>
-              )}
-
-              {report.categories.length > 0 && (
-                <div className="analysis-chart" role="img" aria-label="Seçilen kategorinin aylık harcama trendi.">
-                  <ResponsiveContainer width="100%" height={195}>
-                    <ComposedChart
-                      data={report.monthly.map((row) => ({
-                        month: row.month,
-                        value: row.hasSpendingEvidence
-                          ? activeCategory === 'all'
-                            ? row.netSpend
-                            : (row.categories[activeCategory] ?? 0)
-                          : null,
-                      }))}
-                      margin={{ top: 10, right: 12, bottom: 0, left: -6 }}
-                    >
-                      <defs>
-                        <linearGradient id={gradCatId} x1="0" y1="0" x2="0" y2="1">
-                          <stop
-                            offset="0%"
-                            stopColor={
-                              report.categories.find((row) => row.id === activeCategory)?.color ??
-                              'var(--accent)'
-                            }
-                            stopOpacity={0.28}
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor={
-                              report.categories.find((row) => row.id === activeCategory)?.color ??
-                              'var(--accent)'
-                            }
-                            stopOpacity={0}
-                          />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
-                      <XAxis {...axis} dataKey="month" tickFormatter={shortMonth} minTickGap={28} />
-                      <YAxis {...axis} width={60} tickFormatter={(value) => moneyCompact(value)} />
-                      <Tooltip content={<MoneyTooltip />} />
-                      <Area
-                        type="monotone"
-                        name={
-                          activeCategory === 'all'
-                            ? 'Net harcama'
-                            : (report.categories.find((row) => row.id === activeCategory)?.label ?? 'Kategori')
-                        }
-                        dataKey="value"
-                        stroke={
-                          report.categories.find((row) => row.id === activeCategory)?.color ?? 'var(--accent)'
-                        }
-                        strokeWidth={2.2}
-                        fill={`url(#${gradCatId})`}
-                        dot={{ r: 3 }}
-                        connectNulls={false}
-                        isAnimationActive={false}
+          {report.categories.length > 0 && (
+            <Stagger index={2}>
+              <Panel
+                title="Kategori Dağılımı & Harcamalar"
+                description="Soldan bir dilim veya kategori seç; seçili kategorinin harcamaları sağda kaydırılabilir listede anında sıralanır."
+              >
+                <div className="analysis-explorer-grid">
+                  <div className="analysis-explorer-left">
+                    {donutSlices.length > 0 && (
+                      <InteractiveDonutChart
+                        data={donutSlices}
+                        height={188}
+                        activeId={selectedExplorerCategory}
+                        onSelect={(id) => {
+                          if (id) openCategory(id as CategoryId)
+                        }}
+                        totalLabel="Kategori payı"
                       />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-
-              {report.categoryMovers.length > 0 ? (
-                <div
-                  className="analysis-table-scroll overflow-x-auto"
-                  tabIndex={0}
-                  role="region"
-                  aria-label="Kategori değişimleri tablosu"
-                >
-                  <table className="analysis-table">
-                    <thead>
-                      <tr>
-                        <th>Kategori</th>
-                        <th>Önceki ay</th>
-                        <th>Son ay</th>
-                        <th>Fark</th>
-                        <th>Değişim</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.categoryMovers.map((row) => (
-                        <tr key={row.id}>
-                          <th>
-                            <i style={{ background: row.color }} />
-                            {row.label}
-                          </th>
-                          <td className="num">{amount(row.previous)}</td>
-                          <td className="num">{amount(row.current)}</td>
-                          <td className="num">{money2(row.delta, { sign: true })}</td>
-                          <td
-                            className={`num font-semibold ${
-                              row.deltaPct && row.deltaPct > 0
-                                ? 'text-negative'
-                                : row.deltaPct && row.deltaPct < 0
-                                  ? 'text-positive'
-                                  : ''
-                            }`}
+                    )}
+                    <ul className="analysis-key mizan-scroll-box mizan-scroll-box--sm">
+                      {report.categories.map((row) => (
+                        <li key={row.id}>
+                          <button
+                            type="button"
+                            onClick={() => openCategory(row.id)}
+                            aria-pressed={selectedExplorerCategory === row.id}
                           >
-                            {pct(row.deltaPct)}
-                          </td>
-                        </tr>
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span className="shrink-0" style={{ color: row.color }}>
+                                <CategoryIcon category={row.id} size={14} />
+                              </span>
+                              <span className="truncate">{row.label}</span>
+                            </span>
+                            <strong className="num">{amount(row.net)}</strong>
+                            <span className="analysis-key-share num">
+                              {row.pieValue > 0
+                                ? row.share < 0.001
+                                  ? '<%0,1'
+                                  : '%' + percentNumber.format(row.share * 100)
+                                : 'İade'}
+                            </span>
+                            <ChevronRight size={14} aria-hidden="true" />
+                          </button>
+                        </li>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="analysis-caption">
-                  Bir önceki ayın verisi yoksa değişim yüzdesi hesaplanmaz.
-                </p>
-              )}
-            </Panel>
-          </Stagger>
-
-          <Panel
-            title="Varlıkların ve birikimin"
-            description="Bugünkü portföyün ve gerçekten kaydedilmiş aylık değerleri."
-            action={
-              <button type="button" className="text-button" onClick={() => onNavigate('assets')}>
-                Varlıkları yönet <ArrowUpRight size={15} />
-              </button>
-            }
-          >
-            <div className="analysis-assets-grid">
-              <div>
-                <span className="analysis-caption">
-                  {report.portfolio.total === null ? 'Fiyatı bilinen varlıklar' : 'Bugünkü tahmini değer'}
-                </span>
-                <strong className="analysis-asset-total num">
-                  {hasHoldings && (report.portfolio.total ?? report.portfolio.knownValue) !== null ? (
-                    <MoneyValue value={(report.portfolio.total ?? report.portfolio.knownValue)!} />
-                  ) : (
-                    '—'
-                  )}
-                </strong>
-                {report.portfolio.missing > 0 && (
-                  <p className="analysis-caption">
-                    {report.portfolio.missing} varlığın fiyatı eksik; bu toplam portföyünün tamamı değil.
-                  </p>
-                )}
-                <ul className="analysis-key">
-                  {report.portfolio.composition.map((row) => (
-                    <li key={row.id} className="flex items-center justify-between gap-2 py-2.5 text-label">
-                      <span className="flex items-center text-ink">
-                        <i style={{ background: row.color }} />
-                        <span>
-                          {row.label}
-                          <small className="ml-1.5 text-faint">{row.holdingCount} kayıt</small>
-                        </span>
-                      </span>
-                      <strong className="num">{row.unpriced ? 'Fiyat eksik' : amount(row.valueMinor)}</strong>
-                    </li>
-                  ))}
-                </ul>
-                {!hasHoldings && (
-                  <p className="analysis-caption">Altın, gümüş ve dövizini Varlıklarım’dan ekleyebilirsin.</p>
-                )}
-                <div className="analysis-actions mt-3">
-                  <Button size="sm" disabled={!hasHoldings || rateBusy} onClick={() => void refresh()}>
-                    <RefreshCw size={14} className={rateBusy ? 'animate-spin' : ''} />
-                    {rateBusy ? 'Kurlar alınıyor' : 'Kurları yenile'}
-                  </Button>
-                </div>
-                {(rateError || rates?.warning) && (
-                  <p role="status" className="analysis-caption">
-                    {rateError || rates?.warning}
-                  </p>
-                )}
-                {hasHoldings && (
-                  <p className="analysis-caption">
-                    Kaynak tarihi:{' '}
-                    {Object.values(quotes).length
-                      ? new Date(Math.min(...Object.values(quotes).map((quote) => quote.asOf))).toLocaleDateString(
-                          'tr-TR',
-                          { timeZone: 'Europe/Istanbul' },
-                        )
-                      : 'Fiyat bekleniyor'}
-                    . Önbellek ve günlük referans fiyatı kullanılabilir; satış fiyatı garantisi değildir.
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <AssetHistoryChart report={report} />
-                <Button size="sm" className="mt-3" onClick={() => setHistoryEditor(true)}>
-                  <Plus size={15} /> Geçmiş ay değeri ekle / düzelt
-                </Button>
-                <p className="analysis-caption">
-                  Fark; miktar ekleme/çıkarma ve fiyat hareketlerini birlikte içerir. Yatırım getirisi değildir. Geçmiş kurlar veya varlıklar tahmin edilmez.
-                </p>
-              </div>
-            </div>
-          </Panel>
-
-          <Panel title="Harcama alışkanlıkların" description="Seçili dönemdeki alışveriş kayıtlarından.">
-            <dl className="analysis-habits">
-              <Summary
-                label="Alışveriş başına ortalama"
-                value={amount(report.habits.averageTicket)}
-                note={`${report.totals.purchases} alışveriş`}
-              />
-              <Summary
-                label="Ortanca alışveriş"
-                value={amount(report.habits.medianTicket)}
-                note="Büyük tutarlardan daha az etkilenir"
-              />
-              <Summary
-                label="Hafta sonu payı"
-                value={
-                  report.habits.weekendShare === null
-                    ? '—'
-                    : Math.round(report.habits.weekendShare * 100) + '%'
-                }
-                note="Brüt alışveriş tutarı içinde"
-              />
-              <Summary
-                label="Tekrar gittiğin işyerleri"
-                value={String(report.habits.repeatMerchants)}
-                note={`${report.habits.activeDays} alışveriş yapılan gün`}
-              />
-            </dl>
-            <div className="analysis-weekdays">
-              {report.weekday.map((day) => (
-                <div key={day.index}>
-                  <span title={day.label}>{weekdayShort[day.index]}</span>
-                  <div>
-                    <i style={{ width: Math.max(0, day.share * 100) + '%' }} />
+                    </ul>
                   </div>
-                  <strong className="num">{day.count}</strong>
-                </div>
-              ))}
-            </div>
-            <p className="analysis-caption">
-              Gün çubukları brüt harcama payını, alttaki sayılar alışveriş adedini gösterir.
-            </p>
-            {report.merchants.length > 0 && (
-              <div
-                className="analysis-table-scroll overflow-x-auto"
-                role="region"
-                tabIndex={0}
-                aria-label="İşyeri harcamaları"
-              >
-                <table className="analysis-table">
-                  <thead>
-                    <tr>
-                      <th>İşyeri</th>
-                      <th>Alışveriş</th>
-                      <th>Kayıtlı ay</th>
-                      <th>Net harcama</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.merchants.slice(0, 12).map((row) => (
-                      <tr key={row.merchant}>
-                        <th>{row.label}</th>
-                        <td>{row.count}</td>
-                        <td>{row.months}</td>
-                        <td className="num font-semibold">{amount(row.net)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
 
-          <Panel
-            title="Ay ay, tüm kayıtların"
-            description="Grafiklerin sayısal karşılığı. Kart borcu ödemeleri yeniden gider sayılmaz."
-          >
-            {report.monthly.length > 0 ? (
-              <div
-                className="analysis-table-scroll overflow-x-auto"
-                role="region"
-                tabIndex={0}
-                aria-label="Aylık finansal analiz tablosu"
-              >
-                <table className="analysis-table">
-                  <thead>
-                    <tr>
-                      <th>Ay</th>
-                      <th>Gelir</th>
-                      <th>Net gider</th>
-                      <th>Gelirden kalan</th>
-                      <th>Ekstre gün kapsamı</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.monthly.map((row) => (
-                      <tr key={row.month}>
-                        <th>
-                          {row.label}
-                          <small>{coverageLabels[row.status]}</small>
-                        </th>
-                        <td className="num">{row.hasIncome ? amount(row.income) : '—'}</td>
-                        <td className="num">{row.hasSpendingEvidence ? amount(row.netSpend) : '—'}</td>
-                        <td
-                          className={`num font-semibold ${
-                            row.hasIncome
-                              ? row.recordedSurplus >= 0
-                                ? 'text-positive'
-                                : 'text-negative'
-                              : ''
-                          }`}
+                  <div className="analysis-explorer-right">
+                    <div className="analysis-explorer-right__head">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        {selectedExplorerRow && (
+                          <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                            style={{
+                              background: `${selectedExplorerRow.color}1F`,
+                              color: selectedExplorerRow.color,
+                            }}
+                          >
+                            <CategoryIcon category={selectedExplorerRow.id} size={17} />
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <h3 className="truncate text-body font-semibold text-ink">
+                            {selectedExplorerRow ? selectedExplorerRow.label : 'Kategori seç'}
+                          </h3>
+                          <p className="text-xs text-muted num">
+                            {count(explorerTransactions.length)} işlem
+                            {selectedExplorerRow ? ` · Net ${amount(selectedExplorerRow.net)}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      {selectedExplorerCategory && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() =>
+                            openTransactions({
+                              category: selectedExplorerCategory,
+                              title: selectedExplorerRow?.label,
+                              overall: windowRange === 'all',
+                            })
+                          }
                         >
-                          {row.hasIncome ? amount(row.recordedSurplus) : '—'}
-                        </td>
-                        <td>
-                          {row.coverageDays ? `${row.coverageDays} / ${row.elapsedDays} gün` : 'Bilinmiyor'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="analysis-caption">Henüz aylık kayıt yok.</p>
-            )}
-            <p className="analysis-caption">
-              Ekstre gün kapsamı, yüklenen belgelerin tarih aralığıdır; tüm kartların veya tüm giderlerin eklendiğini kanıtlamaz. Kayıtsız aylar ortalamaya eklenmez.{' '}
-              {report.excludedFutureTransactions > 0 &&
-                'Gelecekteki plan kayıtları gerçekleşmiş harcama sayılmadı.'}
-            </p>
-          </Panel>
+                          Tümünü aç <ArrowUpRight size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {explorerTransactions.length > 0 ? (
+                      <ul className="analysis-explorer-txs mizan-scroll-box mizan-scroll-box--lg">
+                        {explorerTransactions.map((tx) => {
+                          const isRefund = tx.kind === 'refund'
+                          return (
+                            <li key={tx.id} className="analysis-explorer-tx">
+                              <div className="min-w-0 flex-1">
+                                <span className="block truncate text-body font-medium text-ink" title={tx.description}>
+                                  {tx.description}
+                                </span>
+                                <span className="mt-0.5 block truncate text-xs text-muted">
+                                  {fullDayLabel(tx.date)}
+                                  {tx.accountLabel ? ` · ${tx.accountLabel}` : ''}
+                                  {tx.installment ? ` · ${tx.installment}` : ''}
+                                </span>
+                              </div>
+                              <strong
+                                className={clsx(
+                                  'num shrink-0 text-body font-semibold',
+                                  isRefund ? 'text-positive' : 'text-ink',
+                                )}
+                              >
+                                {isRefund ? '+' : '−'}
+                                {money2(tx.amount)}
+                              </strong>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="py-10 text-center text-label text-muted">
+                        Bu dönemde seçili kategoride listelenecek harcama bulunamadı.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Panel>
+            </Stagger>
+          )}
+
+          <div className="analysis-deep-tabs">
+            <div className="tx-mode-switch" role="tablist" aria-label="Detaylı analiz sekmeleri">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={deepTab === 'daily'}
+                className={deepTab === 'daily' ? 'is-active' : ''}
+                onClick={() => {
+                  hapticTap()
+                  setDeepTab('daily')
+                }}
+              >
+                Günlük &amp; Kategori Trendi
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={deepTab === 'mom'}
+                className={deepTab === 'mom' ? 'is-active' : ''}
+                onClick={() => {
+                  hapticTap()
+                  setDeepTab('mom')
+                }}
+              >
+                Ay Bazlı Değişim
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={deepTab === 'tables'}
+                className={deepTab === 'tables' ? 'is-active' : ''}
+                onClick={() => {
+                  hapticTap()
+                  setDeepTab('tables')
+                }}
+              >
+                Alışkanlık &amp; Tablolar
+              </button>
+            </div>
+          </div>
+
+          {deepTab === 'mom' && (
+            <Stagger index={2}>
+              <MonthOverMonthCategoryRadar
+                monthly={report.monthly}
+                onSelectCategory={openCategory}
+              />
+            </Stagger>
+          )}
+
+          {deepTab === 'daily' && (
+            <>
+              <Stagger index={2}>
+                <DailySpending
+                  report={report}
+                  transactions={state.transactions}
+                  asOf={asOf}
+                  category={activeCategory}
+                  onCategory={setCategory}
+                />
+              </Stagger>
+
+              <Stagger index={3}>
+                <Panel
+                  title="Aylık kategori trendi"
+                  description={
+                    report.comparison
+                      ? monthLabel(report.comparison.previousMonth) +
+                        ' ile ' +
+                        monthLabel(report.comparison.currentMonth) +
+                        ' karşılaştırması'
+                      : 'Kategori trendini izle. Karşılaştırma için art arda kayıt bulunan iki ay gerekir.'
+                  }
+                >
+                  {report.categories.length > 0 && (
+                    <div className="analysis-category-control">
+                      <Field label="Trend kategorisi">
+                        <Select
+                          ariaLabel="Trend kategorisi"
+                          value={activeCategory}
+                          onChange={(next) => setCategory(next as CategoryId | 'all')}
+                          options={[
+                            {
+                              value: 'all',
+                              label: 'Toplam net harcama',
+                              icon: <BarChart3 size={14} />,
+                            },
+                            ...sortCategoriesTr(report.categories).map((row) => ({
+                              value: row.id,
+                              label: row.label,
+                              icon: (
+                                <span style={{ color: row.color }}>
+                                  <CategoryIcon category={row.id} size={14} />
+                                </span>
+                              ),
+                            })),
+                          ]}
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  {report.categories.length > 0 && (
+                    <div className="analysis-chart" role="img" aria-label="Seçilen kategorinin aylık harcama trendi.">
+                      <ResponsiveContainer width="100%" height={195}>
+                        <ComposedChart
+                          data={report.monthly.map((row) => ({
+                            month: row.month,
+                            value: row.hasSpendingEvidence
+                              ? activeCategory === 'all'
+                                ? row.netSpend
+                                : (row.categories[activeCategory] ?? 0)
+                              : null,
+                          }))}
+                          margin={{ top: 10, right: 12, bottom: 0, left: -6 }}
+                        >
+                          <defs>
+                            <linearGradient id={gradCatId} x1="0" y1="0" x2="0" y2="1">
+                              <stop
+                                offset="0%"
+                                stopColor={
+                                  report.categories.find((row) => row.id === activeCategory)?.color ??
+                                  'var(--accent)'
+                                }
+                                stopOpacity={0.28}
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor={
+                                  report.categories.find((row) => row.id === activeCategory)?.color ??
+                                  'var(--accent)'
+                                }
+                                stopOpacity={0}
+                              />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid vertical={false} stroke="var(--grid)" strokeDasharray="3 5" />
+                          <XAxis {...axis} dataKey="month" tickFormatter={shortMonth} minTickGap={28} />
+                          <YAxis {...axis} width={60} tickFormatter={(value) => moneyCompact(value)} />
+                          <Tooltip content={<MoneyTooltip />} />
+                          <Area
+                            type="monotone"
+                            name={
+                              activeCategory === 'all'
+                                ? 'Net harcama'
+                                : (report.categories.find((row) => row.id === activeCategory)?.label ?? 'Kategori')
+                            }
+                            dataKey="value"
+                            stroke={
+                              report.categories.find((row) => row.id === activeCategory)?.color ?? 'var(--accent)'
+                            }
+                            strokeWidth={2.2}
+                            fill={`url(#${gradCatId})`}
+                            dot={{ r: 3 }}
+                            connectNulls={false}
+                            isAnimationActive={false}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+
+                  {report.categoryMovers.length > 0 ? (
+                    <div
+                      className="analysis-table-scroll mizan-scroll-box mizan-scroll-box--md overflow-x-auto"
+                      tabIndex={0}
+                      role="region"
+                      aria-label="Kategori değişimleri tablosu"
+                    >
+                      <table className="analysis-table">
+                        <thead>
+                          <tr>
+                            <th>Kategori</th>
+                            <th>Önceki ay</th>
+                            <th>Son ay</th>
+                            <th>Fark</th>
+                            <th>Değişim</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {report.categoryMovers.map((row) => (
+                            <tr key={row.id}>
+                              <th>
+                                <i style={{ background: row.color }} />
+                                {row.label}
+                              </th>
+                              <td className="num">{amount(row.previous)}</td>
+                              <td className="num">{amount(row.current)}</td>
+                              <td className="num">{money2(row.delta, { sign: true })}</td>
+                              <td
+                                className={`num font-semibold ${
+                                  row.deltaPct && row.deltaPct > 0
+                                    ? 'text-negative'
+                                    : row.deltaPct && row.deltaPct < 0
+                                      ? 'text-positive'
+                                      : ''
+                                }`}
+                              >
+                                {pct(row.deltaPct)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="analysis-caption">
+                      Bir önceki ayın verisi yoksa değişim yüzdesi hesaplanmaz.
+                    </p>
+                  )}
+                </Panel>
+              </Stagger>
+            </>
+          )}
+
+          {deepTab === 'tables' && (
+            <>
+              <Panel
+                title="Varlıkların ve birikimin"
+                description="Bugünkü portföyün ve gerçekten kaydedilmiş aylık değerleri."
+                action={
+                  <button type="button" className="text-button" onClick={() => onNavigate('assets')}>
+                    Varlıkları yönet <ArrowUpRight size={15} />
+                  </button>
+                }
+              >
+                <div className="analysis-assets-grid">
+                  <div>
+                    <span className="analysis-caption">
+                      {report.portfolio.total === null ? 'Fiyatı bilinen varlıklar' : 'Bugünkü tahmini değer'}
+                    </span>
+                    <strong className="analysis-asset-total num">
+                      {hasHoldings && (report.portfolio.total ?? report.portfolio.knownValue) !== null ? (
+                        <MoneyValue value={(report.portfolio.total ?? report.portfolio.knownValue)!} />
+                      ) : (
+                        '—'
+                      )}
+                    </strong>
+                    {report.portfolio.missing > 0 && (
+                      <p className="analysis-caption">
+                        {report.portfolio.missing} varlığın fiyatı eksik; bu toplam portföyünün tamamı değil.
+                      </p>
+                    )}
+                    <ul className="analysis-key mizan-scroll-box mizan-scroll-box--sm">
+                      {report.portfolio.composition.map((row) => (
+                        <li key={row.id} className="flex items-center justify-between gap-2 py-2.5 text-label">
+                          <span className="flex items-center text-ink">
+                            <i style={{ background: row.color }} />
+                            <span>
+                              {row.label}
+                              <small className="ml-1.5 text-faint">{row.holdingCount} kayıt</small>
+                            </span>
+                          </span>
+                          <strong className="num">{row.unpriced ? 'Fiyat eksik' : amount(row.valueMinor)}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                    {!hasHoldings && (
+                      <p className="analysis-caption">Altın, gümüş ve dövizini Varlıklarım’dan ekleyebilirsin.</p>
+                    )}
+                    <div className="analysis-actions mt-3">
+                      <Button size="sm" disabled={!hasHoldings || rateBusy} onClick={() => void refresh()}>
+                        <RefreshCw size={14} className={rateBusy ? 'animate-spin' : ''} />
+                        {rateBusy ? 'Kurlar alınıyor' : 'Kurları yenile'}
+                      </Button>
+                    </div>
+                    {(rateError || rates?.warning) && (
+                      <p role="status" className="analysis-caption">
+                        {rateError || rates?.warning}
+                      </p>
+                    )}
+                    {hasHoldings && (
+                      <p className="analysis-caption">
+                        Kaynak tarihi:{' '}
+                        {Object.values(quotes).length
+                          ? new Date(Math.min(...Object.values(quotes).map((quote) => quote.asOf))).toLocaleDateString(
+                              'tr-TR',
+                              { timeZone: 'Europe/Istanbul' },
+                            )
+                          : 'Fiyat bekleniyor'}
+                        . Önbellek ve günlük referans fiyatı kullanılabilir; satış fiyatı garantisi değildir.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <AssetHistoryChart report={report} />
+                    <Button size="sm" className="mt-3" onClick={() => setHistoryEditor(true)}>
+                      <Plus size={15} /> Geçmiş ay değeri ekle / düzelt
+                    </Button>
+                    <p className="analysis-caption">
+                      Fark; miktar ekleme/çıkarma ve fiyat hareketlerini birlikte içerir. Yatırım getirisi değildir. Geçmiş kurlar veya varlıklar tahmin edilmez.
+                    </p>
+                  </div>
+                </div>
+              </Panel>
+
+              <Panel title="Harcama alışkanlıkların" description="Seçili dönemdeki alışveriş kayıtlarından.">
+                <dl className="analysis-habits">
+                  <Summary
+                    label="Alışveriş başına ortalama"
+                    value={amount(report.habits.averageTicket)}
+                    note={`${report.totals.purchases} alışveriş`}
+                  />
+                  <Summary
+                    label="Ortanca alışveriş"
+                    value={amount(report.habits.medianTicket)}
+                    note="Büyük tutarlardan daha az etkilenir"
+                  />
+                  <Summary
+                    label="Hafta sonu payı"
+                    value={
+                      report.habits.weekendShare === null
+                        ? '—'
+                        : Math.round(report.habits.weekendShare * 100) + '%'
+                    }
+                    note="Brüt alışveriş tutarı içinde"
+                  />
+                  <Summary
+                    label="Tekrar gittiğin işyerleri"
+                    value={String(report.habits.repeatMerchants)}
+                    note={`${report.habits.activeDays} alışveriş yapılan gün`}
+                  />
+                </dl>
+                <div className="analysis-weekdays">
+                  {report.weekday.map((day) => (
+                    <div key={day.index}>
+                      <span title={day.label}>{weekdayShort[day.index]}</span>
+                      <div>
+                        <i style={{ width: Math.max(0, day.share * 100) + '%' }} />
+                      </div>
+                      <strong className="num">{day.count}</strong>
+                    </div>
+                  ))}
+                </div>
+                <p className="analysis-caption">
+                  Gün çubukları brüt harcama payını, alttaki sayılar alışveriş adedini gösterir.
+                </p>
+                {report.merchants.length > 0 && (
+                  <div
+                    className="analysis-table-scroll mizan-scroll-box mizan-scroll-box--md overflow-x-auto"
+                    role="region"
+                    tabIndex={0}
+                    aria-label="İşyeri harcamaları"
+                  >
+                    <table className="analysis-table">
+                      <thead>
+                        <tr>
+                          <th>İşyeri</th>
+                          <th>Alışveriş</th>
+                          <th>Kayıtlı ay</th>
+                          <th>Net harcama</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.merchants.slice(0, 20).map((row) => (
+                          <tr key={row.merchant}>
+                            <th>{row.label}</th>
+                            <td>{row.count}</td>
+                            <td>{row.months}</td>
+                            <td className="num font-semibold">{amount(row.net)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </Panel>
+
+              <Panel
+                title="Ay ay, tüm kayıtların"
+                description="Grafiklerin sayısal karşılığı. Kart borcu ödemeleri yeniden gider sayılmaz."
+              >
+                {report.monthly.length > 0 ? (
+                  <div
+                    className="analysis-table-scroll mizan-scroll-box mizan-scroll-box--md overflow-x-auto"
+                    role="region"
+                    tabIndex={0}
+                    aria-label="Aylık finansal analiz tablosu"
+                  >
+                    <table className="analysis-table">
+                      <thead>
+                        <tr>
+                          <th>Ay</th>
+                          <th>Gelir</th>
+                          <th>Net gider</th>
+                          <th>Gelirden kalan</th>
+                          <th>Ekstre gün kapsamı</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {report.monthly.map((row) => (
+                          <tr key={row.month}>
+                            <th>
+                              {row.label}
+                              <small>{coverageLabels[row.status]}</small>
+                            </th>
+                            <td className="num">{row.hasIncome ? amount(row.income) : '—'}</td>
+                            <td className="num">{row.hasSpendingEvidence ? amount(row.netSpend) : '—'}</td>
+                            <td
+                              className={`num font-semibold ${
+                                row.hasIncome
+                                  ? row.recordedSurplus >= 0
+                                    ? 'text-positive'
+                                    : 'text-negative'
+                                  : ''
+                              }`}
+                            >
+                              {row.hasIncome ? amount(row.recordedSurplus) : '—'}
+                            </td>
+                            <td>
+                              {row.coverageDays ? `${row.coverageDays} / ${row.elapsedDays} gün` : 'Bilinmiyor'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="analysis-caption">Henüz aylık kayıt yok.</p>
+                )}
+                <p className="analysis-caption">
+                  Ekstre gün kapsamı, yüklenen belgelerin tarih aralığıdır; tüm kartların veya tüm giderlerin eklendiğini kanıtlamaz. Kayıtsız aylar ortalamaya eklenmez.{' '}
+                  {report.excludedFutureTransactions > 0 &&
+                    'Gelecekteki plan kayıtları gerçekleşmiş harcama sayılmadı.'}
+                </p>
+              </Panel>
+            </>
+          )}
         </>
       )}
         </>

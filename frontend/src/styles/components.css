@@ -2,6 +2,49 @@
  * Mizan 2026 — Shared Component Surfaces, Controls, Physical Cards & Micro-Feedback
  */
 
+/* ── Reusable Bounded Scroll Containers (Prevents Long Vertical Page Sprawl) ── */
+.mizan-scroll-box {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+  padding-right: 4px;
+}
+
+.mizan-scroll-box::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.mizan-scroll-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mizan-scroll-box::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+
+.mizan-scroll-box::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+.mizan-scroll-box--sm {
+  max-height: 260px;
+}
+
+.mizan-scroll-box--md {
+  max-height: 360px;
+}
+
+.mizan-scroll-box--lg {
+  max-height: clamp(360px, 56vh, 540px);
+}
+
+.mizan-scroll-box--xl {
+  max-height: clamp(400px, 64vh, 640px);
+}
+
 /* ── Tactile Press Physics ─────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
   .primary-button,

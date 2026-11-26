@@ -239,7 +239,7 @@ function Section({ section }: { section: LedgerSection }) {
           Önceki dönemin borcunu kapatır; harcama sayılmaz.
         </p>
       )}
-      <ul>
+      <ul className="mizan-scroll-box mizan-scroll-box--lg">
         {section.rows.map((tx) => (
           <Row key={tx.id} tx={tx} sign={section.sign} />
         ))}

@@ -123,7 +123,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
           {period.statements.length > 0 && (
             <section className="card-detail-documents">
               <h2>Ekstreler</h2>
-              <ul className="divide-y divide-line">
+              <ul className="divide-y divide-line mizan-scroll-box mizan-scroll-box--sm">
                 {[...period.statements]
                   .sort((a, b) => (b.periodEnd ?? '').localeCompare(a.periodEnd ?? ''))
                   .map((statement) => {
@@ -187,7 +187,7 @@ export function CardDetailView({ cardId, onBack }: { cardId: string; onBack: () 
                   onSelect={setActiveCat}
                   totalLabel="Kart harcaması"
                 />
-                <ul className="divide-y divide-line">
+                <ul className="divide-y divide-line mizan-scroll-box mizan-scroll-box--sm">
                   {categories.map((cat) => (
                     <li key={cat.id} className="flex items-center gap-3 py-2.5 text-body">
                       <CategoryBadge category={cat.id} size="xs" />
